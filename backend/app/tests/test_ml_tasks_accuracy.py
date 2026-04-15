@@ -6,12 +6,59 @@ from unittest.mock import MagicMock, patch
 
 from app.services.ml.tasks import (
     _compute_accuracy_metrics,
+    _persist_historical_backfill_rows,
     _select_forecast_accuracy_actual,
     compute_forecast_accuracy_task,
 )
 
 
 class ForecastAccuracyTaskTests(unittest.TestCase):
+    def test_persist_historical_backfill_rows_only_inserts_missing_targets(self) -> None:
+        class _ForecastRow:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+        db = MagicMock()
+        existing_dates = {datetime(2026, 4, 2, 0, 0, 0)}
+        windows = [
+            {
+                "issue_date": "2026-03-26T00:00:00",
+                "target_date": "2026-04-02T00:00:00",
+                "predicted": 100.0,
+                "actual": 110.0,
+                "event_probability": 0.3,
+                "fold": 1,
+            },
+            {
+                "issue_date": "2026-03-27T00:00:00",
+                "target_date": "2026-04-03T00:00:00",
+                "predicted": 120.0,
+                "actual": 130.0,
+                "event_probability": 0.6,
+                "fold": 2,
+            },
+        ]
+
+        result = _persist_historical_backfill_rows(
+            db,
+            windows=windows,
+            existing_scope_dates=existing_dates,
+            virus_typ="Influenza A",
+            region="DE",
+            horizon_days=7,
+            model_version="historical_backfill_reconstructed_h7",
+            ml_forecast_cls=_ForecastRow,
+        )
+
+        self.assertEqual(result["inserted"], 1)
+        self.assertEqual(result["skipped_existing"], 1)
+        inserted_row = db.add.call_args.args[0]
+        self.assertEqual(inserted_row.forecast_date, datetime(2026, 4, 3, 0, 0, 0))
+        self.assertEqual(inserted_row.predicted_value, 120.0)
+        self.assertEqual(inserted_row.model_version, "historical_backfill_reconstructed_h7")
+        self.assertEqual(inserted_row.features_used["backfill_source"], "walk_forward_reconstruction")
+        db.commit.assert_called_once_with()
+
     def test_select_forecast_accuracy_actual_prefers_raw_viruslast(self) -> None:
         row = SimpleNamespace(viruslast=52371.4, viruslast_normalisiert=0.04)
 

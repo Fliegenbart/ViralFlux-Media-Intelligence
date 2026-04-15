@@ -611,6 +611,7 @@ def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dic
                 from app.services.data_ingest.tasks import run_full_ingestion_pipeline
                 from app.services.media.tasks import generate_marketing_opportunities_task
                 from app.services.ml.tasks import (
+                    backfill_recent_forecast_history_task,
                     compute_forecast_accuracy_task,
                     refresh_live_forecasts_task,
                     refresh_market_backtests_task,
@@ -648,6 +649,7 @@ def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dic
                     train_xgboost_model_task.si(),
                     train_regional_models_task.si(),
                     refresh_live_forecasts_task.si(),
+                    backfill_recent_forecast_history_task.si(),
                     refresh_market_backtests_task.si(),
                     compute_forecast_accuracy_task.si(),
                     refresh_regional_operational_snapshots_task.si(),
@@ -667,6 +669,7 @@ def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dic
                             "train_xgboost_model_task",
                             "train_regional_models_task",
                             "refresh_live_forecasts_task",
+                            "backfill_recent_forecast_history_task",
                             "refresh_market_backtests_task",
                             "compute_forecast_accuracy_task",
                             "refresh_regional_operational_snapshots_task",

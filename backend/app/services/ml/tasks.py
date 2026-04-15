@@ -7,7 +7,7 @@ meta-learner models. Follows the same patterns as
 
 from app.core.time import utc_now
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict
 
@@ -87,6 +87,114 @@ def _compute_accuracy_metrics(predicted: list[float], actual: list[float]) -> di
         "mape": mape,
         "correlation": corr,
     }
+
+
+def _naive_datetime(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo else value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    return None
+
+
+def _persist_historical_backfill_rows(
+    db: Any,
+    *,
+    windows: list[dict[str, Any]],
+    existing_scope_dates: set[datetime],
+    virus_typ: str,
+    region: str,
+    horizon_days: int,
+    model_version: str,
+    ml_forecast_cls: Any,
+) -> dict[str, Any]:
+    inserted = 0
+    skipped_existing = 0
+    inserted_targets: list[str] = []
+    covered_targets: list[str] = []
+
+    for window in windows:
+        target_date = _naive_datetime(window.get("target_date"))
+        if target_date is None:
+            continue
+
+        target_date = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        iso_target = target_date.isoformat()
+        covered_targets.append(iso_target)
+
+        if target_date in existing_scope_dates:
+            skipped_existing += 1
+            continue
+
+        predicted_value = window.get("predicted")
+        if predicted_value is None:
+            continue
+
+        event_probability = window.get("event_probability")
+        confidence = float(event_probability) if event_probability is not None else None
+
+        db.add(
+            ml_forecast_cls(
+                forecast_date=target_date,
+                virus_typ=virus_typ,
+                region=region,
+                horizon_days=horizon_days,
+                predicted_value=float(predicted_value),
+                lower_bound=float(predicted_value),
+                upper_bound=float(predicted_value),
+                confidence=confidence,
+                model_version=model_version,
+                features_used={
+                    "backfill_source": "walk_forward_reconstruction",
+                    "issue_date": window.get("issue_date"),
+                    "target_date": iso_target,
+                    "actual_observed": window.get("actual"),
+                    "fold": window.get("fold"),
+                    "bounds_note": "Historical backfill stores point estimates only.",
+                },
+                outbreak_risk_score=confidence,
+            )
+        )
+        existing_scope_dates.add(target_date)
+        inserted += 1
+        inserted_targets.append(iso_target)
+
+    if inserted:
+        db.commit()
+
+    return {
+        "inserted": inserted,
+        "skipped_existing": skipped_existing,
+        "inserted_targets": inserted_targets,
+        "covered_targets": covered_targets,
+    }
+
+
+def _extract_datetime_cell(row: Any, *, attribute_name: str) -> datetime | None:
+    if row is None:
+        return None
+    if isinstance(row, (datetime, date, str)):
+        return _naive_datetime(row)
+    attribute_value = getattr(row, attribute_name, None)
+    if attribute_value is not None:
+        return _naive_datetime(attribute_value)
+    mapping = getattr(row, "_mapping", None)
+    if mapping is not None and attribute_name in mapping:
+        return _naive_datetime(mapping[attribute_name])
+    if isinstance(row, (tuple, list)) and row:
+        return _naive_datetime(row[0])
+    return None
 
 
 @celery_app.task(bind=True, name="train_xgboost_model_task")
@@ -222,6 +330,194 @@ def refresh_live_forecasts_task(
         "region": region,
         "horizon_days": horizon_days,
         "include_internal_history": include_internal_history,
+        "failed_virus_types": failed,
+        "timestamp": utc_now().isoformat(),
+    })
+
+
+@celery_app.task(bind=True, name="backfill_recent_forecast_history_task")
+def backfill_recent_forecast_history_task(
+    self,
+    region: str = "DE",
+    horizon_days: int = 7,
+    include_internal_history: bool = True,
+    days: int = 14,
+) -> Dict[str, Any]:
+    """Reconstruct recent missing historical forecast targets for monitoring recovery.
+
+    This is a best-effort walk-forward reconstruction based on the current
+    training frame. It is intended to repair monitoring gaps after missed daily
+    forecast runs without inventing fake accuracy logs.
+    """
+    from sqlalchemy import func
+
+    from app.models.database import MLForecast, WastewaterAggregated
+    from app.services.ml.forecast_service import ForecastService
+
+    logger.info(
+        "Celery: backfilling recent forecast history (region=%s, horizon_days=%s, internal=%s, days=%s)",
+        region,
+        horizon_days,
+        include_internal_history,
+        days,
+    )
+    self.update_state(
+        state="PROGRESS",
+        meta={"step": "Initializing forecast history backfill...", "progress": 10},
+    )
+
+    cutoff = utc_now().replace(microsecond=0)
+    window_start = (cutoff - timedelta(days=max(int(days), 1))).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    model_version = f"historical_backfill_reconstructed_h{int(horizon_days)}"
+    results: dict[str, dict[str, Any]] = {}
+
+    with get_db_context() as db:
+        service = ForecastService(db)
+        total = len(SUPPORTED_VIRUS_TYPES)
+
+        for index, virus in enumerate(SUPPORTED_VIRUS_TYPES, start=1):
+            progress = min(95, 10 + int(index / max(total, 1) * 80))
+            self.update_state(
+                state="PROGRESS",
+                meta={
+                    "step": f"Reconstructing recent forecast history for {virus}...",
+                    "progress": progress,
+                },
+            )
+            try:
+                actual_max = (
+                    db.query(func.max(WastewaterAggregated.datum))
+                    .filter(WastewaterAggregated.virus_typ == virus)
+                    .scalar()
+                )
+                actual_max_dt = _naive_datetime(actual_max)
+                if actual_max_dt is None:
+                    results[virus] = {
+                        "status": "skipped",
+                        "message": "Keine Ist-Daten für Backfill verfügbar",
+                    }
+                    continue
+
+                backfill_end = min(
+                    actual_max_dt.replace(hour=0, minute=0, second=0, microsecond=0),
+                    (cutoff - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0),
+                )
+                if backfill_end < window_start:
+                    results[virus] = {
+                        "status": "skipped",
+                        "message": "Keine historischen Zielfenster im Backfill-Bereich",
+                        "actual_max_date": actual_max_dt.isoformat(),
+                    }
+                    continue
+
+                existing_rows = (
+                    db.query(MLForecast.forecast_date)
+                    .filter(
+                        MLForecast.virus_typ == virus,
+                        MLForecast.region == region,
+                        MLForecast.horizon_days == horizon_days,
+                        MLForecast.forecast_date >= window_start,
+                        MLForecast.forecast_date <= backfill_end,
+                    )
+                    .all()
+                )
+                existing_scope_dates = {
+                    extracted.replace(hour=0, minute=0, second=0, microsecond=0)
+                    for row in existing_rows
+                    if (extracted := _extract_datetime_cell(row, attribute_name="forecast_date")) is not None
+                }
+
+                desired_dates: list[datetime] = []
+                current_day = window_start
+                while current_day <= backfill_end:
+                    normalized = current_day.replace(hour=0, minute=0, second=0, microsecond=0)
+                    if normalized not in existing_scope_dates:
+                        desired_dates.append(normalized)
+                    current_day += timedelta(days=1)
+
+                if not desired_dates:
+                    results[virus] = {
+                        "status": "success",
+                        "message": "Keine fehlenden Forecast-Zieltage im Backfill-Bereich",
+                        "backfilled": 0,
+                        "window_start": window_start.isoformat(),
+                        "window_end": backfill_end.isoformat(),
+                    }
+                    continue
+
+                metrics = service.evaluate_training_candidate(
+                    virus_typ=virus,
+                    include_internal_history=include_internal_history,
+                    region=region,
+                    horizon_days=horizon_days,
+                )
+                if metrics.get("error"):
+                    results[virus] = {
+                        "status": "error",
+                        "error": metrics.get("error"),
+                    }
+                    continue
+
+                desired_targets = {value.isoformat() for value in desired_dates}
+                matching_windows = [
+                    window
+                    for window in list(metrics.get("windows") or [])
+                    if (
+                        (_naive_datetime(window.get("target_date")) or datetime.min)
+                        .replace(hour=0, minute=0, second=0, microsecond=0)
+                        .isoformat()
+                        in desired_targets
+                    )
+                ]
+
+                persisted = _persist_historical_backfill_rows(
+                    db,
+                    windows=matching_windows,
+                    existing_scope_dates=existing_scope_dates,
+                    virus_typ=virus,
+                    region=region,
+                    horizon_days=horizon_days,
+                    model_version=model_version,
+                    ml_forecast_cls=MLForecast,
+                )
+
+                unavailable_targets = sorted(
+                    desired_targets.difference(set(persisted["covered_targets"]))
+                )
+                results[virus] = {
+                    "status": "success",
+                    "backfilled": persisted["inserted"],
+                    "skipped_existing": persisted["skipped_existing"],
+                    "requested_targets": sorted(desired_targets),
+                    "backfilled_targets": persisted["inserted_targets"],
+                    "unavailable_targets": unavailable_targets,
+                    "window_start": window_start.isoformat(),
+                    "window_end": backfill_end.isoformat(),
+                }
+            except Exception as exc:
+                logger.exception("Celery: forecast history backfill failed for %s", virus)
+                results[virus] = {"status": "error", "error": str(exc)}
+
+    failed = [virus for virus, payload in results.items() if payload.get("status") == "error"]
+    status = "success" if not failed else ("error" if len(failed) == len(SUPPORTED_VIRUS_TYPES) else "partial_error")
+    logger.info(
+        "Celery: forecast history backfill completed (status=%s, failed=%s)",
+        status,
+        failed,
+    )
+    return _json_safe({
+        "status": status,
+        "region": region,
+        "horizon_days": horizon_days,
+        "include_internal_history": include_internal_history,
+        "days": days,
+        "model_version": model_version,
+        "results": results,
         "failed_virus_types": failed,
         "timestamp": utc_now().isoformat(),
     })

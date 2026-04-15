@@ -229,6 +229,59 @@ class ForecastDecisionService:
         return round(max(0.0, min(1.0, 1.0 - (float(mape) / 100.0))), 4)
 
     @staticmethod
+    def _resolve_event_calibration(
+        *,
+        probability_is_learned: bool,
+        stored_event_forecast: dict[str, Any],
+        event_calibration: dict[str, Any],
+        probability_source: str,
+    ) -> dict[str, Any]:
+        if not probability_is_learned:
+            return {
+                "calibration_method": str(
+                    stored_event_forecast.get("calibration_method") or probability_source
+                ),
+                "brier_score": None,
+                "ece": None,
+                "calibration_passed": None,
+            }
+
+        has_backtest_calibration = any(
+            event_calibration.get(key) is not None
+            for key in ("calibration_passed", "brier_score", "ece")
+        )
+        calibration_method = (
+            event_calibration.get("calibration_method")
+            if has_backtest_calibration and event_calibration.get("calibration_method")
+            else stored_event_forecast.get("calibration_method")
+        )
+        calibration_passed = (
+            event_calibration.get("calibration_passed")
+            if has_backtest_calibration
+            else stored_event_forecast.get("calibration_passed")
+        )
+        brier_score = (
+            event_calibration.get("brier_score")
+            if has_backtest_calibration and event_calibration.get("brier_score") is not None
+            else stored_event_forecast.get("brier_score")
+        )
+        ece = (
+            event_calibration.get("ece")
+            if has_backtest_calibration and event_calibration.get("ece") is not None
+            else stored_event_forecast.get("ece")
+        )
+        return {
+            "calibration_method": str(calibration_method or probability_source),
+            "brier_score": (round(float(brier_score), 4) if brier_score is not None else None),
+            "ece": (round(float(ece), 4) if ece is not None else None),
+            "calibration_passed": (
+                bool(calibration_passed)
+                if calibration_passed is not None
+                else None
+            ),
+        }
+
+    @staticmethod
     def _clean_decision_event_forecast(payload: dict[str, Any]) -> dict[str, Any]:
         return normalize_event_forecast_payload(payload)
 
@@ -426,6 +479,12 @@ class ForecastDecisionService:
             stored_event_forecast=stored_event_forecast,
             market_metrics=market_metrics,
         )
+        resolved_calibration = self._resolve_event_calibration(
+            probability_is_learned=probability_is_learned,
+            stored_event_forecast=stored_event_forecast,
+            event_calibration=event_calibration,
+            probability_source=probability_source,
+        )
 
         event_forecast = EventForecast(
             event_key=f"{virus_typ.lower().replace(' ', '_')}_growth_7d",
@@ -443,26 +502,10 @@ class ForecastDecisionService:
                 if baseline_value > 0
                 else None
             ),
-            calibration_method=str(
-                event_calibration.get("calibration_method")
-                if probability_is_learned and event_calibration.get("calibration_method")
-                else probability_source
-            ),
-            brier_score=(
-                round(float(event_calibration["brier_score"]), 4)
-                if probability_is_learned and event_calibration.get("brier_score") is not None
-                else None
-            ),
-            ece=(
-                round(float(event_calibration["ece"]), 4)
-                if probability_is_learned and event_calibration.get("ece") is not None
-                else None
-            ),
-            calibration_passed=(
-                bool(event_calibration.get("calibration_passed"))
-                if probability_is_learned and event_calibration
-                else None
-            ),
+            calibration_method=resolved_calibration["calibration_method"],
+            brier_score=resolved_calibration["brier_score"],
+            ece=resolved_calibration["ece"],
+            calibration_passed=resolved_calibration["calibration_passed"],
             reliability_score=reliability_score,
             backtest_quality_score=backtest_quality_score,
             probability_source=probability_source,

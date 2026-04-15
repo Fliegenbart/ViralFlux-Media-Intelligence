@@ -363,6 +363,64 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["drift_status"], "warning")
         self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
 
+    def test_build_forecast_bundle_preserves_stored_calibration_when_backtest_skips_it(self) -> None:
+        self._seed_forecast_bundle_inputs()
+        stored_forecast = (
+            self.db.query(MLForecast)
+            .filter(MLForecast.virus_typ == "Influenza A")
+            .order_by(MLForecast.forecast_date.asc())
+            .offset(6)
+            .limit(1)
+            .one()
+        )
+        stored_forecast.features_used = {
+            "event_forecast": {
+                "event_probability": 0.64,
+                "probability_source": "learned_exceedance_logistic_regression",
+                "calibration_mode": "platt",
+                "calibration_method": "learned_exceedance_logistic_regression:platt",
+                "brier_score": 0.08,
+                "ece": 0.04,
+                "calibration_passed": True,
+                "reliability_score": 0.71,
+                "backtest_quality_score": 0.79,
+                "fallback_used": False,
+            }
+        }
+        latest_market = (
+            self.db.query(BacktestRun)
+            .filter(BacktestRun.virus_typ == "Influenza A", BacktestRun.mode == "MARKET_CHECK")
+            .one()
+        )
+        latest_market.metrics = {
+            **(latest_market.metrics or {}),
+            "event_calibration": {
+                "samples": 0,
+                "brier_score": None,
+                "ece": None,
+                "calibration_passed": None,
+                "calibration_method": "skipped_heuristic_event_score",
+                "calibration_skipped": True,
+                "skip_reason": "heuristic_event_score_only",
+                "buckets": [],
+            },
+        }
+        self.db.commit()
+
+        bundle = ForecastDecisionService(self.db).build_forecast_bundle(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        event = bundle["event_forecast"]
+        self.assertEqual(
+            event["calibration_method"],
+            "learned_exceedance_logistic_regression:platt",
+        )
+        self.assertEqual(event["brier_score"], 0.08)
+        self.assertEqual(event["ece"], 0.04)
+        self.assertTrue(event["calibration_passed"])
+
     def test_build_legacy_outbreak_score_exposes_honest_signal_fields(self) -> None:
         self._seed_forecast_bundle_inputs()
 

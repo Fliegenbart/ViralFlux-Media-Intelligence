@@ -3,8 +3,11 @@ import asyncio
 import logging
 import secrets
 import time
+from datetime import UTC, time as time_of_day
 from typing import Any
+from zoneinfo import ZoneInfo
 
+from celery import chain
 from fastapi import FastAPI, Depends, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -54,6 +57,10 @@ logger = logging.getLogger(__name__)
 
 _STARTUP_READINESS_LOCK = "startup:readiness:record"
 _STARTUP_BFARM_IMPORT_LOCK = "startup:bfarm:import"
+_STARTUP_MORNING_CATCHUP_LOCK = "startup:morning:catchup"
+_STARTUP_MORNING_CATCHUP_ACTION = "STARTUP_MORNING_CATCHUP"
+_STARTUP_MORNING_CATCHUP_CUTOFF = time_of_day(hour=9, minute=0)
+_STARTUP_MORNING_CATCHUP_TZ = ZoneInfo("Europe/Berlin")
 
 
 def _api_surface_urls(settings_obj: Any | None = None) -> dict[str, str | None]:
@@ -449,6 +456,7 @@ async def startup_event():
         logger_obj=logger,
         log_event_fn=log_event,
     )
+    app.state.startup_morning_catchup_metadata = _run_startup_morning_catchup_once(readiness_snapshot)
 
     log_event(
         logger,
@@ -495,6 +503,184 @@ def _startup_skip_metadata(*, action: str, summary: str, lock_name: str) -> dict
             "singleton": True,
         },
     }
+
+
+def _startup_local_time(now_utc: Any | None = None):
+    current_utc = now_utc or utc_now()
+    aware_utc = current_utc if getattr(current_utc, "tzinfo", None) else current_utc.replace(tzinfo=UTC)
+    return aware_utc.astimezone(_STARTUP_MORNING_CATCHUP_TZ)
+
+
+def _startup_morning_catchup_reasons(readiness_snapshot: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    forecast_monitoring = ((readiness_snapshot.get("components") or {}).get("forecast_monitoring") or {})
+    for item in list(forecast_monitoring.get("items") or []):
+        virus_typ = str(item.get("virus_typ") or "").strip() or "Unknown forecast"
+        forecast_readiness = str(item.get("forecast_readiness") or "").strip().upper()
+        if forecast_readiness and forecast_readiness != "GO":
+            reasons.append(f"{virus_typ}: forecast readiness {forecast_readiness}")
+            continue
+
+        for field_name, label in (
+            ("accuracy_freshness_status", "accuracy freshness"),
+            ("freshness_status", "freshness"),
+            ("backtest_freshness_status", "backtest freshness"),
+        ):
+            value = str(item.get(field_name) or "").strip().lower()
+            if value in {"stale", "expired", "warning", "unknown"}:
+                reasons.append(f"{virus_typ}: {label} {value}")
+                break
+
+    return _dedupe_public_strings(reasons)
+
+
+def _run_startup_morning_catchup_once(readiness_snapshot: dict[str, Any]) -> dict[str, Any]:
+    try:
+        with try_advisory_lock(_STARTUP_MORNING_CATCHUP_LOCK) as acquired:
+            if not acquired:
+                summary = (
+                    "Startup morning catch-up skipped on this worker because another "
+                    "worker already owns the singleton startup section."
+                )
+                log_event(
+                    logger,
+                    "startup_singleton_section_skipped",
+                    section="startup_morning_catchup",
+                    lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                )
+                return _startup_skip_metadata(
+                    action=_STARTUP_MORNING_CATCHUP_ACTION,
+                    summary=summary,
+                    lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                )
+
+            log_event(
+                logger,
+                "startup_singleton_section_started",
+                section="startup_morning_catchup",
+                lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+            )
+            local_now = _startup_local_time()
+            if local_now.time() < _STARTUP_MORNING_CATCHUP_CUTOFF:
+                summary = (
+                    "Startup morning catch-up skipped because startup happened before "
+                    "the morning task catch-up cutoff."
+                )
+                log_event(
+                    logger,
+                    "startup_singleton_section_skipped",
+                    section="startup_morning_catchup",
+                    lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                    reason="before_cutoff",
+                    local_time=local_now.isoformat(),
+                )
+                return _startup_skip_metadata(
+                    action=_STARTUP_MORNING_CATCHUP_ACTION,
+                    summary=summary,
+                    lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                )
+
+            reasons = _startup_morning_catchup_reasons(readiness_snapshot)
+            if not reasons:
+                summary = (
+                    "Startup morning catch-up skipped because forecast monitoring did "
+                    "not show stale morning-job signals."
+                )
+                log_event(
+                    logger,
+                    "startup_singleton_section_skipped",
+                    section="startup_morning_catchup",
+                    lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                    reason="not_needed",
+                    local_time=local_now.isoformat(),
+                )
+                return _startup_skip_metadata(
+                    action=_STARTUP_MORNING_CATCHUP_ACTION,
+                    summary=summary,
+                    lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                )
+
+            local_day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            utc_day_start = local_day_start.astimezone(UTC).replace(tzinfo=None)
+
+            with get_db_context() as db:
+                from app.models.database import AuditLog
+                from app.services.ml.tasks import (
+                    compute_forecast_accuracy_task,
+                    refresh_live_forecasts_task,
+                    refresh_market_backtests_task,
+                    refresh_regional_operational_snapshots_task,
+                )
+
+                existing_run = (
+                    db.query(AuditLog)
+                    .filter(
+                        AuditLog.action == _STARTUP_MORNING_CATCHUP_ACTION,
+                        AuditLog.timestamp >= utc_day_start,
+                    )
+                    .first()
+                )
+                if existing_run is not None:
+                    summary = "Startup morning catch-up already ran for the current local day."
+                    log_event(
+                        logger,
+                        "startup_singleton_section_skipped",
+                        section="startup_morning_catchup",
+                        lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                        reason="already_ran_today",
+                        local_day=local_day_start.date().isoformat(),
+                    )
+                    return _startup_skip_metadata(
+                        action=_STARTUP_MORNING_CATCHUP_ACTION,
+                        summary=summary,
+                        lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                    )
+
+                workflow = chain(
+                    refresh_live_forecasts_task.si(),
+                    refresh_market_backtests_task.si(),
+                    compute_forecast_accuracy_task.si(),
+                    refresh_regional_operational_snapshots_task.si(),
+                )
+                async_result = workflow.apply_async()
+                run_metadata = OperationalRunRecorder(db).record_event(
+                    action=_STARTUP_MORNING_CATCHUP_ACTION,
+                    status="success",
+                    summary="Queued startup morning catch-up workflow after late startup.",
+                    metadata={
+                        "local_time": local_now.isoformat(),
+                        "local_day": local_day_start.date().isoformat(),
+                        "reasons": reasons,
+                        "queued_tasks": [
+                            "refresh_live_forecasts_task",
+                            "refresh_market_backtests_task",
+                            "compute_forecast_accuracy_task",
+                            "refresh_regional_operational_snapshots_task",
+                        ],
+                        "celery_chain_id": str(getattr(async_result, "id", "") or ""),
+                    },
+                )
+
+            log_event(
+                logger,
+                "startup_singleton_section_completed",
+                section="startup_morning_catchup",
+                lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+                run_id=run_metadata.get("run_id"),
+                local_time=local_now.isoformat(),
+                reasons=reasons,
+            )
+            return run_metadata
+    except Exception as exc:
+        log_event(
+            logger,
+            "startup_singleton_section_failed",
+            level=logging.ERROR,
+            section="startup_morning_catchup",
+            lock_name=_STARTUP_MORNING_CATCHUP_LOCK,
+            error_message=str(exc),
+        )
+        raise
 
 
 def _record_startup_readiness_once(readiness_snapshot: dict[str, Any]) -> dict[str, Any]:

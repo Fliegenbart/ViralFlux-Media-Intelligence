@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+from datetime import datetime
 from types import ModuleType, SimpleNamespace
 import unittest
 from contextlib import contextmanager
@@ -154,6 +155,7 @@ class StartupSingletonTests(unittest.TestCase):
             patch.object(main, "init_db", return_value={"status": "ok", "warnings": [], "actions": []}),
             patch.object(main, "ProductionReadinessService") as readiness_service_cls,
             patch.object(main, "_record_startup_readiness_once", return_value={"status": "healthy"}),
+            patch.object(main, "_run_startup_morning_catchup_once", return_value={"status": "skipped"}),
             patch.object(main, "_launch_bfarm_startup_import_thread") as launch_import_mock,
             patch.object(main, "log_event") as log_event_mock,
         ):
@@ -189,6 +191,7 @@ class StartupSingletonTests(unittest.TestCase):
             patch.object(main, "init_db", return_value={"status": "ok", "warnings": [], "actions": []}),
             patch.object(main, "ProductionReadinessService") as readiness_service_cls,
             patch.object(main, "_record_startup_readiness_once", return_value={"status": "healthy"}),
+            patch.object(main, "_run_startup_morning_catchup_once", return_value={"status": "skipped"}),
             patch.object(main, "_launch_bfarm_startup_import_thread") as launch_import_mock,
         ):
             check_db_connection_mock.return_value = True
@@ -199,6 +202,50 @@ class StartupSingletonTests(unittest.TestCase):
             asyncio.run(main.startup_event())
 
         launch_import_mock.assert_called_once_with()
+
+    def test_startup_event_runs_morning_catchup_when_forecast_monitoring_is_stale(self) -> None:
+        readiness_snapshot = {
+            "status": "degraded",
+            "components": {
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "items": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "status": "warning",
+                            "accuracy_freshness_status": "expired",
+                        }
+                    ],
+                }
+            },
+            "blockers": [],
+            "checked_at": "2026-03-26T10:00:00",
+        }
+
+        with (
+            patch.object(main, "settings", SimpleNamespace(
+                APP_NAME="ViralFlux Media Intelligence",
+                APP_VERSION="1.0.0",
+                ENVIRONMENT="development",
+                EFFECTIVE_STARTUP_STRICT_READINESS=False,
+                STARTUP_ENABLE_BFARM_IMPORT=False,
+            )),
+            patch.object(main, "check_db_connection") as check_db_connection_mock,
+            patch.object(main, "init_db", return_value={"status": "ok", "warnings": [], "actions": []}),
+            patch.object(main, "ProductionReadinessService") as readiness_service_cls,
+            patch.object(main, "_record_startup_readiness_once", return_value={"status": "healthy"}),
+            patch.object(main, "_run_startup_morning_catchup_once", create=True) as catchup_mock,
+            patch.object(main, "_launch_bfarm_startup_import_thread") as launch_import_mock,
+        ):
+            check_db_connection_mock.return_value = True
+            readiness_service_cls.return_value.build_snapshot.return_value = readiness_snapshot
+
+            import asyncio
+
+            asyncio.run(main.startup_event())
+
+        catchup_mock.assert_called_once_with(readiness_snapshot)
+        launch_import_mock.assert_not_called()
 
     def test_record_startup_readiness_skips_when_lock_is_busy(self) -> None:
         snapshot = {"status": "healthy", "components": {}, "blockers": [], "checked_at": "2026-03-26T10:00:00"}
@@ -270,3 +317,96 @@ class StartupSingletonTests(unittest.TestCase):
         self.assertTrue(
             any(call.args[1] == "startup_bfarm_pull_completed" for call in log_event_mock.call_args_list)
         )
+
+    def test_startup_morning_catchup_queues_chain_once_when_needed(self) -> None:
+        readiness_snapshot = {
+            "status": "degraded",
+            "components": {
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "items": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "status": "warning",
+                            "accuracy_freshness_status": "expired",
+                        }
+                    ],
+                }
+            },
+        }
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        recorder = MagicMock()
+        recorder.record_event.return_value = {
+            "run_id": "catchup-1",
+            "status": "success",
+            "action": "STARTUP_MORNING_CATCHUP",
+        }
+        live_task = MagicMock()
+        live_task.si.return_value = "live-refresh"
+        backtest_task = MagicMock()
+        backtest_task.si.return_value = "backtest-refresh"
+        accuracy_task = MagicMock()
+        accuracy_task.si.return_value = "accuracy-refresh"
+        snapshot_task = MagicMock()
+        snapshot_task.si.return_value = "snapshot-refresh"
+        fake_tasks_module = SimpleNamespace(
+            refresh_live_forecasts_task=live_task,
+            refresh_market_backtests_task=backtest_task,
+            compute_forecast_accuracy_task=accuracy_task,
+            refresh_regional_operational_snapshots_task=snapshot_task,
+        )
+        chain_runner = MagicMock()
+
+        with (
+            patch.object(main, "utc_now", return_value=datetime(2026, 4, 15, 8, 30, 0)),
+            patch.object(main, "try_advisory_lock", return_value=_lock_result(True)),
+            patch.object(main, "get_db_context", return_value=_db_context(db)),
+            patch.object(main, "OperationalRunRecorder", return_value=recorder),
+            patch.dict("sys.modules", {"app.services.ml.tasks": fake_tasks_module}),
+            patch.object(main, "chain", return_value=chain_runner, create=True) as chain_mock,
+            patch.object(main, "log_event"),
+        ):
+            run_metadata = main._run_startup_morning_catchup_once(readiness_snapshot)
+
+        chain_mock.assert_called_once_with(
+            "live-refresh",
+            "backtest-refresh",
+            "accuracy-refresh",
+            "snapshot-refresh",
+        )
+        chain_runner.apply_async.assert_called_once_with()
+        self.assertEqual(run_metadata["run_id"], "catchup-1")
+
+    def test_startup_morning_catchup_skips_when_it_already_ran_today(self) -> None:
+        readiness_snapshot = {
+            "status": "degraded",
+            "components": {
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "items": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "status": "warning",
+                            "accuracy_freshness_status": "expired",
+                        }
+                    ],
+                }
+            },
+        }
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = object()
+
+        with (
+            patch.object(main, "utc_now", return_value=datetime(2026, 4, 15, 8, 30, 0)),
+            patch.object(main, "try_advisory_lock", return_value=_lock_result(True)),
+            patch.object(main, "get_db_context", return_value=_db_context(db)),
+            patch.object(main, "chain", create=True) as chain_mock,
+            patch.object(main, "OperationalRunRecorder") as recorder_cls,
+            patch.object(main, "log_event"),
+        ):
+            run_metadata = main._run_startup_morning_catchup_once(readiness_snapshot)
+
+        self.assertEqual(run_metadata["status"], "skipped")
+        chain_mock.assert_not_called()
+        recorder_cls.assert_not_called()

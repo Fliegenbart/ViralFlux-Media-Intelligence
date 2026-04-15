@@ -391,7 +391,12 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
         for virus in virus_types:
             # Forecasts der letzten 14 Tage, die jetzt in der Vergangenheit liegen
             cutoff = utc_now()
-            window_start = cutoff - timedelta(days=14)
+            window_start = (cutoff - timedelta(days=14)).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
             forecasts = (
                 db.query(MLForecast)
                 .filter(

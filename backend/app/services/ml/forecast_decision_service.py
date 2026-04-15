@@ -45,6 +45,8 @@ CONVERSION_OUTCOME_FIELD_NAMES = ("sales_units", "order_count", "revenue_eur")
 class ForecastDecisionService:
     """Forecast-first runtime adapter for decision, risk and opportunity layers."""
 
+    GENERIC_MARKET_PROXY_SOURCES = {"RKI_ARE", "ATEMWEGSINDEX"}
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -98,6 +100,20 @@ class ForecastDecisionService:
                 func.upper(BacktestRun.target_source) == str(target_source).strip().upper()
             )
         return query.order_by(BacktestRun.created_at.desc()).first()
+
+    @classmethod
+    def _market_gate_is_advisory_proxy(
+        cls,
+        *,
+        latest_market: BacktestRun | None,
+        target_source: str | None = None,
+    ) -> bool:
+        source = (
+            latest_market.target_source
+            if latest_market and latest_market.target_source
+            else target_source
+        )
+        return str(source or "").strip().upper() in cls.GENERIC_MARKET_PROXY_SOURCES
 
     def _latest_customer_backtest(self, *, virus_typ: str) -> BacktestRun | None:
         return (
@@ -465,8 +481,16 @@ class ForecastDecisionService:
         freshness_status = self._freshness_state(
             forecasts[0].created_at if forecasts and forecasts[0].created_at else None
         )
+        market_gate_is_advisory_proxy = self._market_gate_is_advisory_proxy(
+            latest_market=latest_market,
+            target_source=target_source,
+        )
         forecast_ready = bool(
-            quality_gate.get("overall_passed")
+            latest_market is not None
+            and (
+                market_gate_is_advisory_proxy
+                or quality_gate.get("overall_passed")
+            )
             and drift_status != "warning"
             and freshness_status == "fresh"
         )
@@ -628,6 +652,10 @@ class ForecastDecisionService:
             "lead_lag": latest_market.lead_lag if latest_market else None,
             "improvement_vs_baselines": latest_market.improvement_vs_baselines if latest_market else None,
         }
+        market_gate_is_advisory_proxy = self._market_gate_is_advisory_proxy(
+            latest_market=latest_market,
+            target_source=target_source,
+        )
 
         alerts: list[str] = []
         if not (burden_forecast.get("points") or []):
@@ -649,7 +677,11 @@ class ForecastDecisionService:
 
         promotion_gate = forecast_quality.get("promotion_gate") or {}
         interval_coverage = forecast_quality.get("interval_coverage") or {}
-        if promotion_gate and not bool(promotion_gate.get("overall_passed")):
+        if (
+            promotion_gate
+            and not market_gate_is_advisory_proxy
+            and not bool(promotion_gate.get("overall_passed"))
+        ):
             alerts.append("Forecast-Promotion-Gate steht aktuell auf WATCH.")
         if interval_coverage and interval_coverage.get("interval_passed") is False:
             alerts.append("Intervallabdeckung liegt ausserhalb des Zielbands.")
@@ -658,7 +690,11 @@ class ForecastDecisionService:
 
         lead_lag = latest_backtest_payload.get("lead_lag") or {}
         effective_lead_days = lead_lag.get("effective_lead_days")
-        if effective_lead_days is not None and float(effective_lead_days) <= 0:
+        if (
+            not market_gate_is_advisory_proxy
+            and effective_lead_days is not None
+            and float(effective_lead_days) <= 0
+        ):
             alerts.append("Effektive Vorlaufzeit ist nicht positiv.")
 
         critical = any(

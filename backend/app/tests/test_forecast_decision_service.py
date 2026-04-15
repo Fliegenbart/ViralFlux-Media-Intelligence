@@ -363,6 +363,71 @@ class ForecastDecisionServiceTests(unittest.TestCase):
         self.assertEqual(snapshot["drift_status"], "warning")
         self.assertTrue(any("Drift" in alert for alert in snapshot["alerts"]))
 
+    def test_build_monitoring_snapshot_treats_generic_rki_are_gate_as_advisory(self) -> None:
+        self._seed_forecast_bundle_inputs(quality_gate_passed=False)
+        latest_market = (
+            self.db.query(BacktestRun)
+            .filter(BacktestRun.virus_typ == "Influenza A", BacktestRun.mode == "MARKET_CHECK")
+            .one()
+        )
+        latest_market.metrics = {
+            **(latest_market.metrics or {}),
+            "quality_gate": {
+                "overall_passed": False,
+                "forecast_readiness": "WATCH",
+                "ttd_passed": False,
+                "lead_passed": False,
+                "baseline_passed": False,
+            },
+            "timing_metrics": {"best_lag_days": -7, "corr_at_best_lag": 0.22},
+        }
+        latest_market.lead_lag = {"effective_lead_days": 0}
+        self.db.commit()
+
+        snapshot = ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ="Influenza A",
+            target_source="RKI_ARE",
+        )
+
+        self.assertEqual(snapshot["forecast_readiness"], "GO")
+        self.assertEqual(snapshot["monitoring_status"], "healthy")
+        self.assertFalse(any("Promotion-Gate" in alert for alert in snapshot["alerts"]))
+        self.assertFalse(any("Vorlaufzeit" in alert for alert in snapshot["alerts"]))
+
+    def test_build_monitoring_snapshot_keeps_specific_survstat_gate_blocking(self) -> None:
+        self._seed_forecast_bundle_inputs(quality_gate_passed=False)
+        latest_market = (
+            self.db.query(BacktestRun)
+            .filter(BacktestRun.virus_typ == "Influenza A", BacktestRun.mode == "MARKET_CHECK")
+            .one()
+        )
+        latest_market.target_source = "SURVSTAT"
+        latest_market.target_key = "SURVSTAT:Influenza A"
+        latest_market.target_label = "SURVSTAT Influenza A"
+        latest_market.metrics = {
+            **(latest_market.metrics or {}),
+            "quality_gate": {
+                "overall_passed": False,
+                "forecast_readiness": "WATCH",
+                "ttd_passed": False,
+                "lead_passed": False,
+                "baseline_passed": False,
+            },
+            "timing_metrics": {"best_lag_days": -7, "corr_at_best_lag": 0.22},
+        }
+        latest_market.lead_lag = {"effective_lead_days": 0}
+        self.db.commit()
+
+        snapshot = ForecastDecisionService(self.db).build_monitoring_snapshot(
+            virus_typ="Influenza A",
+            target_source="SURVSTAT",
+        )
+
+        self.assertEqual(snapshot["forecast_readiness"], "WATCH")
+        self.assertEqual(snapshot["monitoring_status"], "warning")
+        self.assertTrue(any("Promotion-Gate" in alert for alert in snapshot["alerts"]))
+        self.assertTrue(any("Vorlaufzeit" in alert for alert in snapshot["alerts"]))
+
     def test_build_forecast_bundle_preserves_stored_calibration_when_backtest_skips_it(self) -> None:
         self._seed_forecast_bundle_inputs()
         stored_forecast = (

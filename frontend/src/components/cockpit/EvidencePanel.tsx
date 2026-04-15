@@ -6,6 +6,7 @@ import {
   MediaEvidenceResponse,
   TruthImportBatchDetailResponse,
   TruthImportResponse,
+  type WorkspaceStatusTone,
   WorkspaceStatusSummary,
 } from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
@@ -38,13 +39,11 @@ interface Props {
   onLoadTruthBatchDetail: (batchId: string) => Promise<void>;
 }
 
-type EvidenceTone = 'success' | 'warning' | 'neutral';
-
 interface EvidenceSummaryCard {
   label: string;
   value: string;
   detail: string;
-  tone: EvidenceTone;
+  tone: WorkspaceStatusTone;
 }
 
 const EvidencePanel: React.FC<Props> = ({
@@ -115,7 +114,7 @@ const EvidencePanel: React.FC<Props> = ({
       || freshnessItem?.tone === 'success'
     ),
   );
-  const heroTone: EvidenceTone = readyForWeeklyPlanning ? 'success' : (hasBlockers || !hasTruthData ? 'warning' : 'neutral');
+  const heroTone: WorkspaceStatusTone = readyForWeeklyPlanning ? 'success' : (hasBlockers || !hasTruthData ? 'warning' : 'neutral');
   const heroLabel = readyForWeeklyPlanning
     ? 'Belastbar genug für die Wochenplanung'
     : hasBlockers

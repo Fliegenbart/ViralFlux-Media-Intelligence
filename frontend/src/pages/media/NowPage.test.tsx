@@ -9,7 +9,35 @@ const mockClearPageHeader = jest.fn();
 const mockToast = jest.fn();
 const mockNavigate = jest.fn();
 const mockOpenRecommendation = jest.fn();
-let mockNowPageData: Record<string, unknown>;
+
+type MockNowPageView = {
+  generatedAt?: string;
+  primaryActionLabel: string;
+  primaryRecommendationId: string | null;
+  heroRecommendation: {
+    actionLabel: string;
+    ctaDisabled: boolean;
+  } | null;
+  focusRegion: {
+    code: string;
+    name: string;
+  } | null;
+};
+
+type MockNowPageData = {
+  loading: boolean;
+  workspaceStatus: null;
+  forecast: null;
+  focusRegionBacktest: null;
+  focusRegionBacktestLoading: boolean;
+  waveOutlook: null;
+  waveOutlookLoading: boolean;
+  waveRadar: null;
+  waveRadarLoading: boolean;
+  view: MockNowPageView;
+};
+
+let mockNowPageData: MockNowPageData;
 
 jest.mock('../../components/AnimatedPage', () => ({
   __esModule: true,
@@ -21,7 +49,7 @@ jest.mock('../../components/cockpit/NowWorkspace', () => ({
   default: () => <div>Diese-Woche-Ansicht</div>,
 }));
 
-jest.mock('../../App', () => ({
+jest.mock('../../lib/appContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 

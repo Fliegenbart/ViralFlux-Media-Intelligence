@@ -2,31 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { geoMercator, geoPath } from 'd3-geo';
 
 import deBundeslaenderGeo from '../../assets/maps/de-bundeslaender.geo.json';
+import { GeoBundeslandCollection, GeoBundeslandShape } from './geoTypes';
 import { MapRegion } from './types';
 import {
   formatPercent,
   formatSignalScore,
   primarySignalScore,
 } from './cockpitUtils';
-
-interface GeoBundeslandFeature {
-  type: 'Feature';
-  properties?: { code?: string; name?: string };
-  geometry: unknown;
-}
-
-interface GeoBundeslandCollection {
-  type: 'FeatureCollection';
-  features: GeoBundeslandFeature[];
-}
-
-interface GeoBundeslandShape {
-  code?: string;
-  name: string;
-  d: string;
-  cx: number;
-  cy: number;
-}
 
 const BUNDESLAND_NAME_TO_CODE: Record<string, string> = {
   'Baden-Württemberg': 'BW',

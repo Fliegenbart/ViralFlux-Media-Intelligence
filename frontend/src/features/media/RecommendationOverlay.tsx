@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { useToast } from '../../App';
 import RecommendationDrawer from '../../components/cockpit/RecommendationDrawer';
 import { ConnectorCatalogItem, PreparedSyncPayload, RecommendationDetail } from '../../types/media';
 import { mediaApi } from './api';
 import { useMediaWorkflow } from './workflowContext';
+import { useToast } from '../../lib/appContext';
 
 const RecommendationOverlay: React.FC = () => {
   const navigate = useNavigate();

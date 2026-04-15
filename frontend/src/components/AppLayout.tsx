@@ -8,8 +8,8 @@ import React, {
   useState,
 } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { useTheme, useAuth } from '../App';
 import { apiFetch } from '../lib/api';
+import { useAuth, useTheme } from '../lib/appContext';
 import {
   Activity,
   LineChart,

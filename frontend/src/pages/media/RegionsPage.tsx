@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
 import RegionWorkbench from '../../components/cockpit/RegionWorkbench';
-import { useToast } from '../../App';
 import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useRegionsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
+import { useToast } from '../../lib/appContext';
 
 const RegionsPage: React.FC = () => {
   const location = useLocation();

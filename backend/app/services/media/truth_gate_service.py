@@ -1,14 +1,32 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
+from typing import TypedDict
 
-from app.services.media.semantic_contracts import truth_readiness_contract
+from app.services.media.semantic_contracts import MetricContract, truth_readiness_contract
+
+
+class TruthCoverageInput(TypedDict, total=False):
+    coverage_weeks: int | float | str | None
+    required_fields_present: Sequence[str] | None
+    conversion_fields_present: Sequence[str] | None
+    truth_freshness_state: str | None
+    trust_readiness: str | None
+
+
+class TruthGateResult(TypedDict):
+    passed: bool
+    state: str
+    learning_state: str
+    message: str | None
+    guidance: str
+    field_contracts: dict[str, MetricContract]
 
 
 class TruthGateService:
     """Interprets truth coverage into a consistent gate and communication contract."""
 
-    def evaluate(self, truth_coverage: dict[str, Any]) -> dict[str, Any]:
+    def evaluate(self, truth_coverage: TruthCoverageInput) -> TruthGateResult:
         coverage_weeks = int(truth_coverage.get("coverage_weeks") or 0)
         required_fields = set(truth_coverage.get("required_fields_present") or [])
         conversion_fields = set(truth_coverage.get("conversion_fields_present") or [])
@@ -73,7 +91,7 @@ class TruthGateService:
         learning_state: str,
         message: str | None,
         guidance: str,
-    ) -> dict[str, Any]:
+    ) -> TruthGateResult:
         return {
             "passed": passed,
             "state": state,

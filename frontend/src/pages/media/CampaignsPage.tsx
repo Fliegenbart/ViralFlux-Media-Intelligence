@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import CampaignStudio from '../../components/cockpit/CampaignStudio';
-import { useToast } from '../../App';
 import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { mediaApi } from '../../features/media/api';
 import { useCampaignsPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
+import { useToast } from '../../lib/appContext';
 import { RecommendationCard } from '../../types/media/recommendations';
 
 const CampaignsPage: React.FC = () => {

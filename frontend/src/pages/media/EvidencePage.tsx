@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 
 import EvidencePanel from '../../components/cockpit/EvidencePanel';
-import { useToast } from '../../App';
 import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { useEvidencePageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
+import { useToast } from '../../lib/appContext';
 
 const EvidencePage: React.FC = () => {
   const { toast } = useToast();

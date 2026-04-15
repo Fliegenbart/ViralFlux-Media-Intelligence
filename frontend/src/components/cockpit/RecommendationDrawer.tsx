@@ -8,6 +8,7 @@ import {
   ConnectorCatalogItem,
   PreparedSyncPayload,
   RecommendationDetail,
+  type WorkspaceStatusTone,
 } from '../../types/media';
 import {
   STATUS_ACTION_LABELS,
@@ -42,8 +43,6 @@ interface Props {
   onRegenerateAI: (id: string) => void;
   onPrepareSync: (id: string, connectorKey: string) => void;
 }
-
-type DrawerTone = 'success' | 'warning' | 'neutral';
 
 const RecommendationDrawer: React.FC<Props> = ({
   detail,
@@ -630,7 +629,7 @@ function publishabilityHint(detail: RecommendationDetail): string {
 function approvalMemoReadiness(
   detail: RecommendationDetail,
   syncPreview: PreparedSyncPayload | null,
-): { label: string; detail: string; tone: DrawerTone } {
+): { label: string; detail: string; tone: WorkspaceStatusTone } {
   if (detail.publish_blockers && detail.publish_blockers.length > 0) {
     return {
       label: 'Blockiert',

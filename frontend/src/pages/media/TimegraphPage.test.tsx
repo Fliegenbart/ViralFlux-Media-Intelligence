@@ -9,7 +9,7 @@ const mockSetSelectedRegion = jest.fn();
 const mockSetPageHeader = jest.fn();
 const mockClearPageHeader = jest.fn();
 
-jest.mock('../../App', () => ({
+jest.mock('../../lib/appContext', () => ({
   useToast: () => ({
     toast: jest.fn(),
   }),

@@ -5,25 +5,7 @@ import { geoMercator, geoPath } from 'd3-geo';
 import deBundeslaenderGeo from '../../assets/maps/de-bundeslaender.geo.json';
 import { WaveRadarRegion, WaveRadarResponse } from '../../types/media';
 import { formatDateShort } from './cockpitUtils';
-
-interface GeoBundeslandFeature {
-  type: 'Feature';
-  properties?: { code?: string; name?: string };
-  geometry: unknown;
-}
-
-interface GeoBundeslandCollection {
-  type: 'FeatureCollection';
-  features: GeoBundeslandFeature[];
-}
-
-interface GeoBundeslandShape {
-  code?: string;
-  name: string;
-  d: string;
-  cx: number;
-  cy: number;
-}
+import { GeoBundeslandCollection, GeoBundeslandShape } from './geoTypes';
 
 const BUNDESLAND_NAME_TO_CODE: Record<string, string> = {
   'Baden-Württemberg': 'BW',

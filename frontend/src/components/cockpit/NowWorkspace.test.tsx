@@ -46,11 +46,6 @@ jest.mock('./BacktestVisuals', () => ({
   WaveSpreadPanel: ({ title = 'Ausbreitungsreihenfolge' }: { title?: string }) => <div>{title}</div>,
 }));
 
-jest.mock('./ForecastChart', () => ({
-  __esModule: true,
-  ForecastChart: () => <div>Forecast chart</div>,
-}));
-
 jest.mock('./GermanyMap', () => ({
   __esModule: true,
   default: () => <div>Germany map</div>,

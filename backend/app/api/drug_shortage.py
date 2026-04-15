@@ -8,6 +8,7 @@ import logging
 import threading
 
 from app.api.deps import get_current_admin, get_current_user
+from app.services.data_ingest.bfarm_service import get_cached_analyzer, set_cached_analyzer
 from app.services.data_ingest.drug_shortage_service import DrugShortageAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,6 @@ ALLOWED_CSV_CONTENT_TYPES = {
     "application/vnd.ms-excel",
 }
 
-# Singleton-Instanz für gecachte Analyse
 _analyzer: DrugShortageAnalyzer | None = None
 _auto_refresh_lock = threading.Lock()
 _auto_refresh_attempted = False
@@ -28,6 +28,10 @@ def _ensure_analyzer() -> DrugShortageAnalyzer | None:
     """Lazy-load BfArM data if no analyzer is cached (multi-worker safety)."""
     global _analyzer, _auto_refresh_attempted
     if _analyzer is not None and _analyzer.df_filtered is not None:
+        return _analyzer
+    cached_analyzer = get_cached_analyzer()
+    if cached_analyzer is not None and cached_analyzer.df_filtered is not None:
+        _analyzer = cached_analyzer
         return _analyzer
     if _auto_refresh_attempted:
         return _analyzer
@@ -42,6 +46,9 @@ def _ensure_analyzer() -> DrugShortageAnalyzer | None:
             logger.info("Auto-Refresh: BfArM-Daten werden nachgeladen (Worker hatte keine Daten)")
             service = BfarmIngestionService()
             service.run_full_import()
+            cached_analyzer = get_cached_analyzer()
+            if cached_analyzer is not None and cached_analyzer.df_filtered is not None:
+                _analyzer = cached_analyzer
             logger.info("Auto-Refresh: BfArM-Daten erfolgreich geladen")
         except Exception as e:
             logger.warning(f"Auto-Refresh fehlgeschlagen: {e}")
@@ -69,7 +76,6 @@ async def upload_shortage_csv(file: UploadFile = File(...)):
     """
     global _analyzer
 
-    # Temporäre Datei schreiben
     try:
         content = await file.read()
         _validate_csv_upload(file, content)
@@ -81,6 +87,7 @@ async def upload_shortage_csv(file: UploadFile = File(...)):
         df = analyzer.load_and_clean(tmp_path)
 
         _analyzer = analyzer
+        set_cached_analyzer(analyzer)
 
         signals = analyzer.get_infection_signals()
         summary = analyzer.get_summary_text()
@@ -155,7 +162,6 @@ async def get_shortage_details(
     if pediatric_only:
         df = df[df['is_pediatric']]
 
-    # Dedupliziere nach Bearbeitungsnummer für saubere Ausgabe
     if 'Bearbeitungsnummer' in df.columns:
         df_dedup = df.drop_duplicates(subset=['Bearbeitungsnummer'])
     else:

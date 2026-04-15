@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 
-import { useToast } from '../../App';
 import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import { FocusRegionOutlookPanel } from '../../components/cockpit/BacktestVisuals';
 import { formatDateShort, VIRUS_OPTIONS } from '../../components/cockpit/cockpitUtils';
 import { useTimegraphPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
+import { useToast } from '../../lib/appContext';
 
 const TimegraphPage: React.FC = () => {
   const { toast } = useToast();
@@ -27,7 +27,6 @@ const TimegraphPage: React.FC = () => {
     return clearPageHeader;
   }, [clearPageHeader]);
 
-  /* ── derived insight values ── */
   const prediction = regionalBacktest?.timeline?.[regionalBacktest.timeline.length - 1] || null;
   const changePct = prediction
     ? ((prediction.expected_target_incidence - prediction.current_known_incidence) /

@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import { useToast } from '../../App';
 import AnimatedPage from '../../components/AnimatedPage';
 import { usePageHeader } from '../../components/AppLayout';
 import SimplifiedDecisionWorkspace from '../../components/cockpit/SimplifiedDecisionWorkspace';
 import { useNowPageData } from '../../features/media/useMediaData';
 import { useMediaWorkflow } from '../../features/media/workflowContext';
+import { useToast } from '../../lib/appContext';
 
 const VirusRadarPage: React.FC = () => {
   const { toast } = useToast();

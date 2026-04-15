@@ -8,6 +8,7 @@ from app.services.media.semantic_contracts import (
     outcome_signal_contract,
     truth_readiness_contract,
 )
+from .context import build_truth_learning_context
 
 
 def _campaign_cards(service, *, brand: str, limit: int = 120) -> list[dict[str, Any]]:
@@ -16,13 +17,9 @@ def _campaign_cards(service, *, brand: str, limit: int = 120) -> list[dict[str, 
         limit=limit,
         normalize_status=True,
     )
-    truth_coverage = service.get_truth_coverage(brand=brand)
-    truth_gate = service.truth_gate_service.evaluate(truth_coverage)
-    learning_bundle = service.outcome_signal_service.build_learning_bundle(
-        brand=brand,
-        truth_coverage=truth_coverage,
-        truth_gate=truth_gate,
-    )
+    truth_context = build_truth_learning_context(service, brand=brand)
+    truth_gate = truth_context["truth_gate"]
+    learning_bundle = truth_context["learning_bundle"]
     cards = [
         service._attach_outcome_learning_to_card(
             card=to_card_response(opp, include_preview=True),

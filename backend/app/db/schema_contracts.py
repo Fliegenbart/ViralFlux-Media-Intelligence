@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 ML_FORECAST_REGION_SCOPE_MIGRATION = "f1a2b3c4d5e6"
 OUTBREAK_SCORE_PRIORITY_INDEX_MIGRATION = "d9e8f7a6b5c4"
+MEDIA_OUTCOME_BATCH_INGESTION_FIELDS_MIGRATION = "e1f4c7b8a9d2"
 
 _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
     "ml_forecasts": {
@@ -32,6 +33,19 @@ _REQUIRED_SCHEMA_CONTRACTS: dict[str, dict[str, Any]] = {
         ),
         "indexes": (
             "idx_outbreak_date_virus",
+        ),
+    },
+    "media_outcome_import_batches": {
+        "migration_revision": MEDIA_OUTCOME_BATCH_INGESTION_FIELDS_MIGRATION,
+        "columns": (
+            "source_system",
+            "external_batch_id",
+            "ingestion_mode",
+        ),
+        "indexes": (
+            "ix_media_outcome_import_batches_source_system",
+            "ix_media_outcome_import_batches_external_batch_id",
+            "ix_media_outcome_import_batches_ingestion_mode",
         ),
     },
 }

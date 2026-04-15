@@ -1,16 +1,3 @@
-/**
- * Authenticated API client — handles token management for all API calls.
- *
- * Credentials are provided by the user via the login form.
- * The browser stores the session in an httpOnly cookie set by the backend,
- * so no readable JWT is persisted in localStorage or sessionStorage.
- *
- * Usage:
- *   import { apiFetch, login, logout, isAuthenticated } from '../lib/api';
- *   await login(email, password, true);
- *   const data = await apiFetch('/api/v1/marketing/list?limit=100');
- */
-
 const AUTH_CHANGE_EVENT = 'viralflux-auth-change';
 
 interface SessionState {
@@ -62,7 +49,7 @@ async function fetchSessionState(): Promise<boolean> {
     throw new Error(await readErrorMessage(response, `Sitzung konnte nicht geprüft werden (${response.status})`));
   }
 
-  const data = await response.json().catch(() => ({ authenticated: false })) as SessionState;
+  const data = await response.json() as SessionState;
   return Boolean(data.authenticated);
 }
 
@@ -79,7 +66,6 @@ export function addAuthChangeListener(listener: (authenticated: boolean) => void
   return () => window.removeEventListener(AUTH_CHANGE_EVENT, handleChange as EventListener);
 }
 
-/** Restore auth state from the backend session after a page reload. */
 export async function rehydrateAuth(force = false): Promise<boolean> {
   if (_hydrated && !force) {
     return _authenticated;
@@ -102,12 +88,10 @@ export async function rehydrateAuth(force = false): Promise<boolean> {
   return _rehydratePromise;
 }
 
-/** Check whether a valid authenticated session exists in memory. */
 export function isAuthenticated(): boolean {
   return _authenticated;
 }
 
-/** Log in with email + password. The backend stores the JWT in an httpOnly cookie. */
 export async function login(email: string, password: string, rememberMe = true): Promise<void> {
   const form = new URLSearchParams();
   form.append('username', email);
@@ -128,7 +112,6 @@ export async function login(email: string, password: string, rememberMe = true):
   notifyAuthChange(true);
 }
 
-/** Clear session state and ask the backend to expire the auth cookie. */
 export function logout(): void {
   const shouldNotify = _authenticated;
   clearAuthState(true);
@@ -139,13 +122,11 @@ export function logout(): void {
   void Promise.resolve(fetch('/api/auth/logout', {
     method: 'POST',
     credentials: 'include',
-  })).catch(() => undefined);
+  })).catch((error) => {
+    console.error('Logout request failed', error);
+  });
 }
 
-/**
- * Authenticated fetch wrapper.
- * Throws if not logged in and clears auth state on 401.
- */
 export async function apiFetch(
   url: string,
   init?: RequestInit,

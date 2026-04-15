@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterable
+from typing import NotRequired, TypedDict
+
+
+class MetricContract(TypedDict):
+    label: str
+    semantics: str
+    source: str
+    unit: str
+    calibrated: bool
+    derived_from: NotRequired[str]
+    note: NotRequired[str]
 
 
 _FEATURE_FAMILY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -14,7 +25,7 @@ _FEATURE_FAMILY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 )
 
 
-def infer_feature_families(feature_names: list[Any] | tuple[Any, ...] | set[Any] | None) -> list[str]:
+def infer_feature_families(feature_names: Iterable[object] | None) -> list[str]:
     normalized = {
         str(name).strip().lower()
         for name in (feature_names or [])
@@ -31,7 +42,7 @@ def infer_feature_families(feature_names: list[Any] | tuple[Any, ...] | set[Any]
     return families
 
 
-def normalize_confidence_pct(raw_confidence: Any) -> float | None:
+def normalize_confidence_pct(raw_confidence: object | None) -> float | None:
     if raw_confidence is None:
         return None
     try:
@@ -52,8 +63,8 @@ def build_metric_contract(
     calibrated: bool,
     derived_from: str | None = None,
     note: str | None = None,
-) -> dict[str, Any]:
-    contract = {
+) -> MetricContract:
+    contract: MetricContract = {
         "label": label,
         "semantics": semantics,
         "source": source,
@@ -67,7 +78,7 @@ def build_metric_contract(
     return contract
 
 
-def forecast_probability_contract(*, source: str = "ForecastDecisionService") -> dict[str, Any]:
+def forecast_probability_contract(*, source: str = "ForecastDecisionService") -> MetricContract:
     return build_metric_contract(
         label="Event-Wahrscheinlichkeit",
         semantics="forecast_event_probability",
@@ -79,7 +90,7 @@ def forecast_probability_contract(*, source: str = "ForecastDecisionService") ->
     )
 
 
-def ranking_signal_contract(*, source: str, label: str = "Signal-Score") -> dict[str, Any]:
+def ranking_signal_contract(*, source: str, label: str = "Signal-Score") -> MetricContract:
     return build_metric_contract(
         label=label,
         semantics="ranking_signal",
@@ -91,7 +102,7 @@ def ranking_signal_contract(*, source: str, label: str = "Signal-Score") -> dict
     )
 
 
-def priority_score_contract(*, source: str) -> dict[str, Any]:
+def priority_score_contract(*, source: str) -> MetricContract:
     return build_metric_contract(
         label="Priority-Score",
         semantics="activation_priority",
@@ -103,7 +114,7 @@ def priority_score_contract(*, source: str) -> dict[str, Any]:
     )
 
 
-def signal_confidence_contract(*, source: str, derived_from: str) -> dict[str, Any]:
+def signal_confidence_contract(*, source: str, derived_from: str) -> MetricContract:
     return build_metric_contract(
         label="Signal-Konfidenz",
         semantics="signal_confidence",
@@ -115,7 +126,7 @@ def signal_confidence_contract(*, source: str, derived_from: str) -> dict[str, A
     )
 
 
-def truth_readiness_contract(*, source: str = "MediaOutcomeRecord") -> dict[str, Any]:
+def truth_readiness_contract(*, source: str = "MediaOutcomeRecord") -> MetricContract:
     return build_metric_contract(
         label="Truth-Readiness",
         semantics="truth_readiness",
@@ -127,7 +138,7 @@ def truth_readiness_contract(*, source: str = "MediaOutcomeRecord") -> dict[str,
     )
 
 
-def business_gate_contract(*, source: str = "BusinessValidationService") -> dict[str, Any]:
+def business_gate_contract(*, source: str = "BusinessValidationService") -> MetricContract:
     return build_metric_contract(
         label="Business-Gate",
         semantics="business_validation_gate",
@@ -139,7 +150,7 @@ def business_gate_contract(*, source: str = "BusinessValidationService") -> dict
     )
 
 
-def evidence_tier_contract(*, source: str = "BusinessValidationService") -> dict[str, Any]:
+def evidence_tier_contract(*, source: str = "BusinessValidationService") -> MetricContract:
     return build_metric_contract(
         label="Evidenz-Tier",
         semantics="business_evidence_tier",
@@ -151,7 +162,7 @@ def evidence_tier_contract(*, source: str = "BusinessValidationService") -> dict
     )
 
 
-def outcome_signal_contract(*, source: str = "OutcomeSignalService") -> dict[str, Any]:
+def outcome_signal_contract(*, source: str = "OutcomeSignalService") -> MetricContract:
     return build_metric_contract(
         label="Outcome-Score",
         semantics="observed_outcome_signal",
@@ -163,7 +174,7 @@ def outcome_signal_contract(*, source: str = "OutcomeSignalService") -> dict[str
     )
 
 
-def outcome_confidence_contract(*, source: str = "OutcomeSignalService") -> dict[str, Any]:
+def outcome_confidence_contract(*, source: str = "OutcomeSignalService") -> MetricContract:
     return build_metric_contract(
         label="Learning-Konfidenz",
         semantics="outcome_learning_confidence",

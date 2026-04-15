@@ -7,21 +7,23 @@ import {
   logout,
 } from './api';
 
-function mockJsonResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
+function mockJsonResponse(body: JsonValue, status = 200): Response {
+  return new Response(typeof body === 'string' ? body : JSON.stringify(body), {
     status,
-    json: async () => body,
-    text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
-  } as Response;
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 }
 
 describe('auth session handling', () => {
   const originalFetch = global.fetch;
-  const fetchMock = jest.fn<Promise<Response>, [RequestInfo | URL, RequestInit?]>();
+  const fetchMock = jest.fn<Promise<Response>, [RequestInfo | URL, RequestInit?]>() as jest.MockedFunction<typeof fetch>;
 
   beforeAll(() => {
-    global.fetch = fetchMock as unknown as typeof fetch;
+    global.fetch = fetchMock;
   });
 
   afterAll(() => {
@@ -58,6 +60,19 @@ describe('auth session handling', () => {
       credentials: 'include',
     }));
     expect(isAuthenticated()).toBe(true);
+  });
+
+  it('fails loudly when the session payload cannot be parsed', async () => {
+    const brokenJsonResponse = new Response('', { status: 200 });
+    Object.defineProperty(brokenJsonResponse, 'json', {
+      value: async () => {
+        throw new Error('kaputtes JSON');
+      },
+    });
+    fetchMock.mockResolvedValueOnce(brokenJsonResponse);
+
+    await expect(rehydrateAuth(true)).rejects.toThrow('kaputtes JSON');
+    expect(isAuthenticated()).toBe(false);
   });
 
   it('clears auth state on logout and 401 responses', async () => {

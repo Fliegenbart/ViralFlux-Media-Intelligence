@@ -16,11 +16,11 @@ export type CampaignLifecycleState =
   | 'ARCHIVED';
 
 export interface MetricContract {
-  label?: string;
-  semantics?: string;
-  source?: string;
-  unit?: string;
-  calibrated?: boolean;
+  label: string;
+  semantics: string;
+  source: string;
+  unit: string;
+  calibrated: boolean;
   derived_from?: string;
   note?: string;
 }

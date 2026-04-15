@@ -71,6 +71,130 @@ def _api_surface_urls(settings_obj: Any | None = None) -> dict[str, str | None]:
     }
 
 
+def _dedupe_public_strings(values: list[str]) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        deduped.append(text)
+        seen.add(text)
+    return deduped
+
+
+def _public_blocker_reasons(snapshot: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    for blocker in list(snapshot.get("blockers") or []):
+        if isinstance(blocker, dict):
+            component = str(blocker.get("component") or "").strip()
+            message = str(blocker.get("message") or "").strip()
+            if component and message:
+                reasons.append(f"{component}: {message}")
+            elif message:
+                reasons.append(message)
+            elif component:
+                reasons.append(component)
+            continue
+        text = str(blocker or "").strip()
+        if text:
+            reasons.append(text)
+    return _dedupe_public_strings(reasons)
+
+
+def _public_scope_warning_reason(item: dict[str, Any]) -> str | None:
+    scope = str(item.get("virus_typ") or "").strip() or "Unknown scope"
+    horizon = item.get("horizon_days")
+    if horizon is not None:
+        scope = f"{scope} h{horizon}"
+
+    for collection_name in ("blockers", "core_scope_advisories", "live_source_advisories"):
+        collection = item.get(collection_name) or []
+        for reason in collection:
+            text = str(reason or "").strip()
+            if text:
+                return f"{scope}: {text}"
+
+    quality_gate = item.get("quality_gate") or {}
+    quality_readiness = str(quality_gate.get("forecast_readiness") or "").strip().upper()
+    if quality_readiness and quality_readiness != "GO":
+        return f"{scope}: forecast readiness {quality_readiness}."
+
+    status = str(item.get("status") or "").strip().lower()
+    if status:
+        return f"{scope}: status {status}."
+    return None
+
+
+def _public_forecast_monitoring_reason(item: dict[str, Any]) -> str | None:
+    virus_typ = str(item.get("virus_typ") or "").strip() or "Unknown forecast"
+    reasons: list[str] = []
+
+    forecast_readiness = str(item.get("forecast_readiness") or "").strip().upper()
+    if forecast_readiness and forecast_readiness != "GO":
+        reasons.append(f"forecast readiness {forecast_readiness}")
+
+    for field_name, label in (
+        ("freshness_status", "freshness"),
+        ("accuracy_freshness_status", "accuracy freshness"),
+        ("backtest_freshness_status", "backtest freshness"),
+    ):
+        value = str(item.get(field_name) or "").strip().lower()
+        if value and value not in {"ok", "fresh"}:
+            reasons.append(f"{label} {value}")
+
+    if not reasons:
+        status = str(item.get("status") or "").strip().lower()
+        if not status:
+            return None
+        reasons.append(f"status {status}")
+
+    return f"{virus_typ}: {'; '.join(reasons)}."
+
+
+def _public_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]]:
+    explicit_warnings = _dedupe_public_strings(
+        [str(warning or "").strip() for warning in list(snapshot.get("warnings") or [])]
+    )
+    if explicit_warnings:
+        return len(explicit_warnings), explicit_warnings
+
+    components = snapshot.get("components") or {}
+    warning_components = [
+        (name, component)
+        for name, component in components.items()
+        if str((component or {}).get("status") or "").strip().lower() in {"warning", "unknown"}
+    ]
+
+    reasons: list[str] = []
+    for name, component in warning_components:
+        if name in {"regional_operational", "core_regional_operational"}:
+            for item in list(component.get("matrix") or []):
+                item_status = str(item.get("status") or "").strip().lower()
+                if item_status not in {"warning", "unknown", "critical"}:
+                    continue
+                reason = _public_scope_warning_reason(item)
+                if reason:
+                    reasons.append(reason)
+            continue
+
+        if name == "forecast_monitoring":
+            for item in list(component.get("items") or []):
+                item_status = str(item.get("status") or "").strip().lower()
+                if item_status not in {"warning", "unknown", "critical"}:
+                    continue
+                reason = _public_forecast_monitoring_reason(item)
+                if reason:
+                    reasons.append(reason)
+            continue
+
+        message = str(component.get("message") or "").strip()
+        if message:
+            reasons.append(f"{name}: {message}")
+
+    return len(warning_components), _dedupe_public_strings(reasons)
+
+
 def _public_readiness_payload(
     snapshot: dict[str, Any],
     *,
@@ -86,15 +210,20 @@ def _public_readiness_payload(
     if should_expose_details:
         return snapshot
 
-    blockers = list(snapshot.get("blockers") or [])
-    warnings = list(snapshot.get("warnings") or [])
+    blocker_reasons = _public_blocker_reasons(snapshot)
+    warning_count, warning_reasons = _public_warning_reasons(snapshot)
+    status_reasons = blocker_reasons + warning_reasons
     payload = {
         "status": snapshot.get("status"),
         "checked_at": snapshot.get("checked_at"),
         "app_version": getattr(active_settings, "APP_VERSION", None),
-        "blocker_count": len(blockers),
-        "warning_count": len(warnings),
+        "blocker_count": len(blocker_reasons),
+        "warning_count": warning_count,
     }
+    if status_reasons:
+        payload["status_reasons"] = status_reasons[:3]
+        if len(status_reasons) > 3:
+            payload["remaining_reason_count"] = len(status_reasons) - 3
     environment = str(getattr(active_settings, "ENVIRONMENT", "") or "").strip()
     if environment and environment != "production":
         payload["environment"] = environment

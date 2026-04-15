@@ -137,6 +137,28 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
 
         self.assertEqual(window_start, datetime(2026, 3, 11, 0, 0, 0))
 
+    def test_resolve_accuracy_window_start_prefers_deeper_evidence_when_available(self) -> None:
+        fixed_now = datetime(2026, 4, 15, 10, 14, 16)
+        recent_forecast_rows = [
+            SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 8, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 25, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 18, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 11, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 4, 0, 0, 0)),
+        ]
+
+        window_start = _resolve_accuracy_window_start(
+            cutoff=fixed_now,
+            recent_forecast_rows=recent_forecast_rows,
+            default_days=14,
+            minimum_pairs=3,
+            target_pairs=7,
+        )
+
+        self.assertEqual(window_start, datetime(2026, 3, 4, 0, 0, 0))
+
     def test_compute_forecast_accuracy_uses_frequency_aware_window_start(self) -> None:
         db = MagicMock()
         actual_max_query = MagicMock()
@@ -172,7 +194,7 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
             for condition in filter_args
             if isinstance(getattr(getattr(condition, "right", None), "value", None), datetime)
         )
-        self.assertEqual(lower_bound, datetime(2026, 4, 1, 0, 0, 0))
+        self.assertEqual(lower_bound, datetime(2026, 3, 25, 0, 0, 0))
 
     def test_compute_forecast_accuracy_skips_forecasts_without_actuals_when_resolving_window(self) -> None:
         db = MagicMock()
@@ -210,7 +232,7 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
             for condition in filter_args
             if isinstance(getattr(getattr(condition, "right", None), "value", None), datetime)
         )
-        self.assertEqual(lower_bound, datetime(2026, 3, 11, 0, 0, 0))
+        self.assertEqual(lower_bound, datetime(2026, 3, 10, 0, 0, 0))
 
 
 if __name__ == "__main__":

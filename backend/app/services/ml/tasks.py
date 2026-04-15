@@ -226,6 +226,7 @@ def _resolve_accuracy_window_start(
     actual_max_date: datetime | None = None,
     default_days: int = 14,
     minimum_pairs: int = 3,
+    target_pairs: int | None = None,
 ) -> datetime:
     default_start = (cutoff - timedelta(days=max(int(default_days), 1))).replace(
         hour=0,
@@ -253,7 +254,10 @@ def _resolve_accuracy_window_start(
         eligible_dates = [value for value in normalized_dates if value <= latest_matchable_date]
 
     if eligible_dates:
-        anchor_index = min(max(int(minimum_pairs), 1) - 1, len(eligible_dates) - 1)
+        desired_pairs = max(int(minimum_pairs), 1)
+        if target_pairs is not None:
+            desired_pairs = max(desired_pairs, min(int(target_pairs), len(eligible_dates)))
+        anchor_index = min(desired_pairs - 1, len(eligible_dates) - 1)
         anchor_date = eligible_dates[anchor_index]
         return min(anchor_date, default_start)
 
@@ -813,6 +817,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 actual_max_date=actual_max_date,
                 default_days=14,
                 minimum_pairs=3,
+                target_pairs=10,
             )
             forecasts = (
                 db.query(MLForecast)

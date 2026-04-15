@@ -159,6 +159,46 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
 
         self.assertEqual(window_start, datetime(2026, 3, 4, 0, 0, 0))
 
+    def test_resolve_accuracy_window_start_prefers_truly_comparable_dates(self) -> None:
+        fixed_now = datetime(2026, 4, 15, 10, 14, 16)
+        recent_forecast_rows = [
+            SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 18, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 11, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 10, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 9, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 8, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 7, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 6, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 5, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 4, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 2, 25, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 2, 18, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 2, 11, 0, 0, 0)),
+        ]
+
+        window_start = _resolve_accuracy_window_start(
+            cutoff=fixed_now,
+            recent_forecast_rows=recent_forecast_rows,
+            actual_dates=[
+                datetime(2026, 4, 8, 0, 0, 0),
+                datetime(2026, 4, 1, 0, 0, 0),
+                datetime(2026, 3, 25, 0, 0, 0),
+                datetime(2026, 3, 18, 0, 0, 0),
+                datetime(2026, 3, 11, 0, 0, 0),
+                datetime(2026, 3, 4, 0, 0, 0),
+                datetime(2026, 2, 25, 0, 0, 0),
+                datetime(2026, 2, 18, 0, 0, 0),
+                datetime(2026, 2, 11, 0, 0, 0),
+            ],
+            default_days=14,
+            minimum_pairs=3,
+            target_pairs=7,
+        )
+
+        self.assertEqual(window_start, datetime(2026, 2, 25, 0, 0, 0))
+
     def test_compute_forecast_accuracy_uses_frequency_aware_window_start(self) -> None:
         db = MagicMock()
         actual_max_query = MagicMock()
@@ -170,9 +210,21 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
             SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
             SimpleNamespace(forecast_date=datetime(2026, 3, 25, 0, 0, 0)),
         ]
+        recent_actual_dates_query = MagicMock()
+        recent_actual_dates_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            (datetime(2026, 4, 15, 0, 0, 0),),
+            (datetime(2026, 4, 8, 0, 0, 0),),
+            (datetime(2026, 4, 1, 0, 0, 0),),
+            (datetime(2026, 3, 25, 0, 0, 0),),
+        ]
         forecast_query = MagicMock()
         forecast_query.filter.return_value.order_by.return_value.all.return_value = []
-        db.query.side_effect = [actual_max_query, recent_scope_query, forecast_query]
+        db.query.side_effect = [
+            actual_max_query,
+            recent_scope_query,
+            recent_actual_dates_query,
+            forecast_query,
+        ]
 
         @contextmanager
         def _db_context():
@@ -208,9 +260,21 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
         ]
         actual_max_query = MagicMock()
         actual_max_query.filter.return_value.scalar.return_value = datetime(2026, 4, 8, 0, 0, 0)
+        recent_actual_dates_query = MagicMock()
+        recent_actual_dates_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            (datetime(2026, 4, 8, 0, 0, 0),),
+            (datetime(2026, 4, 1, 0, 0, 0),),
+            (datetime(2026, 3, 18, 0, 0, 0),),
+            (datetime(2026, 3, 11, 0, 0, 0),),
+        ]
         forecast_query = MagicMock()
         forecast_query.filter.return_value.order_by.return_value.all.return_value = []
-        db.query.side_effect = [actual_max_query, recent_scope_query, forecast_query]
+        db.query.side_effect = [
+            actual_max_query,
+            recent_scope_query,
+            recent_actual_dates_query,
+            forecast_query,
+        ]
 
         @contextmanager
         def _db_context():

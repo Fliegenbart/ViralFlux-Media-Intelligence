@@ -224,6 +224,7 @@ def _resolve_accuracy_window_start(
     cutoff: datetime,
     recent_forecast_rows: list[Any],
     actual_max_date: datetime | None = None,
+    actual_dates: list[Any] | None = None,
     default_days: int = 14,
     minimum_pairs: int = 3,
     target_pairs: int | None = None,
@@ -244,7 +245,21 @@ def _resolve_accuracy_window_start(
     )
 
     eligible_dates = normalized_dates
-    if actual_max_date is not None:
+    normalized_actual_dates = sorted(
+        {
+            extracted.replace(hour=0, minute=0, second=0, microsecond=0)
+            for row in (actual_dates or [])
+            if (extracted := _extract_datetime_cell(row, attribute_name="datum")) is not None
+        },
+        reverse=True,
+    )
+    if normalized_actual_dates:
+        eligible_dates = [
+            forecast_date
+            for forecast_date in normalized_dates
+            if any(abs((actual_date - forecast_date).days) <= 1 for actual_date in normalized_actual_dates)
+        ]
+    elif actual_max_date is not None:
         latest_matchable_date = actual_max_date.replace(
             hour=0,
             minute=0,
@@ -808,6 +823,17 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 .limit(32)
                 .all()
             )
+            recent_actual_date_rows = (
+                db.query(WastewaterAggregated.datum)
+                .filter(
+                    WastewaterAggregated.virus_typ == virus,
+                    WastewaterAggregated.viruslast.isnot(None),
+                    WastewaterAggregated.datum < cutoff,
+                )
+                .order_by(WastewaterAggregated.datum.desc())
+                .limit(32)
+                .all()
+            )
 
             # Das Accuracy-Fenster muss zur echten Forecast-Frequenz passen.
             # Bei wöchentlichen Forecasts wären 14 Tage mit mindestens 3 Paaren sonst unmöglich.
@@ -815,6 +841,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 cutoff=cutoff,
                 recent_forecast_rows=recent_scope_rows,
                 actual_max_date=actual_max_date,
+                actual_dates=recent_actual_date_rows,
                 default_days=14,
                 minimum_pairs=3,
                 target_pairs=10,

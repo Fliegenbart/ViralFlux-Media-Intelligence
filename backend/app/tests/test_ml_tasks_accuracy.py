@@ -99,7 +99,7 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
 
         self.assertEqual(result, [datetime(2026, 4, 8, 0, 0, 0)])
 
-    def test_resolve_accuracy_window_start_expands_for_weekly_forecasts(self) -> None:
+    def test_resolve_accuracy_window_start_anchors_to_minimum_recent_forecast_dates(self) -> None:
         fixed_now = datetime(2026, 4, 15, 10, 14, 16)
         recent_forecast_rows = [
             SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
@@ -115,10 +115,32 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
             minimum_pairs=3,
         )
 
-        self.assertEqual(window_start, datetime(2026, 3, 25, 0, 0, 0))
+        self.assertEqual(window_start, datetime(2026, 4, 1, 0, 0, 0))
+
+    def test_resolve_accuracy_window_start_skips_unmatchable_latest_forecasts(self) -> None:
+        fixed_now = datetime(2026, 4, 15, 10, 14, 16)
+        recent_forecast_rows = [
+            SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 18, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 11, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 10, 0, 0, 0)),
+        ]
+
+        window_start = _resolve_accuracy_window_start(
+            cutoff=fixed_now,
+            recent_forecast_rows=recent_forecast_rows,
+            actual_max_date=datetime(2026, 4, 8, 0, 0, 0),
+            default_days=14,
+            minimum_pairs=3,
+        )
+
+        self.assertEqual(window_start, datetime(2026, 3, 11, 0, 0, 0))
 
     def test_compute_forecast_accuracy_uses_frequency_aware_window_start(self) -> None:
         db = MagicMock()
+        actual_max_query = MagicMock()
+        actual_max_query.filter.return_value.scalar.return_value = datetime(2026, 4, 15, 0, 0, 0)
         recent_scope_query = MagicMock()
         recent_scope_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
             SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
@@ -128,7 +150,7 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
         ]
         forecast_query = MagicMock()
         forecast_query.filter.return_value.order_by.return_value.all.return_value = []
-        db.query.side_effect = [recent_scope_query, forecast_query]
+        db.query.side_effect = [actual_max_query, recent_scope_query, forecast_query]
 
         @contextmanager
         def _db_context():
@@ -145,8 +167,50 @@ class ForecastAccuracyTaskTests(unittest.TestCase):
             compute_forecast_accuracy_task.run()
 
         filter_args = forecast_query.filter.call_args.args
-        lower_bound = filter_args[2].right.value
-        self.assertEqual(lower_bound, datetime(2026, 3, 25, 0, 0, 0))
+        lower_bound = min(
+            condition.right.value
+            for condition in filter_args
+            if isinstance(getattr(getattr(condition, "right", None), "value", None), datetime)
+        )
+        self.assertEqual(lower_bound, datetime(2026, 4, 1, 0, 0, 0))
+
+    def test_compute_forecast_accuracy_skips_forecasts_without_actuals_when_resolving_window(self) -> None:
+        db = MagicMock()
+        recent_scope_query = MagicMock()
+        recent_scope_query.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            SimpleNamespace(forecast_date=datetime(2026, 4, 15, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 4, 1, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 18, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 11, 0, 0, 0)),
+            SimpleNamespace(forecast_date=datetime(2026, 3, 10, 0, 0, 0)),
+        ]
+        actual_max_query = MagicMock()
+        actual_max_query.filter.return_value.scalar.return_value = datetime(2026, 4, 8, 0, 0, 0)
+        forecast_query = MagicMock()
+        forecast_query.filter.return_value.order_by.return_value.all.return_value = []
+        db.query.side_effect = [actual_max_query, recent_scope_query, forecast_query]
+
+        @contextmanager
+        def _db_context():
+            yield db
+
+        fixed_now = datetime(2026, 4, 15, 10, 14, 16)
+
+        with (
+            patch.object(compute_forecast_accuracy_task, "update_state"),
+            patch("app.services.ml.tasks.get_db_context", return_value=_db_context()),
+            patch("app.services.ml.tasks.SUPPORTED_VIRUS_TYPES", ("Influenza A",)),
+            patch("app.services.ml.tasks.utc_now", return_value=fixed_now),
+        ):
+            compute_forecast_accuracy_task.run()
+
+        filter_args = forecast_query.filter.call_args.args
+        lower_bound = min(
+            condition.right.value
+            for condition in filter_args
+            if isinstance(getattr(getattr(condition, "right", None), "value", None), datetime)
+        )
+        self.assertEqual(lower_bound, datetime(2026, 3, 11, 0, 0, 0))
 
 
 if __name__ == "__main__":

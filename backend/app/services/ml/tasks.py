@@ -223,9 +223,40 @@ def _resolve_accuracy_window_start(
     *,
     cutoff: datetime,
     recent_forecast_rows: list[Any],
+    actual_max_date: datetime | None = None,
     default_days: int = 14,
     minimum_pairs: int = 3,
 ) -> datetime:
+    default_start = (cutoff - timedelta(days=max(int(default_days), 1))).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    normalized_dates = sorted(
+        {
+            extracted.replace(hour=0, minute=0, second=0, microsecond=0)
+            for row in recent_forecast_rows
+            if (extracted := _extract_datetime_cell(row, attribute_name="forecast_date")) is not None
+        },
+        reverse=True,
+    )
+
+    eligible_dates = normalized_dates
+    if actual_max_date is not None:
+        latest_matchable_date = actual_max_date.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        ) + timedelta(days=1)
+        eligible_dates = [value for value in normalized_dates if value <= latest_matchable_date]
+
+    if eligible_dates:
+        anchor_index = min(max(int(minimum_pairs), 1) - 1, len(eligible_dates) - 1)
+        anchor_date = eligible_dates[anchor_index]
+        return min(anchor_date, default_start)
+
     cadence_days = _estimate_forecast_cadence_days(recent_forecast_rows)
     window_days = max(int(default_days), int(cadence_days or 0) * int(minimum_pairs or 1))
     return (cutoff - timedelta(days=window_days)).replace(
@@ -750,18 +781,27 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
     virus_types = list(SUPPORTED_VIRUS_TYPES)
 
     with get_db_context() as db:
+        from sqlalchemy import func
         from app.models.database import MLForecast, WastewaterAggregated, ForecastAccuracyLog
 
         for virus in virus_types:
             cutoff = utc_now()
+            actual_max = (
+                db.query(func.max(WastewaterAggregated.datum))
+                .filter(WastewaterAggregated.virus_typ == virus)
+                .scalar()
+            )
+            actual_max_date = _naive_datetime(actual_max)
             recent_scope_rows = (
                 db.query(MLForecast.forecast_date)
                 .filter(
                     MLForecast.virus_typ == virus,
+                    MLForecast.region == "DE",
+                    MLForecast.horizon_days == 7,
                     MLForecast.forecast_date < cutoff,
                 )
                 .order_by(MLForecast.forecast_date.desc())
-                .limit(8)
+                .limit(32)
                 .all()
             )
 
@@ -770,6 +810,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
             window_start = _resolve_accuracy_window_start(
                 cutoff=cutoff,
                 recent_forecast_rows=recent_scope_rows,
+                actual_max_date=actual_max_date,
                 default_days=14,
                 minimum_pairs=3,
             )
@@ -777,6 +818,8 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 db.query(MLForecast)
                 .filter(
                     MLForecast.virus_typ == virus,
+                    MLForecast.region == "DE",
+                    MLForecast.horizon_days == 7,
                     MLForecast.forecast_date < cutoff,
                     MLForecast.forecast_date >= window_start,
                 )

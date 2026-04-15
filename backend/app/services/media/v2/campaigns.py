@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .context import build_truth_learning_context
 from .shared import JsonDict, generated_at
 
 
@@ -16,13 +17,8 @@ def build_campaigns_payload(
     primary_cards = queue["primary_cards"]
     archived_cards = queue["archived_cards"]
     visible_cards = queue["visible_cards"]
-    truth_coverage = service.get_truth_coverage(brand=brand)
-    truth_gate = service.truth_gate_service.evaluate(truth_coverage)
-    outcome_learning = service.outcome_signal_service.build_learning_bundle(
-        brand=brand,
-        truth_coverage=truth_coverage,
-        truth_gate=truth_gate,
-    )["summary"]
+    truth_context = build_truth_learning_context(service, brand=brand)
+    outcome_learning = truth_context["learning_bundle"]["summary"]
 
     return {
         "generated_at": generated_at(),

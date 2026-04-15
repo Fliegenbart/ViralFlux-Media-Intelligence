@@ -3,11 +3,46 @@ import React from 'react';
 import { render } from '@testing-library/react';
 
 import EvidencePage from './EvidencePage';
+import type { BacktestResponse } from '../../types/media';
 
 const mockSetPageHeader = jest.fn();
 const mockClearPageHeader = jest.fn();
 const mockInvalidateData = jest.fn();
-let mockEvidencePageData: Record<string, unknown>;
+
+type MockEvidencePageData = {
+  evidence: {
+    source_status: {
+      items: Array<{ status_color: string }>;
+    };
+    truth_coverage?: {
+      coverage_weeks?: number;
+    };
+    truth_snapshot?: {
+      coverage?: {
+        coverage_weeks?: number;
+      };
+    };
+  } | null;
+  evidenceLoading: boolean;
+  workspaceStatus: MockWorkspaceStatus;
+  marketValidation: BacktestResponse | null;
+  marketValidationLoading: boolean;
+  customerValidation: BacktestResponse | null;
+  customerValidationLoading: boolean;
+  truthPreview: null;
+  truthBatchDetail: null;
+  truthActionLoading: boolean;
+  truthBatchDetailLoading: boolean;
+  submitTruthCsv: jest.Mock;
+  loadTruthBatchDetail: jest.Mock;
+};
+
+let mockEvidencePageData: MockEvidencePageData;
+
+type MockWorkspaceStatus = {
+  blocker_count: number;
+  blockers: string[];
+} | null;
 
 jest.mock('../../components/AnimatedPage', () => ({
   __esModule: true,
@@ -19,7 +54,7 @@ jest.mock('../../components/cockpit/EvidencePanel', () => ({
   default: () => <div>Evidenzansicht</div>,
 }));
 
-jest.mock('../../App', () => ({
+jest.mock('../../lib/appContext', () => ({
   useToast: () => ({ toast: jest.fn() }),
 }));
 

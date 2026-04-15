@@ -2,15 +2,11 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
-const mockRehydrateAuth = jest.fn<Promise<boolean>, []>();
-const mockLogout = jest.fn();
-const mockAddAuthChangeListener = jest.fn<() => void, [(authenticated: boolean) => void]>(() => () => {});
-
 jest.mock('./lib/api', () => ({
   apiFetch: jest.fn(),
-  rehydrateAuth: (...args: unknown[]) => mockRehydrateAuth(...args as []),
-  logout: (...args: unknown[]) => mockLogout(...args),
-  addAuthChangeListener: (...args: [(authenticated: boolean) => void]) => mockAddAuthChangeListener(...args),
+  rehydrateAuth: jest.fn(),
+  logout: jest.fn(),
+  addAuthChangeListener: jest.fn(),
 }));
 
 jest.mock('./pages/LoginPage', () => ({
@@ -62,6 +58,11 @@ jest.mock('./pages/media/EvidencePage', () => ({
 }));
 
 import App from './App';
+import { addAuthChangeListener, logout, rehydrateAuth } from './lib/api';
+
+const mockRehydrateAuth = jest.mocked(rehydrateAuth);
+const mockLogout = jest.mocked(logout);
+const mockAddAuthChangeListener = jest.mocked(addAuthChangeListener);
 
 describe('App routing', () => {
   beforeEach(() => {
@@ -89,6 +90,20 @@ describe('App routing', () => {
     render(<App />);
 
     expect(await screen.findByText('Virus-Radar Mock')).toBeInTheDocument();
+  });
+
+  it('logs auth rehydration failures and still lands on the login page', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockRehydrateAuth.mockRejectedValueOnce(new Error('session busted'));
+
+    try {
+      render(<App />);
+
+      expect(await screen.findByText('Login Mock')).toBeInTheDocument();
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Auth rehydration failed', expect.any(Error));
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it('renders the real operator shell chrome for authenticated routes', async () => {

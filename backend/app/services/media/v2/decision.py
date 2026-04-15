@@ -15,6 +15,7 @@ from app.services.media.semantic_contracts import (
 )
 from app.services.ml.forecast_decision_service import ForecastDecisionService
 
+from .context import build_truth_validation_context
 from .shared import JsonDict, generated_at
 
 
@@ -32,20 +33,15 @@ def build_decision_payload(
     )
     forecast_quality = forecast_bundle.get("forecast_quality") or {}
     event_forecast = forecast_bundle.get("event_forecast") or {}
-    truth_coverage = service.get_truth_coverage(brand=brand, virus_typ=virus_typ)
-    truth_gate = service.truth_gate_service.evaluate(truth_coverage)
-    outcome_learning = service.outcome_signal_service.build_learning_bundle(
-        brand=brand,
-        truth_coverage=truth_coverage,
-        truth_gate=truth_gate,
-    )["summary"]
-    business_validation = service.business_validation_service.evaluate(
+    truth_context = build_truth_validation_context(
+        service,
         brand=brand,
         virus_typ=virus_typ,
-        truth_coverage=truth_coverage,
-        truth_gate=truth_gate,
-        outcome_learning_summary=outcome_learning,
     )
+    truth_coverage = truth_context["truth_coverage"]
+    truth_gate = truth_context["truth_gate"]
+    outcome_learning = truth_context["learning_bundle"]["summary"]
+    business_validation = truth_context["business_validation"]
     model_lineage = service.get_model_lineage(virus_typ=virus_typ)
     queue = service._build_campaign_queue(service._campaign_cards(brand=brand, limit=80), visible_limit=8)
     campaign_cards = queue["visible_cards"]

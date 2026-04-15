@@ -11,6 +11,7 @@ from app.services.media.business_validation_service import BusinessValidationSer
 from app.services.media import pilot_readout_readiness
 from app.services.media import pilot_readout_sections
 from app.services.media import pilot_readout_trace
+from app.services.media.v2.context import build_truth_learning_context, normalize_brand
 from app.services.media.v2_service import MediaV2Service
 from app.services.ml.regional_forecast import RegionalForecastService
 from app.services.ops.regional_operational_snapshot_store import RegionalOperationalSnapshotStore
@@ -54,9 +55,7 @@ class PilotReadoutService:
         weekly_budget_eur: float = 120000.0,
         top_n: int = 12,
     ) -> dict[str, Any]:
-        brand_value = str(brand).strip().lower()
-        if not brand_value:
-            raise ValueError("brand must be provided")
+        brand_value = normalize_brand(brand)
         forecast = self.regional_service.predict_all_regions(
             virus_typ=virus_typ,
             brand=brand_value,
@@ -78,16 +77,19 @@ class PilotReadoutService:
             allocation.get("target_window_days") or [horizon_days, horizon_days],
         )
 
-        truth_coverage = self.media_service.get_truth_coverage(
+        truth_context = build_truth_learning_context(
+            self.media_service,
             brand=brand_value,
             virus_typ=virus_typ,
         )
-        truth_gate = self.media_service.truth_gate_service.evaluate(truth_coverage)
+        truth_coverage = truth_context["truth_coverage"]
+        truth_gate = truth_context["truth_gate"]
         business_validation = self.business_validation_service.evaluate(
             brand=brand_value,
             virus_typ=virus_typ,
             truth_coverage=truth_coverage,
             truth_gate=truth_gate,
+            outcome_learning_summary=truth_context["learning_bundle"]["summary"],
         )
         evaluation = self._latest_live_evaluation(
             virus_typ=virus_typ,

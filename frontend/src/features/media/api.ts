@@ -114,7 +114,7 @@ function mapVirusToWaveRadarDisease(virus: string): string {
   return 'influenza';
 }
 
-export async function fetchJson<T>(
+async function fetchJson<T>(
   url: string,
   init?: RequestInit,
   timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
@@ -143,7 +143,7 @@ export async function fetchJson<T>(
   }
 }
 
-export function sortRecommendations(cards: RecommendationCard[]): RecommendationCard[] {
+function sortRecommendations(cards: RecommendationCard[]): RecommendationCard[] {
   return [...cards].sort((a, b) => {
     const publishableDelta = Number(Boolean(b.is_publishable)) - Number(Boolean(a.is_publishable));
     if (publishableDelta !== 0) return publishableDelta;

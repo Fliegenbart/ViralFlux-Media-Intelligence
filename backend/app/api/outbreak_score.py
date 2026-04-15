@@ -30,33 +30,20 @@ PUBLIC_PEIX_REGION_FIELDS = (
 )
 
 
-# ─── Singleton für DrugShortage-Cache ──────────────────────────────────────
-_cached_shortage_signals: dict | None = None
-
-
 def _get_shortage_signals() -> dict | None:
     """Drug-Shortage-Signale aus Cache, Analyzer oder BfArM Auto-Pull."""
-    global _cached_shortage_signals
-    if _cached_shortage_signals:
-        return _cached_shortage_signals
-
-    # Versuch 1: Bestehender Analyzer (manueller Upload oder auto-refresh)
     try:
         from app.api.drug_shortage import _ensure_analyzer
         analyzer = _ensure_analyzer()
         if analyzer and analyzer.df is not None and not analyzer.df.empty:
-            signals = analyzer.get_infection_signals()
-            _cached_shortage_signals = signals
-            return signals
+            return analyzer.get_infection_signals()
     except Exception:
         pass
 
-    # Versuch 2: Cached Signals vom BfArM Auto-Pull Service
     try:
         from app.services.data_ingest.bfarm_service import get_cached_signals
         cached = get_cached_signals()
         if cached:
-            _cached_shortage_signals = cached
             return cached
     except Exception:
         pass
@@ -143,7 +130,6 @@ async def get_all_outbreak_scores(db: Session = Depends(get_db)):
     service = RankingSignalService(db)
     peix = service.build()
 
-    # Backward-kompatible Response-Struktur
     return {
         "overall_score": peix["national_score"],
         "overall_risk_level": peix["national_band"].upper(),
@@ -223,7 +209,6 @@ async def upload_lab_history(
 
     content = await file.read()
     _validate_csv_upload(file, content)
-    # Auto-detect encoding & separator
     text = content.decode('utf-8', errors='replace')
     sep = ';' if ';' in text[:500] else ','
     df = pd.read_csv(StringIO(text), sep=sep)

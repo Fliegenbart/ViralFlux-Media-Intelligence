@@ -3,7 +3,12 @@ import React from 'react';
 import { OPERATOR_LABELS } from '../../constants/operatorLabels';
 import { additionalSuggestionsText, evidenceStatusHelper, evidenceStatusLabel } from '../../lib/copy';
 import { normalizeGermanText } from '../../lib/plainLanguage';
-import { MediaCampaignsResponse, RecommendationCard, WorkspaceStatusSummary } from '../../types/media';
+import {
+  MediaCampaignsResponse,
+  RecommendationCard,
+  type WorkspaceStatusTone,
+  WorkspaceStatusSummary,
+} from '../../types/media';
 import CollapsibleSection from '../CollapsibleSection';
 import {
   formatDateShort,
@@ -34,13 +39,11 @@ interface Props {
   onOpenRecommendation: (id: string) => void;
 }
 
-type ApprovalTone = 'success' | 'warning' | 'neutral';
-
 interface ApprovalStatusItem {
   label: string;
   value: string;
   detail: string;
-  tone: ApprovalTone;
+  tone: WorkspaceStatusTone;
 }
 
 const CampaignStudio: React.FC<Props> = ({
@@ -595,7 +598,7 @@ function humanizeChannel(value: string): string {
   return normalizeGermanText(value);
 }
 
-function approvalReadiness(card: RecommendationCard): { label: string; detail: string; tone: ApprovalTone } {
+function approvalReadiness(card: RecommendationCard): { label: string; detail: string; tone: WorkspaceStatusTone } {
   const blockers = card.publish_blockers || [];
   const lane = recommendationLane(card);
 

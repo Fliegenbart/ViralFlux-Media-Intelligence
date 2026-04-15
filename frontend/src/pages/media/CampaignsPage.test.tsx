@@ -16,17 +16,54 @@ const mockCloseRecommendation = jest.fn();
 const mockLoadCampaigns = jest.fn().mockResolvedValue(undefined);
 const mockLoadRegions = jest.fn().mockResolvedValue(undefined);
 let mockCampaignsPageData: {
-  campaignsView: unknown;
+  campaignsView: MockCampaignsView | null;
   campaignsLoading: boolean;
   loadCampaigns: typeof mockLoadCampaigns;
-  workspaceStatus: unknown;
+  workspaceStatus: MockWorkspaceStatus;
 };
 let mockRegionsPageData: {
-  regionsView: unknown;
+  regionsView: MockRegionsView | null;
   regionsLoading: boolean;
   loadRegions: typeof mockLoadRegions;
-  workspaceStatus: unknown;
+  workspaceStatus: MockWorkspaceStatus;
 };
+
+type MockCampaignCard = {
+  id: string;
+  status?: string;
+  lifecycle_state?: string;
+  publish_blockers: string[];
+};
+
+type MockCampaignsView = {
+  cards: MockCampaignCard[];
+};
+
+type MockRegionEntry = {
+  name: string;
+  signal_score?: number;
+  source_trace?: string[];
+  signal_drivers?: Array<{ label: string; strength_pct: number }>;
+  recommendation_ref?: {
+    card_id: string;
+  };
+};
+
+type MockRegionsView = {
+  map: {
+    top_regions: Array<{ code: string }>;
+    regions: Record<string, MockRegionEntry>;
+    activation_suggestions: Array<{
+      region: string;
+      priority: string;
+    }>;
+  };
+};
+
+type MockWorkspaceStatus = {
+  blocker_count: number;
+  blockers: string[];
+} | null;
 
 jest.mock('../../components/AnimatedPage', () => ({
   __esModule: true,
@@ -45,7 +82,7 @@ jest.mock('../../components/cockpit/RegionWorkbench', () => ({
   ),
 }));
 
-jest.mock('../../App', () => ({
+jest.mock('../../lib/appContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 

@@ -1,8 +1,8 @@
 """BfArM Lieferengpass Auto-Pull — Automatisierter Import der BfArM CSV.
 
 Nutzt den bestehenden DrugShortageAnalyzer für Parsing und Signalberechnung.
-Signale werden in Redis gecacht (cross-worker safe) und zusätzlich in
-die Module-Level-Caches von drug_shortage.py und outbreak_score.py geschrieben.
+Die Ergebnisse werden im Worker-Cache und in Redis gehalten, damit mehrere
+Worker denselben letzten Stand sehen.
 
 Datenquelle: https://anwendungen.pharmnet-bund.de/lieferengpassmeldungen/public/csv
 - Statischer Link, kein Scraping nötig
@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 REDIS_KEY = "bfarm:signals"
 _REDIS_TTL_SECONDS = 6 * 3600  # 6h — täglicher Celery-Beat refresh überlappt
 
-# Per-worker fallback cache (used when Redis is unreachable)
 _last_signals: dict | None = None
 _last_analyzer: DrugShortageAnalyzer | None = None
 _last_refresh_attempt: datetime | None = None
@@ -52,6 +51,23 @@ def _store_signals_redis(signals: dict) -> None:
         logger.debug("Redis store failed (non-critical): %s", exc)
 
 
+def set_cached_analyzer(analyzer: DrugShortageAnalyzer | None) -> None:
+    """Store the latest analyzer in the in-process cache."""
+    global _last_analyzer
+    _last_analyzer = analyzer
+
+
+def get_cached_analyzer() -> DrugShortageAnalyzer | None:
+    """Return the latest cached analyzer, if available."""
+    return _last_analyzer
+
+
+def set_cached_signals(signals: dict | None) -> None:
+    """Store the latest signal payload in the in-process cache."""
+    global _last_signals
+    _last_signals = signals
+
+
 def _load_signals_redis() -> dict | None:
     """Load signals from Redis (returns None on miss or error)."""
     try:
@@ -72,8 +88,6 @@ class BfarmIngestionService:
 
     def run_full_import(self) -> dict:
         """Zieht aktuelle CSV, analysiert via DrugShortageAnalyzer, aktualisiert Caches."""
-        global _last_signals, _last_analyzer
-
         logger.info(f"Starte BfArM CSV-Download von {self.CSV_URL}")
 
         response = requests.get(self.CSV_URL, timeout=120)
@@ -88,20 +102,10 @@ class BfarmIngestionService:
             analyzer.load_and_clean(tmp_path)
             signals = analyzer.get_infection_signals()
 
-            # Per-worker cache
-            _last_signals = signals
-            _last_analyzer = analyzer
+            set_cached_signals(signals)
+            set_cached_analyzer(analyzer)
 
-            # Cross-worker cache via Redis
             _store_signals_redis(signals)
-
-            # Singleton in drug_shortage.py aktualisieren (für /signals Endpoint)
-            import app.api.drug_shortage as ds_module
-            ds_module._analyzer = analyzer
-
-            # Cache in outbreak_score.py aktualisieren
-            import app.api.outbreak_score as os_module
-            os_module._cached_shortage_signals = signals
 
             count = len(analyzer.df_filtered) if analyzer.df_filtered is not None else 0
             logger.info(
@@ -134,17 +138,14 @@ def get_cached_signals() -> dict | None:
     """
     global _last_signals, _last_refresh_attempt
 
-    # 1. Per-worker in-process cache
     if _last_signals is not None:
         return _last_signals
 
-    # 2. Cross-worker Redis cache
     redis_signals = _load_signals_redis()
     if redis_signals is not None:
         _last_signals = redis_signals
         return redis_signals
 
-    # 3. Auto-refresh (rate-limited)
     now = utc_now()
     if _last_refresh_attempt is not None:
         age_minutes = (now - _last_refresh_attempt).total_seconds() / 60.0

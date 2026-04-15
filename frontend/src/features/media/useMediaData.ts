@@ -19,4 +19,3 @@ export { type TimegraphRegionOption, useTimegraphPageData } from './useTimegraph
 export { useRegionsPageData } from './useRegionsPageData';
 export { useCampaignsPageData } from './useCampaignsPageData';
 export { useEvidencePageData } from './useEvidencePageData';
-export { useVirusRadarHeroForecast } from './useVirusRadarHeroForecast';

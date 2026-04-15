@@ -8,8 +8,49 @@ const mockSetPageHeader = jest.fn();
 const mockClearPageHeader = jest.fn();
 const mockToast = jest.fn();
 const mockOpenRecommendation = jest.fn();
-const mockWorkspaceProps = jest.fn();
-let mockNowPageData: Record<string, unknown>;
+
+type MockNowPageView = {
+  primaryActionLabel: string;
+  primaryRecommendationId: string | null;
+  heroRecommendation: {
+    actionLabel?: string;
+    ctaDisabled: boolean;
+    direction?: string;
+    region?: string;
+    whyNow?: string;
+  } | null;
+  focusRegion: {
+    code: string;
+    name: string;
+    recommendationId?: string | null;
+  } | null;
+};
+
+type MockNowPageData = {
+  loading?: boolean;
+  workspaceStatus?: null;
+  forecast: null;
+  focusRegionBacktest: null;
+  focusRegionBacktestLoading: boolean;
+  waveOutlook?: null;
+  waveOutlookLoading?: boolean;
+  waveRadar?: null;
+  waveRadarLoading?: boolean;
+  view: MockNowPageView;
+};
+
+type MockWorkspaceProps = {
+  view: MockNowPageView;
+  forecast: null;
+  focusRegionBacktest: null;
+  focusRegionBacktestLoading: boolean;
+  horizonDays: number;
+  primaryActionLabel: string;
+  onPrimaryAction: () => Promise<void> | void;
+};
+
+const mockWorkspaceProps = jest.fn<void, [MockWorkspaceProps]>();
+let mockNowPageData: MockNowPageData;
 
 jest.mock('../../components/AnimatedPage', () => ({
   __esModule: true,
@@ -18,13 +59,13 @@ jest.mock('../../components/AnimatedPage', () => ({
 
 jest.mock('../../components/cockpit/SimplifiedDecisionWorkspace', () => ({
   __esModule: true,
-  default: (props: Record<string, unknown>) => {
+  default: (props: MockWorkspaceProps) => {
     mockWorkspaceProps(props);
     return <div>Entscheidungsansicht</div>;
   },
 }));
 
-jest.mock('../../App', () => ({
+jest.mock('../../lib/appContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
@@ -85,15 +126,12 @@ describe('VirusRadarPage', () => {
     expect(mockSetPageHeader).not.toHaveBeenCalled();
     expect(mockClearPageHeader).toHaveBeenCalledTimes(1);
 
-    const latestProps = mockWorkspaceProps.mock.calls.at(-1)?.[0] as {
-      primaryActionLabel: string;
-      onPrimaryAction: () => Promise<void> | void;
-    };
+    const latestProps = mockWorkspaceProps.mock.calls.at(-1)?.[0];
 
-    expect(latestProps.primaryActionLabel).toBe('Empfehlung pruefen');
+    expect(latestProps?.primaryActionLabel).toBe('Empfehlung pruefen');
 
     await act(async () => {
-      await latestProps.onPrimaryAction();
+      await latestProps?.onPrimaryAction();
     });
 
     expect(mockOpenRecommendation).toHaveBeenCalledWith('rec-1', 'overlay');
@@ -124,15 +162,12 @@ describe('VirusRadarPage', () => {
 
     render(<VirusRadarPage />);
 
-    const latestProps = mockWorkspaceProps.mock.calls.at(-1)?.[0] as {
-      primaryActionLabel: string;
-      onPrimaryAction: () => Promise<void> | void;
-    };
+    const latestProps = mockWorkspaceProps.mock.calls.at(-1)?.[0];
 
-    expect(latestProps.primaryActionLabel).toBe('Details ansehen');
+    expect(latestProps?.primaryActionLabel).toBe('Details ansehen');
 
     await act(async () => {
-      await latestProps.onPrimaryAction();
+      await latestProps?.onPrimaryAction();
     });
 
     expect(mockOpenRecommendation).not.toHaveBeenCalled();

@@ -4,10 +4,9 @@ import csv
 import io
 import uuid
 from datetime import datetime, timedelta
-from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func
 
 from app.core.time import utc_now
 from app.models.database import (
@@ -20,6 +19,7 @@ from app.models.database import (
 )
 from app.services.media.product_catalog_service import ProductCatalogService
 from app.services.media.recommendation_contracts import BUNDESLAND_NAMES, normalize_region_code
+from .context import build_truth_validation_context, normalize_brand
 
 METRIC_FIELD_LABELS = {
     "media_spend_eur": "Mediabudget",
@@ -42,20 +42,13 @@ OUTCOME_TEMPLATE_HEADERS = (
 )
 
 
-def _normalize_brand(value: Any) -> str:
-    brand = str(value).strip().lower()
-    if brand:
-        return brand
-    raise ValueError("brand must be provided")
-
-
 def build_truth_coverage(
     service: Any,
     *,
     brand: str,
     virus_typ: str | None = None,
 ) -> dict[str, Any]:
-    brand_value = _normalize_brand(brand)
+    brand_value = normalize_brand(brand)
     rows = (
         service.db.query(MediaOutcomeRecord)
         .filter(func.lower(MediaOutcomeRecord.brand) == brand_value)
@@ -139,21 +132,17 @@ def build_truth_evidence(
     brand: str,
     virus_typ: str | None = None,
 ) -> dict[str, Any]:
-    brand_value = _normalize_brand(brand)
+    brand_value = normalize_brand(brand)
     coverage = build_truth_coverage(service, brand=brand_value, virus_typ=virus_typ)
-    truth_gate = service.truth_gate_service.evaluate(coverage)
-    outcome_learning = service.outcome_signal_service.build_learning_bundle(
-        brand=brand_value,
-        truth_coverage=coverage,
-        truth_gate=truth_gate,
-    )["summary"]
-    business_validation = service.business_validation_service.evaluate(
+    truth_context = build_truth_validation_context(
+        service,
         brand=brand_value,
         virus_typ=virus_typ,
         truth_coverage=coverage,
-        truth_gate=truth_gate,
-        outcome_learning_summary=outcome_learning,
     )
+    truth_gate = truth_context["truth_gate"]
+    outcome_learning = truth_context["learning_bundle"]["summary"]
+    business_validation = truth_context["business_validation"]
     recent_batches = list_outcome_import_batches(service, brand=brand_value, limit=8)
     latest_batch = recent_batches[0] if recent_batches else None
     issue_count = int(latest_batch.get("rows_rejected") or 0) if latest_batch else 0
@@ -193,7 +182,7 @@ def import_outcomes(
     validate_only: bool = False,
     file_name: str | None = None,
 ) -> dict[str, Any]:
-    brand_value = _normalize_brand(brand)
+    brand_value = normalize_brand(brand)
     source_value = str(source_label or "manual").strip() or "manual"
     batch_id = uuid.uuid4().hex[:12]
 
@@ -365,12 +354,7 @@ def list_outcome_import_batches(
     brand: str,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    brand_value = _normalize_brand(brand)
-    if _uses_legacy_outcome_batch_schema(service):
-        return [
-            _batch_to_dict(service, row)
-            for row in _legacy_import_batch_rows(service, brand=brand_value, limit=limit)
-        ]
+    brand_value = normalize_brand(brand)
     rows = (
         service.db.query(MediaOutcomeImportBatch)
         .filter(func.lower(MediaOutcomeImportBatch.brand) == brand_value)
@@ -386,14 +370,6 @@ def get_outcome_import_batch_detail(
     *,
     batch_id: str,
 ) -> dict[str, Any] | None:
-    if _uses_legacy_outcome_batch_schema(service):
-        batch = _legacy_import_batch_detail(service, batch_id=batch_id)
-        if not batch:
-            return None
-        return {
-            "batch": _batch_to_dict(service, batch),
-            "issues": [],
-        }
     batch = (
         service.db.query(MediaOutcomeImportBatch)
         .filter(MediaOutcomeImportBatch.batch_id == batch_id)
@@ -519,11 +495,8 @@ def _truth_gate(service: Any, truth_coverage: dict[str, Any]) -> dict[str, Any]:
     return service.truth_gate_service.evaluate(truth_coverage)
 
 
-def _latest_import_batch(service: Any, *, brand: str) -> MediaOutcomeImportBatch | SimpleNamespace | None:
-    brand_value = _normalize_brand(brand)
-    if _uses_legacy_outcome_batch_schema(service):
-        rows = _legacy_import_batch_rows(service, brand=brand_value, limit=1)
-        return rows[0] if rows else None
+def _latest_import_batch(service: Any, *, brand: str) -> MediaOutcomeImportBatch | None:
+    brand_value = normalize_brand(brand)
     return (
         service.db.query(MediaOutcomeImportBatch)
         .filter(
@@ -533,52 +506,6 @@ def _latest_import_batch(service: Any, *, brand: str) -> MediaOutcomeImportBatch
         .order_by(MediaOutcomeImportBatch.uploaded_at.desc(), MediaOutcomeImportBatch.id.desc())
         .first()
     )
-
-
-def _uses_legacy_outcome_batch_schema(service: Any) -> bool:
-    inspector = inspect(service.db.connection())
-    table_names = set(inspector.get_table_names())
-    if "media_outcome_import_batches" not in table_names:
-        return False
-    columns = {item["name"] for item in inspector.get_columns("media_outcome_import_batches")}
-    required_runtime_columns = {"source_system", "external_batch_id", "ingestion_mode"}
-    return not required_runtime_columns.issubset(columns)
-
-
-def _legacy_import_batch_rows(service: Any, *, brand: str, limit: int) -> list[SimpleNamespace]:
-    brand_value = _normalize_brand(brand)
-    result = service.db.execute(
-        text(
-            """
-            SELECT id, batch_id, brand, source_label, status, uploaded_at, file_name
-            FROM media_outcome_import_batches
-            WHERE lower(brand) = :brand
-              AND status IN ('imported', 'partial_success', 'validated', 'failed')
-            ORDER BY uploaded_at DESC NULLS LAST, id DESC
-            LIMIT :limit
-            """
-        ),
-        {"brand": brand_value, "limit": int(limit)},
-    )
-    return [SimpleNamespace(**dict(row)) for row in result.mappings().all()]
-
-
-def _legacy_import_batch_detail(service: Any, *, batch_id: str) -> SimpleNamespace | None:
-    result = service.db.execute(
-        text(
-            """
-            SELECT id, batch_id, brand, source_label, status, uploaded_at, file_name
-            FROM media_outcome_import_batches
-            WHERE batch_id = :batch_id
-            ORDER BY uploaded_at DESC NULLS LAST, id DESC
-            LIMIT 1
-            """
-        ),
-        {"batch_id": str(batch_id)},
-    ).mappings().first()
-    if not result:
-        return None
-    return SimpleNamespace(**dict(result))
 
 
 def _latest_epi_reference_week(service: Any, *, virus_typ: str | None = None) -> datetime | None:
@@ -722,7 +649,7 @@ def _normalize_outcome_product(
     products = (
         service.db.query(BrandProduct)
         .filter(
-            func.lower(BrandProduct.brand) == _normalize_brand(brand),
+            func.lower(BrandProduct.brand) == normalize_brand(brand),
             BrandProduct.active.is_(True),
         )
         .all()
@@ -808,7 +735,7 @@ def _project_truth_coverage(
     replace_existing: bool,
     validate_only: bool,
 ) -> dict[str, Any]:
-    brand_value = _normalize_brand(brand)
+    brand_value = normalize_brand(brand)
     existing_rows = (
         service.db.query(MediaOutcomeRecord)
         .filter(func.lower(MediaOutcomeRecord.brand) == brand_value)
@@ -983,7 +910,7 @@ def _issue_to_dict(service: Any, issue: MediaOutcomeImportIssue) -> dict[str, An
     }
 
 
-def _batch_to_dict(service: Any, batch: MediaOutcomeImportBatch | SimpleNamespace) -> dict[str, Any]:
+def _batch_to_dict(service: Any, batch: MediaOutcomeImportBatch) -> dict[str, Any]:
     return {
         "batch_id": getattr(batch, "batch_id", None),
         "brand": getattr(batch, "brand", None),

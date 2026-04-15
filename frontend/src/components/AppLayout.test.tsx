@@ -6,11 +6,11 @@ import { MemoryRouter } from 'react-router-dom';
 import AppLayout, { usePageHeader } from './AppLayout';
 import NowPage from '../pages/media/NowPage';
 import { apiFetch } from '../lib/api';
-import { useAuth, useTheme, useToast } from '../App';
+import { useAuth, useTheme, useToast } from '../lib/appContext';
 import { useNowPageData } from '../features/media/useMediaData';
 import { useMediaWorkflow } from '../features/media/workflowContext';
 
-jest.mock('../App', () => ({
+jest.mock('../lib/appContext', () => ({
   useTheme: jest.fn(),
   useAuth: jest.fn(),
   useToast: jest.fn(),

@@ -159,6 +159,51 @@ def _public_forecast_monitoring_reason(item: dict[str, Any]) -> str | None:
     return f"{virus_typ}: {'; '.join(reasons)}."
 
 
+def _is_compactable_public_forecast_monitoring_item(item: dict[str, Any]) -> bool:
+    item_status = str(item.get("status") or "").strip().lower()
+    forecast_readiness = str(item.get("forecast_readiness") or "").strip().upper()
+    if item_status != "warning" or forecast_readiness == "" or forecast_readiness == "GO":
+        return False
+
+    for field_name in ("freshness_status", "accuracy_freshness_status", "backtest_freshness_status"):
+        value = str(item.get(field_name) or "").strip().lower()
+        if value and value not in {"ok", "fresh"}:
+            return False
+    return True
+
+
+def _public_forecast_monitoring_reasons(items: list[dict[str, Any]]) -> list[str]:
+    grouped_readiness: dict[str, list[str]] = {}
+    passthrough_reasons: list[str] = []
+
+    for item in items:
+        item_status = str(item.get("status") or "").strip().lower()
+        if item_status not in {"warning", "unknown", "critical"}:
+            continue
+
+        if _is_compactable_public_forecast_monitoring_item(item):
+            readiness = str(item.get("forecast_readiness") or "").strip().upper()
+            virus_typ = str(item.get("virus_typ") or "").strip() or "Unknown forecast"
+            grouped_readiness.setdefault(readiness, []).append(virus_typ)
+            continue
+
+        reason = _public_forecast_monitoring_reason(item)
+        if reason:
+            passthrough_reasons.append(reason)
+
+    grouped_reasons: list[str] = []
+    for readiness, viruses in grouped_readiness.items():
+        if len(viruses) == 1:
+            grouped_reasons.append(f"{viruses[0]}: forecast readiness {readiness}.")
+            continue
+        grouped_reasons.append(
+            f"Forecast monitoring: {len(viruses)} viruses with forecast readiness {readiness} "
+            f"({', '.join(viruses)})."
+        )
+
+    return grouped_reasons + passthrough_reasons
+
+
 def _public_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]]:
     explicit_warnings = _dedupe_public_strings(
         [str(warning or "").strip() for warning in list(snapshot.get("warnings") or [])]
@@ -172,15 +217,14 @@ def _public_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]]:
         for name, component in components.items()
         if str((component or {}).get("status") or "").strip().lower() in {"warning", "unknown"}
     ]
-    component_priority = {
-        "core_regional_operational": 0,
-        "regional_operational": 1,
-        "forecast_monitoring": 2,
-    }
-    warning_components.sort(key=lambda item: component_priority.get(item[0], 99))
-
-    reasons: list[str] = []
+    generic_reasons: list[str] = []
+    scope_reasons: list[str] = []
+    forecast_monitoring_items: list[dict[str, Any]] = []
     for name, component in warning_components:
+        if name == "forecast_monitoring":
+            forecast_monitoring_items.extend(list(component.get("items") or []))
+            continue
+
         if name in {"regional_operational", "core_regional_operational"}:
             for item in list(component.get("matrix") or []):
                 item_status = str(item.get("status") or "").strip().lower()
@@ -188,23 +232,16 @@ def _public_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]]:
                     continue
                 reason = _public_scope_warning_reason(item)
                 if reason:
-                    reasons.append(reason)
-            continue
-
-        if name == "forecast_monitoring":
-            for item in list(component.get("items") or []):
-                item_status = str(item.get("status") or "").strip().lower()
-                if item_status not in {"warning", "unknown", "critical"}:
-                    continue
-                reason = _public_forecast_monitoring_reason(item)
-                if reason:
-                    reasons.append(reason)
+                    scope_reasons.append(reason)
             continue
 
         message = str(component.get("message") or "").strip()
         if message:
-            reasons.append(f"{name}: {message}")
+            generic_reasons.append(f"{name}: {message}")
 
+    reasons = generic_reasons + scope_reasons + _public_forecast_monitoring_reasons(
+        forecast_monitoring_items
+    )
     return len(warning_components), _dedupe_public_strings(reasons)
 
 

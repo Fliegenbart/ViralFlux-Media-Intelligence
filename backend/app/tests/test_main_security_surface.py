@@ -133,6 +133,116 @@ class MainSecuritySurfaceTests(unittest.TestCase):
         )
         self.assertNotIn("components", payload)
 
+    def test_public_readiness_payload_prioritizes_system_warning_reasons_before_forecast_monitoring(self) -> None:
+        snapshot = {
+            "status": "degraded",
+            "checked_at": "2026-04-15T16:31:55Z",
+            "blockers": [],
+            "components": {
+                "schema_bootstrap": {
+                    "status": "unknown",
+                    "message": "No startup schema summary recorded yet.",
+                },
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "message": "Forecast monitoring snapshot loaded.",
+                    "items": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "status": "warning",
+                            "forecast_readiness": "WATCH",
+                            "accuracy_freshness_status": "fresh",
+                            "backtest_freshness_status": "fresh",
+                            "freshness_status": "fresh",
+                        },
+                        {
+                            "virus_typ": "Influenza B",
+                            "status": "warning",
+                            "forecast_readiness": "WATCH",
+                            "accuracy_freshness_status": "fresh",
+                            "backtest_freshness_status": "fresh",
+                            "freshness_status": "fresh",
+                        },
+                        {
+                            "virus_typ": "SARS-CoV-2",
+                            "status": "warning",
+                            "forecast_readiness": "WATCH",
+                            "accuracy_freshness_status": "fresh",
+                            "backtest_freshness_status": "fresh",
+                            "freshness_status": "fresh",
+                        },
+                    ],
+                },
+            },
+        }
+
+        payload = main._public_readiness_payload(
+            snapshot,
+            settings_obj=SimpleNamespace(
+                APP_VERSION="1.0.0",
+                ENVIRONMENT="production",
+            ),
+            expose_details=False,
+        )
+
+        self.assertEqual(
+            payload["status_reasons"][0],
+            "schema_bootstrap: No startup schema summary recorded yet.",
+        )
+        self.assertIn(
+            "Forecast monitoring: 3 viruses with forecast readiness WATCH (Influenza A, Influenza B, SARS-CoV-2).",
+            payload["status_reasons"],
+        )
+
+    def test_public_readiness_payload_keeps_distinct_forecast_monitoring_freshness_reasons(self) -> None:
+        snapshot = {
+            "status": "degraded",
+            "checked_at": "2026-04-15T16:31:55Z",
+            "blockers": [],
+            "components": {
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "message": "Forecast monitoring snapshot loaded.",
+                    "items": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "status": "warning",
+                            "forecast_readiness": "WATCH",
+                            "accuracy_freshness_status": "expired",
+                            "backtest_freshness_status": "fresh",
+                            "freshness_status": "fresh",
+                        },
+                        {
+                            "virus_typ": "Influenza B",
+                            "status": "warning",
+                            "forecast_readiness": "WATCH",
+                            "accuracy_freshness_status": "fresh",
+                            "backtest_freshness_status": "fresh",
+                            "freshness_status": "fresh",
+                        },
+                    ],
+                },
+            },
+        }
+
+        payload = main._public_readiness_payload(
+            snapshot,
+            settings_obj=SimpleNamespace(
+                APP_VERSION="1.0.0",
+                ENVIRONMENT="production",
+            ),
+            expose_details=False,
+        )
+
+        self.assertIn(
+            "Influenza A: forecast readiness WATCH; accuracy freshness expired.",
+            payload["status_reasons"],
+        )
+        self.assertIn(
+            "Influenza B: forecast readiness WATCH.",
+            payload["status_reasons"],
+        )
+
     def test_metrics_access_hidden_without_token_in_production(self) -> None:
         request = Request({"type": "http", "headers": []})
 

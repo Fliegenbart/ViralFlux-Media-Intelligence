@@ -56,6 +56,12 @@ def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any
     """
     logger.info(f"Starte asynchrone Daten-Ingestion für Region: {region_code}")
     results: dict[str, Any] = {}
+    forecast_refresh: dict[str, Any] = {
+        "triggered": False,
+        "region": "DE",
+        "horizon_days": 7,
+        "include_internal_history": True,
+    }
 
     try:
         # 1. AMELAG Abwasserdaten (Hauptdatenquelle)
@@ -145,6 +151,20 @@ def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any
             logger.error(f"BfArM import failed: {exc}")
             results["bfarm"] = {"success": False, "error": str(exc)}
 
+        try:
+            from app.services.ml.tasks import refresh_live_forecasts_task
+
+            async_result = refresh_live_forecasts_task.delay(
+                region=forecast_refresh["region"],
+                horizon_days=forecast_refresh["horizon_days"],
+                include_internal_history=forecast_refresh["include_internal_history"],
+            )
+            forecast_refresh["triggered"] = True
+            forecast_refresh["task_id"] = str(getattr(async_result, "id", "") or "")
+        except Exception as exc:
+            logger.exception("Automatischer Forecast-Refresh nach Ingestion konnte nicht gestartet werden: %s", exc)
+            forecast_refresh["error"] = str(exc)
+
         logger.info("Ingestion erfolgreich abgeschlossen.")
         return _json_safe(
             {
@@ -152,6 +172,7 @@ def run_full_ingestion_pipeline(self, region_code: str = "ALL") -> Dict[str, Any
                 "region": region_code,
                 "message": "Alle Datenquellen synchronisiert und berechnet.",
                 "results": results,
+                "forecast_refresh": forecast_refresh,
                 "timestamp": utc_now(),
             }
         )

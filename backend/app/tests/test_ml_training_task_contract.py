@@ -1,3 +1,4 @@
+import importlib
 import unittest
 from contextlib import nullcontext
 from types import SimpleNamespace
@@ -66,13 +67,15 @@ class MLTrainingTaskContractTests(unittest.TestCase):
         self.assertEqual(refresh_entry["schedule"]._orig_minute, 40)
         self.assertEqual(refresh_entry["kwargs"], {})
 
-        training_entry = schedule["daily-xgboost-training"]
+        training_entry = schedule["monthly-xgboost-training"]
         self.assertEqual(training_entry["kwargs"], {"virus_typ": None})
+        self.assertEqual(training_entry["schedule"]._orig_day_of_month, "1")
 
-        regional_training_entry = schedule["daily-regional-model-training"]
+        regional_training_entry = schedule["monthly-regional-model-training"]
         self.assertEqual(regional_training_entry["task"], "train_regional_models_task")
         self.assertEqual(regional_training_entry["schedule"]._orig_hour, 7)
         self.assertEqual(regional_training_entry["schedule"]._orig_minute, 10)
+        self.assertEqual(regional_training_entry["schedule"]._orig_day_of_month, "1")
         self.assertEqual(regional_training_entry["kwargs"], {"virus_typ": None})
 
         live_forecast_entry = schedule["daily-live-forecast-refresh"]
@@ -99,6 +102,82 @@ class MLTrainingTaskContractTests(unittest.TestCase):
         self.assertEqual(accuracy_entry["task"], "compute_forecast_accuracy_task")
         self.assertEqual(accuracy_entry["schedule"]._orig_hour, 7)
         self.assertEqual(accuracy_entry["schedule"]._orig_minute, 50)
+
+    def test_full_ingestion_pipeline_triggers_live_forecast_refresh_after_success(self) -> None:
+        tasks_module = importlib.import_module("app.services.data_ingest.tasks")
+
+        service_patches = [
+            patch.object(tasks_module, "get_db_context", return_value=nullcontext(object())),
+            patch.object(tasks_module, "AmelagIngestionService"),
+            patch.object(tasks_module, "ERAdmissionsIngestionService"),
+            patch.object(tasks_module, "GoogleTrendsService"),
+            patch.object(tasks_module, "WeatherService"),
+            patch.object(tasks_module, "SchoolHolidaysService"),
+            patch.object(tasks_module, "PollenService"),
+            patch.object(tasks_module.run_full_ingestion_pipeline, "update_state"),
+            patch("app.services.data_ingest.grippeweb_service.GrippeWebIngestionService"),
+            patch("app.services.data_ingest.are_konsultation_service.AREKonsultationIngestionService"),
+            patch("app.services.data_ingest.influenza_service.InfluenzaIngestionService"),
+            patch("app.services.data_ingest.rsv_service.RSVIngestionService"),
+            patch("app.services.data_ingest.bfarm_service.BfarmIngestionService"),
+            patch("app.services.ml.tasks.refresh_live_forecasts_task.delay"),
+        ]
+
+        with (
+            service_patches[0],
+            service_patches[1] as amelag_cls,
+            service_patches[2] as er_cls,
+            service_patches[3] as trends_cls,
+            service_patches[4] as weather_cls,
+            service_patches[5] as holidays_cls,
+            service_patches[6] as pollen_cls,
+            service_patches[7],
+            service_patches[8] as grippeweb_cls,
+            service_patches[9] as are_cls,
+            service_patches[10] as influenza_cls,
+            service_patches[11] as rsv_cls,
+            service_patches[12] as bfarm_cls,
+            service_patches[13] as refresh_delay,
+        ):
+            for cls in (
+                amelag_cls,
+                er_cls,
+                trends_cls,
+                weather_cls,
+                holidays_cls,
+                pollen_cls,
+                grippeweb_cls,
+                are_cls,
+                influenza_cls,
+                rsv_cls,
+                bfarm_cls,
+            ):
+                cls.return_value.run_full_import.return_value = {"success": True}
+
+            result = tasks_module.run_full_ingestion_pipeline.run()
+
+        self.assertEqual(result["status"], "success")
+        refresh_delay.assert_called_once_with(
+            region="DE",
+            horizon_days=7,
+            include_internal_history=True,
+        )
+
+    def test_full_ingestion_pipeline_skips_live_forecast_refresh_after_failure(self) -> None:
+        tasks_module = importlib.import_module("app.services.data_ingest.tasks")
+
+        with (
+            patch.object(tasks_module, "get_db_context", return_value=nullcontext(object())),
+            patch.object(tasks_module, "AmelagIngestionService") as amelag_cls,
+            patch.object(tasks_module.run_full_ingestion_pipeline, "update_state"),
+            patch("app.services.ml.tasks.refresh_live_forecasts_task.delay") as refresh_delay,
+        ):
+            amelag_cls.return_value.run_full_import.side_effect = RuntimeError("boom")
+
+            with self.assertRaises(RuntimeError):
+                tasks_module.run_full_ingestion_pipeline.run()
+
+        refresh_delay.assert_not_called()
 
     def test_live_forecast_refresh_task_runs_default_scope(self) -> None:
         with patch(

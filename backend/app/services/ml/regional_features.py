@@ -51,11 +51,16 @@ from app.services.ml.regional_panel_utils import (
     SOURCE_LAG_DAYS,
     STATE_NAME_TO_CODE,
     TARGET_WINDOW_DAYS,
+    absolute_incidence_threshold,
     circular_week_distance,
     effective_available_time,
     event_definition_config_for_virus,
     normalize_state_code,
     seasonal_baseline_and_mad,
+)
+from app.services.ml.regional_trainer_events import (
+    event_probability_from_prediction,
+    event_threshold_from_context,
 )
 from app.services.ml.weather_forecast_vintage import (
     WEATHER_FORECAST_ISSUE_TIME_SEMANTICS,
@@ -700,9 +705,15 @@ class RegionalFeatureBuilder:
         visible_trends: pd.DataFrame | None,
         ww_level: float,
         ww_slope7d: float,
+        ww_acceleration7d: float,
+        neighbor_ww_slope7d: float,
+        national_ww_slope7d: float,
+        national_ww_acceleration7d: float,
         current_known_incidence: float,
         seasonal_baseline: float,
         seasonal_mad: float,
+        survstat_momentum_2w: float,
+        survstat_momentum_4w: float,
         include_nowcast: bool,
         use_revision_adjusted: bool,
         revision_policy: str,
@@ -806,7 +817,47 @@ class RegionalFeatureBuilder:
         trends_momentum_7_14 = float(
             (trends_recent7 - trends_previous7) / max(abs(trends_previous7), 1.0)
         )
+        event_config = event_definition_config_for_virus(virus_typ)
+        default_tau = float(
+            event_config.tau_grid[min(len(event_config.tau_grid) // 2, len(event_config.tau_grid) - 1)]
+        )
+        default_kappa = float(
+            event_config.kappa_grid[min(len(event_config.kappa_grid) // 2, len(event_config.kappa_grid) - 1)]
+        )
+        persistence_threshold = float(
+            event_threshold_from_context(
+                current_known=[current_known_incidence],
+                baseline=[seasonal_baseline],
+                mad=[seasonal_mad],
+                tau=default_tau,
+                kappa=default_kappa,
+                min_absolute_incidence=event_config.min_absolute_incidence,
+                np_module=np,
+                absolute_incidence_threshold_fn=absolute_incidence_threshold,
+            )[0]
+        )
+        persistence_event_probability = float(
+            event_probability_from_prediction(
+                predicted_next=[current_known_incidence],
+                current_known=[current_known_incidence],
+                baseline=[seasonal_baseline],
+                mad=[seasonal_mad],
+                tau=default_tau,
+                kappa=default_kappa,
+                min_absolute_incidence=event_config.min_absolute_incidence,
+                np_module=np,
+                absolute_incidence_threshold_fn=absolute_incidence_threshold,
+            )[0]
+        )
         survstat_baseline_zscore = float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0))
+        survstat_acceleration_2to4w = float(survstat_momentum_2w - survstat_momentum_4w)
+        ww_survstat_trend_gap = float(ww_slope7d - survstat_momentum_2w)
+        ww_survstat_acceleration_gap = float(ww_acceleration7d - survstat_acceleration_2to4w)
+        state_vs_neighbor_trend_gap = float(ww_slope7d - neighbor_ww_slope7d)
+        state_vs_national_trend_gap = float(ww_slope7d - national_ww_slope7d)
+
+        def _reversal_flag(left: float, right: float) -> float:
+            return float((left > 0.0 and right < 0.0) or (left < 0.0 and right > 0.0))
 
         features = {
             "sars_are_available": float(not are_frame.empty),
@@ -826,6 +877,19 @@ class RegionalFeatureBuilder:
             "sars_trends_level": float(trends_level),
             "sars_trends_momentum_14_28": trends_momentum_14_28,
             "sars_trends_acceleration_7d": float(trends_momentum_7_14 - trends_momentum_14_28),
+            "sars_persistence_event_probability": persistence_event_probability,
+            "sars_persistence_threshold_gap": float(current_known_incidence - persistence_threshold),
+            "sars_survstat_acceleration_2to4w": survstat_acceleration_2to4w,
+            "sars_survstat_reversal_flag": _reversal_flag(survstat_momentum_2w, survstat_momentum_4w),
+            "sars_ww_survstat_trend_gap": ww_survstat_trend_gap,
+            "sars_ww_survstat_acceleration_gap": ww_survstat_acceleration_gap,
+            "sars_state_vs_neighbor_ww_trend_gap": state_vs_neighbor_trend_gap,
+            "sars_state_vs_neighbor_ww_reversal_flag": _reversal_flag(ww_slope7d, neighbor_ww_slope7d),
+            "sars_state_vs_national_ww_trend_gap": state_vs_national_trend_gap,
+            "sars_state_vs_national_ww_reversal_flag": _reversal_flag(ww_slope7d, national_ww_slope7d),
+            "sars_state_vs_national_ww_acceleration_gap": float(
+                ww_acceleration7d - national_ww_acceleration7d
+            ),
             "sars_ww_are_log_gap": float(np.log1p(max(ww_level, 0.0)) - np.log1p(max(are_level, 0.0))),
             "sars_ww_are_trend_gap": float(ww_slope7d - are_momentum_1w),
             "sars_ww_notaufnahme_log_gap": float(

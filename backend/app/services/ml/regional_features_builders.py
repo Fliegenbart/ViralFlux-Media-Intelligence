@@ -355,6 +355,8 @@ def build_feature_row(
     truth_lag2 = builder._latest_truth_value(visible_truth, lag_weeks=2)
     truth_lag4 = builder._latest_truth_value(visible_truth, lag_weeks=4)
     truth_lag8 = builder._latest_truth_value(visible_truth, lag_weeks=8)
+    survstat_momentum_2w = float((truth_lag1 - truth_lag2) / max(abs(truth_lag2), 1.0))
+    survstat_momentum_4w = float((truth_lag1 - truth_lag4) / max(abs(truth_lag4), 1.0))
 
     neighbor_values = [
         snapshot["viral_load"]
@@ -371,6 +373,9 @@ def build_feature_row(
     national_accelerations = [snapshot["acceleration7d"] for snapshot in latest_ww_snapshot.values()]
     neighbor_mean = float(np.mean(neighbor_values)) if neighbor_values else 0.0
     national_mean = float(np.mean(national_values)) if national_values else 0.0
+    neighbor_slope7d = float(np.mean(neighbor_slopes)) if neighbor_slopes else 0.0
+    national_slope7d = float(np.mean(national_slopes)) if national_slopes else 0.0
+    national_acceleration7d = float(np.mean(national_accelerations)) if national_accelerations else 0.0
     site_coverage_vs_28d = float(
         ww_site_count / max(float(ww_window28["site_count"].median() or 0.0), 1.0)
     )
@@ -430,9 +435,15 @@ def build_feature_row(
         visible_trends=visible_trends,
         ww_level=ww_level,
         ww_slope7d=ww_slope7d,
+        ww_acceleration7d=ww_acceleration7d,
+        neighbor_ww_slope7d=neighbor_slope7d,
+        national_ww_slope7d=national_slope7d,
+        national_ww_acceleration7d=national_acceleration7d,
         current_known_incidence=current_known_incidence,
         seasonal_baseline=seasonal_baseline,
         seasonal_mad=seasonal_mad,
+        survstat_momentum_2w=survstat_momentum_2w,
+        survstat_momentum_4w=survstat_momentum_4w,
         include_nowcast=include_nowcast,
         use_revision_adjusted=use_revision_adjusted,
         revision_policy=revision_policy,
@@ -503,17 +514,17 @@ def build_feature_row(
         "survstat_lag2w": float(truth_lag2),
         "survstat_lag4w": float(truth_lag4),
         "survstat_lag8w": float(truth_lag8),
-        "survstat_momentum_2w": float((truth_lag1 - truth_lag2) / max(abs(truth_lag2), 1.0)),
-        "survstat_momentum_4w": float((truth_lag1 - truth_lag4) / max(abs(truth_lag4), 1.0)),
+        "survstat_momentum_2w": survstat_momentum_2w,
+        "survstat_momentum_4w": survstat_momentum_4w,
         "survstat_seasonal_baseline": float(seasonal_baseline),
         "survstat_seasonal_mad": float(seasonal_mad),
         "survstat_baseline_gap": float(current_known_incidence - seasonal_baseline),
         "survstat_baseline_zscore": float((current_known_incidence - seasonal_baseline) / max(seasonal_mad, 1.0)),
         "neighbor_ww_level": neighbor_mean,
-        "neighbor_ww_slope7d": float(np.mean(neighbor_slopes)) if neighbor_slopes else 0.0,
+        "neighbor_ww_slope7d": neighbor_slope7d,
         "national_ww_level": national_mean,
-        "national_ww_slope7d": float(np.mean(national_slopes)) if national_slopes else 0.0,
-        "national_ww_acceleration7d": float(np.mean(national_accelerations)) if national_accelerations else 0.0,
+        "national_ww_slope7d": national_slope7d,
+        "national_ww_acceleration7d": national_acceleration7d,
         "ww_relative_to_neighbor_mean": float(ww_level - neighbor_mean),
         "ww_relative_to_national": float(ww_level - national_mean),
         "ww_share_of_national": float(ww_level / max(abs(national_mean), 1.0)),

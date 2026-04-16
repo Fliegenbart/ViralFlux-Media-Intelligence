@@ -130,16 +130,16 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=6, minute=0),
         "kwargs": {},
     },
-    # Taeglich 07:00 — XGBoost Retraining mit neuen Daten
-    "daily-xgboost-training": {
+    # Monatlich am 1. um 07:00 — XGBoost Retraining mit neuen Daten
+    "monthly-xgboost-training": {
         "task": "train_xgboost_model_task",
-        "schedule": crontab(hour=7, minute=0),
+        "schedule": crontab(hour=7, minute=0, day_of_month="1"),
         "kwargs": {"virus_typ": None},  # alle 4 Typen
     },
-    # Taeglich 07:10 — Regionale Modelle nach frischer Ingestion neu trainieren
-    "daily-regional-model-training": {
+    # Monatlich am 1. um 07:10 — Regionale Modelle nach frischer Ingestion neu trainieren
+    "monthly-regional-model-training": {
         "task": "train_regional_models_task",
-        "schedule": crontab(hour=7, minute=10),
+        "schedule": crontab(hour=7, minute=10, day_of_month="1"),
         "kwargs": {"virus_typ": None},
     },
     # Taeglich 07:30 — Frische Live-Forecasts in ml_forecasts persistieren

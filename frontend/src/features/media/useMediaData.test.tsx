@@ -452,6 +452,44 @@ describe('useNowPageData', () => {
 
     expect(mockedMediaApi.getRegionalBacktest).toHaveBeenCalledWith('Influenza A', 'BY', 7);
   });
+
+  it('uses the bundesland with the strongest absolute forecast growth for the hero backtest', async () => {
+    mockedMediaApi.getDecision.mockResolvedValue(buildDecision() as any);
+    mockedMediaApi.getEvidence.mockResolvedValue(buildEvidence() as any);
+    mockedMediaApi.getBacktestRun.mockResolvedValue({ run_id: 'wave-1' } as any);
+    mockedMediaApi.getRegionalForecast.mockResolvedValue(buildForecast([
+      {
+        bundesland: 'BE',
+        bundesland_name: 'Berlin',
+        decision_rank: 1,
+        event_probability: 0.81,
+        expected_target_incidence: 170,
+        current_known_incidence: 150,
+      },
+      {
+        bundesland: 'BY',
+        bundesland_name: 'Bayern',
+        decision_rank: 2,
+        event_probability: 0.56,
+        expected_target_incidence: 160,
+        current_known_incidence: 90,
+      },
+    ]) as any);
+    mockedMediaApi.getRegionalAllocation.mockResolvedValue({ generated_at: '2026-03-21T09:00:00Z', recommendations: [] } as any);
+    mockedMediaApi.getRegionalCampaignRecommendations.mockResolvedValue({ generated_at: '2026-03-21T09:00:00Z', recommendations: [] } as any);
+    mockedMediaApi.getWaveRadar.mockResolvedValue({ generated_at: '2026-03-21T09:00:00Z', waves: [] } as any);
+    mockedMediaApi.getRegionalBacktest.mockResolvedValue({
+      bundesland: 'BY',
+      bundesland_name: 'Bayern',
+      timeline: [],
+    } as any);
+
+    render(<Harness />);
+
+    await waitFor(() => expect(screen.getByTestId('loading-state')).toHaveTextContent('ready'));
+
+    expect(mockedMediaApi.getRegionalBacktest).toHaveBeenCalledWith('Influenza A', 'BY', 7);
+  });
 });
 
 describe('useTimegraphPageData', () => {
@@ -577,6 +615,62 @@ describe('buildNowPageViewModel', () => {
 
     expect(view.secondaryMoves).toHaveLength(2);
     expect(view.secondaryMoves.map((item) => item.name)).toEqual(['Bayern', 'Sachsen']);
+  });
+
+  it('focuses the virus radar on the bundesland with the strongest absolute forecast growth', () => {
+    const view = buildBriefingView({
+      decision: buildDecision({
+        top_recommendations: [
+          {
+            id: 'rec-1',
+            recommended_product: 'GeloMyrtol forte',
+            region_codes: ['BE'],
+            region_codes_display: ['BE'],
+            decision_brief: {
+              recommendation: { primary_region: 'Berlin' },
+              summary_sentence: 'Berlin priorisieren.',
+            },
+          },
+          {
+            id: 'rec-2',
+            recommended_product: 'GeloMyrtol forte',
+            region_codes: ['BY'],
+            region_codes_display: ['BY'],
+            decision_brief: {
+              recommendation: { primary_region: 'Bayern' },
+              summary_sentence: 'Bayern priorisieren.',
+            },
+          },
+        ],
+      }),
+      forecast: buildForecast([
+        {
+          bundesland: 'BE',
+          bundesland_name: 'Berlin',
+          event_probability: 0.81,
+          decision_label: 'Prepare',
+          decision_rank: 1,
+          expected_target_incidence: 170,
+          current_known_incidence: 150,
+          reason_trace: { why: ['Berlin vorne im alten Ranking'] },
+        },
+        {
+          bundesland: 'BY',
+          bundesland_name: 'Bayern',
+          event_probability: 0.72,
+          decision_label: 'Prepare',
+          decision_rank: 2,
+          expected_target_incidence: 160,
+          current_known_incidence: 90,
+          reason_trace: { why: ['Bayern wächst absolut am stärksten'] },
+        },
+      ]),
+    });
+
+    expect(view.focusRegion?.code).toBe('BY');
+    expect(view.focusRegion?.name).toBe('Bayern');
+    expect(view.heroRecommendation?.region).toBe('Bayern');
+    expect(view.primaryRecommendationId).toBe('rec-2');
   });
 
   it.each([

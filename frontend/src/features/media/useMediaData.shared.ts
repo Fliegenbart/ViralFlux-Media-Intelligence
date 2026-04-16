@@ -13,6 +13,12 @@ export {
   type NowPageTrustCheck,
   type NowPageViewModel,
 } from './useMediaData.types';
-export { deriveNowFocusRegionCode, sortRegionalPredictions } from './useMediaData.utils';
+export {
+  deriveNowFocusRegionCode,
+  findRecommendationCardForRegion,
+  findStrongestGrowthPrediction,
+  forecastAbsoluteGrowth,
+  sortRegionalPredictions,
+} from './useMediaData.utils';
 export { buildWorkspaceStatus } from './useMediaWorkspaceStatus';
 export { buildNowPageViewModel } from './useMediaNowViewModel';

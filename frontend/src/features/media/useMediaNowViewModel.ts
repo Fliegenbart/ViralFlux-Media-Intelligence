@@ -28,7 +28,11 @@ import {
   NowPageBriefingTrustItem,
   NowPageViewModel,
 } from './useMediaData.types';
-import { sortRegionalPredictions } from './useMediaData.utils';
+import {
+  findRecommendationCardForRegion,
+  findStrongestGrowthPrediction,
+  sortRegionalPredictions,
+} from './useMediaData.utils';
 import {
   buildNowPageNote,
   businessTrustTone,
@@ -58,12 +62,13 @@ export function buildNowPageViewModel(
   horizonDays: number,
 ): NowPageViewModel {
   const weeklyDecision = decision?.weekly_decision;
-  const topCard = decision?.top_recommendations?.[0] || null;
+  const leadTopCard = decision?.top_recommendations?.[0] || null;
   const sortedPredictions = sortRegionalPredictions(forecast);
   const leadPrediction = sortedPredictions[0] || null;
   const leadAllocation = allocation?.recommendations?.[0] || null;
   const leadCampaign = campaignRecommendations?.recommendations?.[0] || null;
   const topRegion = weeklyDecision?.top_regions?.[0] || null;
+  const strongestGrowthPrediction = findStrongestGrowthPrediction(forecast);
 
   const findPredictionForRegion = (code?: string | null, name?: string | null) => sortedPredictions.find((item) => (
     (code && item.bundesland === code)
@@ -82,23 +87,36 @@ export function buildNowPageViewModel(
     )) || null
   );
 
-  const focusRegionCode = topRegion?.code
+  const focusRegionCode = strongestGrowthPrediction?.bundesland
+    || topRegion?.code
     || leadCampaign?.bundesland
     || leadCampaign?.region
-    || topCard?.region_codes?.[0]
+    || leadTopCard?.region_codes?.[0]
     || leadAllocation?.bundesland
     || leadPrediction?.bundesland
     || null;
   const focusRegionName = firstCleanText(
+    strongestGrowthPrediction?.bundesland_name,
     topRegion?.name,
-    topCard?.decision_brief?.recommendation?.primary_region,
+    leadTopCard?.decision_brief?.recommendation?.primary_region,
     leadCampaign?.region_name,
     leadAllocation?.bundesland_name,
     leadPrediction?.bundesland_name,
   );
-  const focusPrediction = findPredictionForRegion(focusRegionCode, focusRegionName) || leadPrediction;
+  const topCard = findRecommendationCardForRegion(
+    decision?.top_recommendations,
+    focusRegionCode,
+    focusRegionName,
+  ) || leadTopCard;
+  const focusPrediction = findPredictionForRegion(focusRegionCode, focusRegionName)
+    || strongestGrowthPrediction
+    || leadPrediction;
   const focusCampaign = findCampaignForRegion(focusRegionCode, focusRegionName) || leadCampaign;
   const focusAllocation = findAllocationForRegion(focusRegionCode, focusRegionName) || leadAllocation;
+  const focusDecisionRegion = (weeklyDecision?.top_regions || []).find((item) => (
+    (focusRegionCode && item.code === focusRegionCode)
+    || (focusRegionName && item.name === focusRegionName)
+  )) || topRegion;
   const focusStageValue = weeklyDecision?.action_stage
     || weeklyDecision?.decision_state
     || focusCampaign?.activation_level
@@ -118,7 +136,7 @@ export function buildNowPageViewModel(
   );
   const focusReason = firstCleanText(
     (weeklyDecision?.why_now || []).find((item) => String(item || '').includes(focusRegionName)),
-    regionSignalSentence(focusRegionName, topRegion?.signal_score, topRegion?.trend),
+    regionSignalSentence(focusRegionName, focusDecisionRegion?.signal_score, focusDecisionRegion?.trend),
     findReasonMentioningRegion([
       ...preferredReasonEntries(
         focusCampaign?.recommendation_rationale?.why_details,
@@ -263,7 +281,7 @@ export function buildNowPageViewModel(
     focusPrediction?.decision?.explanation_summary,
     focusPrediction?.reason_trace?.why_details?.[0],
     focusPrediction?.reason_trace?.why?.[0],
-    regionSignalSentence(focusRegionName, topRegion?.signal_score, topRegion?.trend),
+    regionSignalSentence(focusRegionName, focusDecisionRegion?.signal_score, focusDecisionRegion?.trend),
   ].map((item) => cleanCopy(item)), 4);
 
   const risks = uniqueText([

@@ -1,0 +1,503 @@
+/**
+ * peix design system — ViralFlux Cockpit Theme
+ * ------------------------------------------------------------------
+ * Inspired by FT (editorial voice), Linear/Stripe (SaaS craft),
+ * and museum-grade data visualisation.
+ *
+ * Use via className="peix" wrapper around any cockpit subtree.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+.peix {
+  /* ----- Colour primitives ----- */
+  --peix-paper: #fafaf7;        /* warm off-white — FT paper */
+  --peix-ink: #0b0d10;          /* near-black, not pure black */
+  --peix-ink-soft: #4a5060;
+  --peix-ink-mute: #8a90a2;
+  --peix-line: #e5e2d9;         /* warm hairline */
+  --peix-line-strong: #c9c5ba;
+  --peix-card: #ffffff;
+  --peix-card-dim: #f4f1ea;
+  --peix-accent: #0b4fa3;       /* peix marine */
+  --peix-accent-deep: #073377;
+  --peix-warm: #d94a2c;         /* editorial red for hero */
+  --peix-warm-soft: #f5d9cf;
+  --peix-gold: #c08a1a;
+  --peix-cool: #0d7f75;         /* teal for "falling" */
+  --peix-cool-soft: #cde8e4;
+
+  --peix-rising-1: #fde4d4;
+  --peix-rising-2: #f9b588;
+  --peix-rising-3: #ef7e44;
+  --peix-rising-4: #d94a2c;
+  --peix-falling-1: #d6e9e5;
+  --peix-falling-2: #87c3b9;
+  --peix-falling-3: #2f998b;
+
+  /* ----- Typography ----- */
+  --peix-font-display: 'Fraunces', 'Times New Roman', serif;
+  --peix-font-sans: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
+  --peix-font-mono: 'JetBrains Mono', 'Menlo', monospace;
+
+  /* ----- Rhythm ----- */
+  --peix-radius-sm: 6px;
+  --peix-radius-md: 12px;
+  --peix-radius-lg: 20px;
+  --peix-radius-xl: 28px;
+  --peix-shadow-soft: 0 1px 2px rgba(11,13,16,0.04), 0 4px 16px rgba(11,13,16,0.04);
+  --peix-shadow-lift: 0 2px 4px rgba(11,13,16,0.06), 0 12px 32px rgba(11,13,16,0.08);
+  --peix-shadow-deep: 0 4px 8px rgba(11,13,16,0.08), 0 24px 60px rgba(11,13,16,0.12);
+
+  background: var(--peix-paper);
+  color: var(--peix-ink);
+  font-family: var(--peix-font-sans);
+  font-feature-settings: 'ss01','ss02','cv11','zero';
+  letter-spacing: -0.005em;
+  min-height: 100vh;
+}
+
+/* Dark theme for the signature 3D stage */
+.peix[data-stage="dark"] {
+  --peix-paper: #0a0d14;
+  --peix-ink: #f5f3ee;
+  --peix-ink-soft: #a6acb8;
+  --peix-ink-mute: #6b7180;
+  --peix-line: #1d222d;
+  --peix-line-strong: #2a3142;
+  --peix-card: #131824;
+  --peix-card-dim: #0f1420;
+  --peix-accent: #7ab6ff;
+  --peix-accent-deep: #3a7fd0;
+}
+
+/* ================================================================
+   Typography primitives
+   ================================================================ */
+.peix-kicker {
+  font-family: var(--peix-font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--peix-ink-mute);
+}
+.peix-display {
+  font-family: var(--peix-font-display);
+  font-weight: 500;
+  font-size: clamp(36px, 4.6vw, 64px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  color: var(--peix-ink);
+}
+.peix-headline {
+  font-family: var(--peix-font-display);
+  font-weight: 500;
+  font-size: clamp(22px, 2.3vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+.peix-eyebrow {
+  font-family: var(--peix-font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--peix-ink-soft);
+}
+.peix-body {
+  font-family: var(--peix-font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--peix-ink-soft);
+}
+.peix-mono {
+  font-family: var(--peix-font-mono);
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--peix-ink-mute);
+  text-transform: uppercase;
+}
+.peix-num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+/* ================================================================
+   Layout
+   ================================================================ */
+.peix-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 28px 40px 96px;
+}
+@media (max-width: 960px) {
+  .peix-shell { padding: 20px 20px 64px; }
+}
+
+/* Masthead — FT-style rule above */
+.peix-masthead {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--peix-line);
+  margin-bottom: 20px;
+}
+.peix-masthead-brand {
+  display: flex; align-items: baseline; gap: 14px;
+}
+.peix-masthead-brand .mark {
+  font-family: var(--peix-font-display);
+  font-weight: 600; font-size: 22px; letter-spacing: -0.01em;
+}
+.peix-masthead-brand .mark em {
+  font-style: italic; color: var(--peix-warm);
+  font-weight: 500;
+}
+.peix-masthead-meta {
+  display: flex; gap: 18px; align-items: center;
+  font-family: var(--peix-font-mono);
+  font-size: 11px; color: var(--peix-ink-mute);
+  text-transform: uppercase; letter-spacing: 0.12em;
+}
+.peix-masthead-meta .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--peix-cool); display: inline-block;
+  box-shadow: 0 0 0 4px rgba(13,127,117,0.12);
+}
+
+/* Tab navigation — editorial, not chip-style */
+.peix-tabs {
+  display: flex; gap: 32px;
+  border-bottom: 1px solid var(--peix-line);
+  margin-bottom: 36px;
+  overflow-x: auto;
+}
+.peix-tab {
+  padding: 14px 0 14px;
+  font-family: var(--peix-font-sans);
+  font-size: 14px; font-weight: 500;
+  color: var(--peix-ink-mute);
+  border: none; background: none; cursor: pointer;
+  position: relative;
+  transition: color 180ms ease;
+  white-space: nowrap;
+}
+.peix-tab:hover { color: var(--peix-ink); }
+.peix-tab[aria-selected="true"] {
+  color: var(--peix-ink);
+}
+.peix-tab[aria-selected="true"]::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px; background: var(--peix-ink);
+}
+.peix-tab .idx {
+  font-family: var(--peix-font-mono);
+  color: var(--peix-ink-mute);
+  margin-right: 10px;
+  font-size: 11px;
+}
+
+/* ================================================================
+   Hero — the editorial lede
+   ================================================================ */
+.peix-hero {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 48px;
+  padding: 8px 0 44px;
+  border-bottom: 1px solid var(--peix-line);
+  margin-bottom: 36px;
+}
+@media (max-width: 960px) {
+  .peix-hero { grid-template-columns: 1fr; gap: 28px; }
+}
+.peix-hero-lede { display: flex; flex-direction: column; gap: 20px; }
+.peix-hero-lede .kick { display: flex; align-items: center; gap: 10px; }
+.peix-hero-lede .kick::before {
+  content: ''; width: 28px; height: 2px;
+  background: var(--peix-warm); display: inline-block;
+}
+.peix-hero-lede h1 em { font-style: italic; color: var(--peix-warm); }
+.peix-hero-lede .dek {
+  font-family: var(--peix-font-display);
+  font-size: clamp(17px, 1.5vw, 20px);
+  line-height: 1.45; font-weight: 400; font-style: italic;
+  color: var(--peix-ink-soft);
+  max-width: 42ch;
+}
+
+/* Primary action bar — calm authority */
+.peix-action-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding-top: 4px;
+}
+.peix-btn {
+  font-family: var(--peix-font-sans);
+  font-size: 14px; font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--peix-ink);
+  background: var(--peix-ink); color: var(--peix-paper);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.peix-btn:hover { transform: translateY(-1px); box-shadow: var(--peix-shadow-lift); }
+.peix-btn.ghost {
+  background: transparent; color: var(--peix-ink);
+  border-color: var(--peix-line-strong);
+}
+.peix-btn.ghost:hover { border-color: var(--peix-ink); }
+.peix-btn.warm {
+  background: var(--peix-warm); border-color: var(--peix-warm); color: #fff;
+}
+
+/* Hero number card on right */
+.peix-hero-card {
+  background: var(--peix-card);
+  border: 1px solid var(--peix-line);
+  border-radius: var(--peix-radius-lg);
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: var(--peix-shadow-soft);
+}
+.peix-hero-card .row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 0;
+  border-top: 1px dashed var(--peix-line);
+}
+.peix-hero-card .row:first-of-type { border-top: none; padding-top: 0; }
+.peix-hero-card .label { color: var(--peix-ink-mute); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+.peix-hero-card .val {
+  font-family: var(--peix-font-display);
+  font-weight: 500; font-size: 26px;
+  letter-spacing: -0.01em;
+}
+.peix-hero-card .val small { font-family: var(--peix-font-sans); font-size: 13px; color: var(--peix-ink-mute); margin-left: 6px; }
+
+/* ================================================================
+   Bento grid
+   ================================================================ */
+.peix-bento {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: minmax(88px, auto);
+  gap: 16px;
+}
+.peix-card {
+  background: var(--peix-card);
+  border: 1px solid var(--peix-line);
+  border-radius: var(--peix-radius-lg);
+  padding: 20px 22px;
+  box-shadow: var(--peix-shadow-soft);
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 0;
+}
+.peix-card.quiet { background: var(--peix-card-dim); border-color: transparent; box-shadow: none; }
+.peix-card.ink { background: var(--peix-ink); color: var(--peix-paper); border-color: var(--peix-ink); }
+.peix-card.ink .peix-kicker { color: rgba(255,255,255,0.55); }
+.peix-card.warm-tint { background: linear-gradient(160deg, #fff7f1 0%, #fde7d9 100%); border-color: #f2ccb4; }
+.peix-card.cool-tint { background: linear-gradient(160deg, #f0f9f7 0%, #dbeee9 100%); border-color: #bfd9d3; }
+.peix-card header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.peix-card header h4 { margin: 0; font-size: 13px; font-weight: 600; color: var(--peix-ink-mute); letter-spacing: 0.02em; text-transform: uppercase; }
+
+/* Col spans */
+.peix-col-4 { grid-column: span 4; }
+.peix-col-5 { grid-column: span 5; }
+.peix-col-6 { grid-column: span 6; }
+.peix-col-7 { grid-column: span 7; }
+.peix-col-8 { grid-column: span 8; }
+.peix-col-12 { grid-column: span 12; }
+@media (max-width: 960px) {
+  .peix-col-4, .peix-col-5, .peix-col-6, .peix-col-7, .peix-col-8 { grid-column: span 12; }
+}
+
+/* ================================================================
+   Figure — chart frames with captions, NYT-style
+   ================================================================ */
+.peix-figure { display: flex; flex-direction: column; gap: 8px; }
+.peix-figure figcaption {
+  font-family: var(--peix-font-display);
+  font-style: italic; font-size: 13px; color: var(--peix-ink-soft);
+  padding-top: 8px; border-top: 1px solid var(--peix-line);
+}
+.peix-axis-label {
+  font-family: var(--peix-font-mono);
+  font-size: 10px; color: var(--peix-ink-mute);
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+
+/* ================================================================
+   Recommendation strip — minimal editorial
+   ================================================================ */
+.peix-rec-list { display: flex; flex-direction: column; gap: 1px; background: var(--peix-line); border-radius: var(--peix-radius-md); overflow: hidden; }
+.peix-rec {
+  background: var(--peix-card);
+  display: grid; grid-template-columns: 3fr 4fr 1fr auto;
+  gap: 16px; padding: 14px 20px; align-items: center;
+  transition: background 160ms ease;
+  cursor: pointer;
+}
+.peix-rec:hover { background: var(--peix-card-dim); }
+.peix-rec .flow {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--peix-font-display); font-size: 17px; letter-spacing: -0.01em;
+}
+.peix-rec .flow .from { color: var(--peix-ink-mute); text-decoration: line-through; text-decoration-color: rgba(138,144,162,0.5); text-decoration-thickness: 1px; }
+.peix-rec .flow .to { color: var(--peix-warm); }
+.peix-rec .flow .arr { color: var(--peix-ink-mute); font-family: var(--peix-font-sans); font-size: 14px; }
+.peix-rec .why { color: var(--peix-ink-soft); font-size: 13px; }
+.peix-rec .conf { font-family: var(--peix-font-mono); font-size: 12px; color: var(--peix-ink-mute); text-align: right; }
+.peix-rec .amt { font-family: var(--peix-font-display); font-size: 18px; font-weight: 500; color: var(--peix-ink); }
+
+/* Sparkline dots */
+.peix-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--peix-cool); vertical-align: middle; margin-right: 6px;
+}
+.peix-dot.warm { background: var(--peix-warm); }
+.peix-dot.cool { background: var(--peix-cool); }
+
+/* ================================================================
+   Footer / sources — FT-style small caps
+   ================================================================ */
+.peix-sources {
+  margin-top: 48px; padding-top: 20px;
+  border-top: 1px solid var(--peix-line);
+  display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 24px;
+  font-family: var(--peix-font-mono);
+  font-size: 11px; color: var(--peix-ink-mute);
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.peix-sources > div { display: flex; flex-direction: column; gap: 6px; }
+.peix-sources > div b { color: var(--peix-ink); font-weight: 600; letter-spacing: 0.08em; }
+
+/* ================================================================
+   3D stage — signature screen
+   ================================================================ */
+.peix-stage {
+  background: radial-gradient(ellipse at 50% 30%, #172236 0%, #070911 70%);
+  color: #f5f3ee;
+  border-radius: var(--peix-radius-xl);
+  overflow: hidden;
+  position: relative;
+  min-height: 560px;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+}
+@media (max-width: 960px) {
+  .peix-stage { grid-template-columns: 1fr; min-height: 440px; }
+}
+.peix-stage-lede {
+  padding: 40px 32px;
+  display: flex; flex-direction: column; gap: 24px;
+  z-index: 2; position: relative;
+  background: linear-gradient(90deg, rgba(7,9,17,0.78), rgba(7,9,17,0.0));
+}
+.peix-stage-lede .kicker { color: rgba(255,255,255,0.55); }
+.peix-stage-lede h2 {
+  font-family: var(--peix-font-display); font-weight: 500;
+  font-size: clamp(28px, 3.2vw, 44px); line-height: 1.08; letter-spacing: -0.02em;
+  color: #f5f3ee; margin: 0;
+}
+.peix-stage-lede h2 em { font-style: italic; color: #ffb897; }
+.peix-stage-lede .dek {
+  font-family: var(--peix-font-display); font-style: italic; font-size: 16px;
+  line-height: 1.5; color: rgba(245,243,238,0.75);
+}
+.peix-stage-canvas {
+  position: relative;
+  overflow: hidden;
+}
+.peix-stage-canvas canvas { display: block; width: 100% !important; height: 100% !important; }
+.peix-stage-legend {
+  position: absolute; bottom: 20px; left: 420px; right: 24px;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--peix-font-mono); font-size: 10px;
+  color: rgba(245,243,238,0.65);
+  text-transform: uppercase; letter-spacing: 0.12em;
+}
+@media (max-width: 960px) { .peix-stage-legend { left: 24px; } }
+.peix-stage-legend .bar {
+  height: 4px; width: 160px; border-radius: 2px;
+  background: linear-gradient(90deg, #2f998b, #7ab6ff, #ffb897, #d94a2c);
+}
+
+/* ================================================================
+   Scrubber — Nowcast-honest timeline
+   ================================================================ */
+.peix-scrubber {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 18px 20px;
+  background: var(--peix-card);
+  border: 1px solid var(--peix-line);
+  border-radius: var(--peix-radius-md);
+}
+.peix-scrubber-track {
+  position: relative; height: 44px;
+}
+.peix-scrubber-rail {
+  position: absolute; top: 50%; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--peix-line-strong) 0%, var(--peix-line-strong) 66%, var(--peix-warm) 66%, var(--peix-warm) 100%);
+  transform: translateY(-50%);
+}
+.peix-scrubber-ticks {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.peix-scrubber-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--peix-ink); border: 3px solid var(--peix-paper);
+  box-shadow: 0 2px 8px rgba(11,13,16,0.25);
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  cursor: grab;
+}
+.peix-scrubber-input {
+  position: absolute; inset: 0; width: 100%; opacity: 0; cursor: grab;
+}
+.peix-scrubber-labels {
+  display: flex; justify-content: space-between;
+  font-family: var(--peix-font-mono); font-size: 10px;
+  color: var(--peix-ink-mute); text-transform: uppercase; letter-spacing: 0.1em;
+}
+
+/* ================================================================
+   Sparkline micro-charts used inside cards
+   ================================================================ */
+.peix-spark { width: 100%; height: 44px; }
+
+/* ================================================================
+   Confidence cloud
+   ================================================================ */
+.peix-cloud-fill { fill: rgba(11, 79, 163, 0.12); }
+.peix-cloud-mid  { stroke: var(--peix-accent); stroke-width: 2; fill: none; }
+.peix-cloud-obs  { stroke: var(--peix-ink); stroke-width: 2; fill: none; }
+.peix-cloud-now  { stroke: var(--peix-warm); stroke-dasharray: 4 4; stroke-width: 1.4; }
+
+/* ================================================================
+   Badges & pills
+   ================================================================ */
+.peix-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--peix-font-sans);
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--peix-line-strong);
+  background: var(--peix-card);
+  color: var(--peix-ink-soft);
+}
+.peix-pill.warm { background: var(--peix-warm-soft); border-color: transparent; color: #8e2a12; }
+.peix-pill.cool { background: var(--peix-cool-soft); border-color: transparent; color: #12544c; }
+.peix-pill.ink { background: var(--peix-ink); border-color: var(--peix-ink); color: var(--peix-paper); }
+
+/* ================================================================
+   Subtle motion
+   ================================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  .peix-fade-in { animation: peixFadeIn 420ms ease both; }
+  @keyframes peixFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

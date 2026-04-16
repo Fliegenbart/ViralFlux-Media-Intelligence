@@ -21,6 +21,8 @@ const TimegraphPage = lazy(() => import('./pages/media/TimegraphPage'));
 const RegionsPage = lazy(() => import('./pages/media/RegionsPage'));
 const CampaignsPage = lazy(() => import('./pages/media/CampaignsPage'));
 const EvidencePage = lazy(() => import('./pages/media/EvidencePage'));
+// peix · GELO cockpit — editorial FT/Linear-premium + 3D signature stage
+const CockpitShell = lazy(() => import('./pages/cockpit/CockpitShell'));
 
 const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -129,6 +131,8 @@ const App: React.FC = () => {
                     <Route path="/validierung" element={<Navigate to="/evidenz" replace />} />
                     <Route path="/dashboard/recommendations/:id" element={<LegacyRecommendationRedirect />} />
                     <Route path="/backtest" element={<Navigate to="/evidenz" replace />} />
+                    {/* peix · GELO cockpit — independent shell, no AppLayout */}
+                    <Route path="/cockpit" element={<CockpitShell />} />
                   </Route>
                 </Routes>
               </Suspense>

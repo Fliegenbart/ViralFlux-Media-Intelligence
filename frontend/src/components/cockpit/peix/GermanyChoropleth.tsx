@@ -41,7 +41,9 @@ interface Props {
   caption: string;
 }
 
-function palette(mode: 'rising' | 'falling', delta7d: number): string {
+function palette(mode: 'rising' | 'falling', delta7d: number | null): string {
+  // null => no regional forecast for this BL, paint neutral.
+  if (delta7d === null || !Number.isFinite(delta7d)) return 'var(--peix-card-dim)';
   if (mode === 'rising') {
     if (delta7d <= 0) return 'var(--peix-card-dim)';
     if (delta7d < 0.10) return 'var(--peix-rising-1)';
@@ -68,6 +70,22 @@ export const GermanyChoropleth: React.FC<Props> = ({ regions, mode, title, kicke
     return m;
   }, [regions]);
 
+  if (regions.length === 0) {
+    return (
+      <div className="peix-figure">
+        <header style={{ marginBottom: 8 }}>
+          <div className="peix-kicker">{kicker}</div>
+          <h3 className="peix-headline" style={{ marginTop: 4 }}>{title}</h3>
+        </header>
+        <p className="peix-body" style={{ color: 'var(--peix-ink-soft)' }}>
+          Für den aktuellen Virus-Scope liegen keine regionalen Forecasts vor.
+          Siehe Modell-Status oben — entweder existiert kein regionales Modell
+          oder das Panel hat aktuell keine ausreichenden Features.
+        </p>
+      </div>
+    );
+  }
+
   const width = 6 * (CELL + GAP);
   const height = 7 * (CELL + GAP);
 
@@ -92,7 +110,13 @@ export const GermanyChoropleth: React.FC<Props> = ({ regions, mode, title, kicke
           const w = (t.w || 1) * CELL + ((t.w || 1) - 1) * GAP;
           const h = (t.h || 1) * CELL + ((t.h || 1) - 1) * GAP;
           const fill = palette(mode, region.delta7d);
-          const dim = mode === 'rising' ? region.delta7d <= 0 : region.delta7d >= 0;
+          const delta = region.delta7d;
+          const dim =
+            delta === null || !Number.isFinite(delta)
+              ? true
+              : mode === 'rising'
+              ? delta <= 0
+              : delta >= 0;
           return (
             <g
               key={t.code}
@@ -116,7 +140,7 @@ export const GermanyChoropleth: React.FC<Props> = ({ regions, mode, title, kicke
       <footer style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <figcaption style={{ fontFamily: 'var(--peix-font-display)', fontStyle: 'italic', fontSize: 13, color: 'var(--peix-ink-soft)', flex: 1 }}>
           {hover
-            ? `${hover.name} · ${fmtSignedPct(hover.delta7d)} · P(steigt) ${Math.round(hover.pRising * 100)} % · Spend ${fmtEurCompact(hover.currentSpendEur)}`
+            ? `${hover.name} · ${fmtSignedPct(hover.delta7d)} · Signalstärke ${hover.pRising !== null ? hover.pRising.toFixed(2) : '—'} · Spend ${hover.currentSpendEur !== null ? fmtEurCompact(hover.currentSpendEur) : '—'}`
             : caption}
         </figcaption>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--peix-font-mono)', fontSize: 10, color: 'var(--peix-ink-mute)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>

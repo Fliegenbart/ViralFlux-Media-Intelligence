@@ -1,0 +1,130 @@
+/**
+ * Styles for the honesty-layer controls added in feat/peix-cockpit-honest:
+ *   - Virus toggle (Influenza A regional / RSV A national)
+ *   - ModelStatusBanner (WATCH readiness, calibration warnings, lag notes)
+ *
+ * Kept in a separate file to minimize diff against peix.css.
+ */
+
+.peix-virus-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--peix-card-dim, #f2efe9);
+  border-radius: 10px;
+  margin: 12px 0 18px;
+}
+
+.peix-virus-toggle__btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: var(--peix-font-sans, sans-serif);
+  font-size: 13px;
+  color: var(--peix-ink-soft, #5e6370);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+  transition: background 160ms, color 160ms, border-color 160ms;
+}
+
+.peix-virus-toggle__btn > small {
+  font-size: 10.5px;
+  color: var(--peix-ink-mute, #8a90a2);
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+}
+
+.peix-virus-toggle__btn:hover {
+  color: var(--peix-ink, #17171a);
+}
+
+.peix-virus-toggle__btn--active,
+.peix-virus-toggle__btn[aria-selected='true'] {
+  background: var(--peix-ink, #17171a);
+  color: #f5f3ee;
+  border-color: var(--peix-ink, #17171a);
+}
+
+.peix-virus-toggle__btn--active > small,
+.peix-virus-toggle__btn[aria-selected='true'] > small {
+  color: rgba(245, 243, 238, 0.7);
+}
+
+.peix-model-status {
+  border: 1px solid var(--peix-line, #e2dfd8);
+  background: var(--peix-card-dim, #f6f4ee);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 22px;
+  font-family: var(--peix-font-sans, sans-serif);
+}
+
+.peix-model-status__header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.peix-model-status__list {
+  list-style: disc;
+  padding-left: 20px;
+  margin: 0;
+  color: var(--peix-ink, #17171a);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.peix-model-status__list li {
+  margin-top: 3px;
+}
+
+.peix-readiness {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.peix-readiness--go {
+  background: rgba(26, 126, 90, 0.14);
+  color: #1a7e5a;
+  border-color: rgba(26, 126, 90, 0.35);
+}
+
+.peix-readiness--watch {
+  background: rgba(217, 120, 15, 0.14);
+  color: #a2570b;
+  border-color: rgba(217, 120, 15, 0.38);
+}
+
+.peix-readiness--hold {
+  background: rgba(217, 74, 44, 0.14);
+  color: #b5341e;
+  border-color: rgba(217, 74, 44, 0.4);
+}
+
+.peix-readiness--unknown {
+  background: rgba(107, 113, 128, 0.14);
+  color: #5e6370;
+  border-color: rgba(107, 113, 128, 0.32);
+}
+
+/* Disabled primary action after the audit ("Media-Plan verbinden"). */
+.peix-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  pointer-events: none;
+}

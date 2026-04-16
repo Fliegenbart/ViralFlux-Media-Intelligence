@@ -47,9 +47,16 @@ export const DecisionPage: React.FC<Props> = ({ snapshot }) => (
             <div className="peix-kicker">weitere empfehlungen</div>
             <h3 className="peix-headline" style={{ marginTop: 4 }}>Shift-Kandidaten der Woche</h3>
           </div>
-          <span className="peix-pill">kalibrierte Konfidenz · Q50</span>
+          <span className="peix-pill">
+            {snapshot.modelStatus?.calibrationMode === 'calibrated'
+              ? 'kalibrierte Konfidenz · Q50'
+              : 'heuristische Signalstärke · Q50'}
+          </span>
         </header>
-        <RecommendationList items={snapshot.secondaryRecommendations} />
+        <RecommendationList
+          items={snapshot.secondaryRecommendations}
+          calibrated={snapshot.modelStatus?.calibrationMode === 'calibrated'}
+        />
       </div>
 
       <div className="peix-card peix-col-7 quiet">
@@ -75,9 +82,13 @@ export const DecisionPage: React.FC<Props> = ({ snapshot }) => (
           genau dorthin, wo die Welle in einer Woche sichtbar wird."
         </p>
         <div style={{ marginTop: 'auto', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <span className="peix-pill ink">7-Tage-Horizont</span>
+          <span className="peix-pill ink">{snapshot.modelStatus?.horizonDays ?? 7}-Tage-Horizont</span>
           <span className="peix-pill ink">Q10 · Q50 · Q90</span>
-          <span className="peix-pill ink">isotonisch kalibriert</span>
+          <span className="peix-pill ink">
+            {snapshot.modelStatus?.calibrationMode === 'calibrated'
+              ? 'isotonisch kalibriert'
+              : 'heuristische Signalstärke'}
+          </span>
         </div>
       </div>
     </section>

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import type { TimelinePoint } from '../../../pages/cockpit/types';
 
 interface Props {
@@ -23,34 +23,75 @@ export const ConfidenceCloud: React.FC<Props> = ({ series, focusDay, height = 28
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
 
+  // Restrict chart math to points that actually have q10/q50/q90 — after the
+  // fixture switch-off a timeline row without an ml_forecasts entry carries
+  // all quantiles as null, which would NaN out the SVG path.
+  const cloudSeries = useMemo(
+    () =>
+      series.filter(
+        (p) => p.q10 !== null && p.q50 !== null && p.q90 !== null,
+      ),
+    [series],
+  );
+
   const { minY, maxY } = useMemo(() => {
+    if (cloudSeries.length === 0) return { minY: 0, maxY: 1 };
     let lo = Infinity, hi = -Infinity;
-    series.forEach((p) => {
-      lo = Math.min(lo, p.q10, p.observed ?? p.q10, p.nowcast ?? p.q10);
-      hi = Math.max(hi, p.q90, p.observed ?? p.q90, p.nowcast ?? p.q90);
+    cloudSeries.forEach((p) => {
+      const q10 = p.q10 as number;
+      const q90 = p.q90 as number;
+      lo = Math.min(lo, q10, p.observed ?? q10, p.nowcast ?? q10);
+      hi = Math.max(hi, q90, p.observed ?? q90, p.nowcast ?? q90);
     });
+    if (!Number.isFinite(lo) || !Number.isFinite(hi) || lo === hi) {
+      return { minY: lo - 1, maxY: hi + 1 };
+    }
     return { minY: Math.floor(lo - 4), maxY: Math.ceil(hi + 4) };
-  }, [series]);
+  }, [cloudSeries]);
 
-  const n = series.length - 1;
-  const xFor = (i: number) => padL + (i / n) * innerW;
-  const yFor = (v: number) => padT + (1 - (v - minY) / (maxY - minY)) * innerH;
+  const n = Math.max(series.length - 1, 1);
+  const xFor = useCallback(
+    (i: number) => padL + (i / n) * innerW,
+    [n, innerW, padL],
+  );
+  const yFor = useCallback(
+    (v: number) => padT + (1 - (v - minY) / Math.max(maxY - minY, 1)) * innerH,
+    [minY, maxY, innerH, padT],
+  );
 
-  // Cloud path Q10..Q90
+  // Cloud path Q10..Q90 — only over points where both bounds are defined.
   const cloud = useMemo(() => {
-    const up = series.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i).toFixed(1)},${yFor(p.q90).toFixed(1)}`).join(' ');
-    const down = series.slice().reverse().map((p, i) => {
-      const realI = series.length - 1 - i;
-      return `L${xFor(realI).toFixed(1)},${yFor(p.q10).toFixed(1)}`;
-    }).join(' ');
+    if (cloudSeries.length < 2) return '';
+    const up = cloudSeries
+      .map((p, i) => {
+        const realI = series.findIndex((x) => x.date === p.date);
+        return `${i === 0 ? 'M' : 'L'}${xFor(realI).toFixed(1)},${yFor(p.q90 as number).toFixed(1)}`;
+      })
+      .join(' ');
+    const down = cloudSeries
+      .slice()
+      .reverse()
+      .map((p) => {
+        const realI = series.findIndex((x) => x.date === p.date);
+        return `L${xFor(realI).toFixed(1)},${yFor(p.q10 as number).toFixed(1)}`;
+      })
+      .join(' ');
     return `${up} ${down} Z`;
-  }, [series]);
+  }, [cloudSeries, series, xFor, yFor]);
 
-  const median = series.map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(i).toFixed(1)},${yFor(p.q50).toFixed(1)}`).join(' ');
-  const observed = series.filter((p) => p.observed != null).map((p, i, arr) => {
-    const realI = series.findIndex((x) => x.date === p.date);
-    return `${i === 0 ? 'M' : 'L'}${xFor(realI).toFixed(1)},${yFor(p.observed as number).toFixed(1)}`;
-  }).join(' ');
+  const median = cloudSeries
+    .map((p, i) => {
+      const realI = series.findIndex((x) => x.date === p.date);
+      return `${i === 0 ? 'M' : 'L'}${xFor(realI).toFixed(1)},${yFor(p.q50 as number).toFixed(1)}`;
+    })
+    .join(' ');
+  const observed = series
+    .filter((p) => p.observed != null)
+    .map((p, i) => {
+      const realI = series.findIndex((x) => x.date === p.date);
+      return `${i === 0 ? 'M' : 'L'}${xFor(realI).toFixed(1)},${yFor(p.observed as number).toFixed(1)}`;
+    })
+    .join(' ');
 
   const todayI = series.findIndex((p) => p.horizonDays === 0);
   const focusI = series.findIndex((p) => p.horizonDays === focusDay);
@@ -88,7 +129,7 @@ export const ConfidenceCloud: React.FC<Props> = ({ series, focusDay, height = 28
         <text x={xFor(todayI) + 6} y={padT + 12} fontFamily="var(--peix-font-mono)" fontSize="10" fill="var(--peix-warm)">heute</text>
 
         {/* focus marker */}
-        {focusPoint && (
+        {focusPoint && focusPoint.q50 !== null && (
           <>
             <line x1={xFor(focusI)} x2={xFor(focusI)} y1={padT} y2={padT + innerH} stroke="var(--peix-ink)" strokeWidth="1" strokeDasharray="2 3" opacity={0.6} />
             <circle cx={xFor(focusI)} cy={yFor(focusPoint.q50)} r="5" fill="var(--peix-ink)" />

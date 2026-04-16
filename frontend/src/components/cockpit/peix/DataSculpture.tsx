@@ -90,8 +90,10 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       ground.position.y = -0.02;
       scene.add(ground);
 
-      // Helper: map delta7d to height and colour
-      const colourFor = (d: number) => {
+      // Helper: map delta7d to height and colour. Null means no regional
+      // forecast — we paint a neutral low-opacity grey tower.
+      const colourFor = (d: number | null) => {
+        if (d === null || !Number.isFinite(d)) return new THREE.Color(0x3a4050);
         if (d >= 0.25) return new THREE.Color(0xd94a2c);
         if (d >= 0.15) return new THREE.Color(0xef7e44);
         if (d >= 0.05) return new THREE.Color(0xf9b588);
@@ -114,7 +116,8 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
         if (!r) return;
         const w = (t.w || 1) * cell + ((t.w || 1) - 1) * gap;
         const h = (t.h || 1) * cell + ((t.h || 1) - 1) * gap;
-        const height = 0.4 + Math.max(0, r.delta7d) * 12 + Math.min(0, r.delta7d) * 1.2;
+        const delta = typeof r.delta7d === 'number' && Number.isFinite(r.delta7d) ? r.delta7d : 0;
+        const height = 0.4 + Math.max(0, delta) * 12 + Math.min(0, delta) * 1.2;
         const z = t.y * (cell + gap) - 4;
         const x = t.x * (cell + gap) - 3.6;
 
@@ -204,7 +207,8 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
         <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
           {regions
             .slice()
-            .sort((a, b) => b.delta7d - a.delta7d)
+            .filter((r) => typeof r.delta7d === 'number' && Number.isFinite(r.delta7d))
+            .sort((a, b) => (b.delta7d ?? 0) - (a.delta7d ?? 0))
             .slice(0, 4)
             .map((r) => (
               <div key={r.code} style={{

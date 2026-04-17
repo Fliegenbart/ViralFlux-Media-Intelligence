@@ -8,7 +8,8 @@ Das Ziel ist einfach:
 - abschätzen, **wie** sich die Lage in den nächsten Tagen entwickelt
 - daraus ableiten, **welche Bundesländer zuerst geprüft oder aktiviert werden sollten**
 
-Live-Instanz: [https://fluxengine.labpulse.ai/virus-radar](https://fluxengine.labpulse.ai/virus-radar)
+Live-Instanz: [https://fluxengine.labpulse.ai/cockpit](https://fluxengine.labpulse.ai/cockpit)
+(password-gated, nur für eingeladene Pilot-Partner)
 
 ## Was die Plattform macht
 
@@ -21,39 +22,41 @@ In einfachen Worten läuft das System so:
 4. Es bewertet, wie relevant ein Bundesland gerade ist.
 5. Es zeigt das Ergebnis in einer operativen Oberfläche für den aktuellen Partner- und Pilot-Scope.
 
-Die aktive Live-Navigation in der UI ist:
+### Produktoberfläche (Stand 2026-04-17)
 
-`/virus-radar`, `/jetzt`, `/zeitgraph`, `/regionen`, `/kampagnen`, `/evidenz`
+Die Plattform hat seit April 2026 **eine einzige user-facing Surface**:
 
-Der operative Kernfluss für die tägliche Arbeit ist:
+- `/cockpit` — vier Tabs, ein Datenstand, ein Scope
+- alles andere (Login, `/virus-radar`, `/jetzt`, `/zeitgraph`, `/regionen`, `/kampagnen`, `/evidenz`, die alte MediaShell) ist retired und leitet client-seitig nach `/cockpit` um
 
-`/jetzt -> /regionen -> /kampagnen -> /evidenz`
+Warum dieser Schnitt:
+- die interne Tool-Oberfläche war für den GELO-Pilot zu groß und zu mehrdeutig
+- das Cockpit ist die kuratierte Sicht, die pro Woche einen Vorschlag mit Unsicherheit liefert
+- ein einfacher shared-password-Gate (HMAC-Cookie, 30 Tage) ersetzt den bisherigen OAuth-Login, damit die URL ohne Account geteilt werden kann
 
-`/virus-radar` bleibt die zentrale Einstiegs- und Überblicksseite. `/zeitgraph` ist eine ergänzende Analysefläche. Weitere Flächen im Repo dienen als technische Quellen, Altstände oder interne Referenz.
+Die vier Tabs im Cockpit:
+1. **Entscheidung** — die Empfehlung der Woche (Shift-Vorschlag, Konfidenz, Landkarten-Splitansicht)
+2. **Wellen-Atlas** — 16 Bundesländer als 3D-Datenskulptur, Höhe = erwarteter Anstieg
+3. **Forecast-Zeitreise** — Fan-Chart Q10/Q50/Q90 mit Kalibrierungs- und Lag-Ehrlichkeits-Panel
+4. **Wirkung & Feedback-Loop** — Live-Ranking, Truth-History, Pipeline-Status für Outcome-Daten
 
 Technische Kernpfade sind vor allem:
-- `frontend/src/pages/media/`
-- `frontend/src/components/cockpit/`
-- `backend/app/services/ml/`
-- `backend/app/services/data_ingest/`
+- `frontend/src/pages/cockpit/` (die vier Tabs + Shell + Gate)
+- `frontend/src/components/cockpit/peix/` (Gallery-Hero, DataSculpture, ConfidenceCloud, Roster, …)
+- `frontend/src/styles/peix*.css` (Design-System: peix.css Basis, peix-gallery.css Atlas-derived)
+- `backend/app/api/media_routes_cockpit_snapshot.py` (Snapshot-API + Gate-Endpoints)
+- `backend/app/services/media/cockpit/` (Snapshot-Builder, Freshness, Impact)
+- `backend/app/services/ml/` (Forecast + Kalibrierung)
+- `backend/app/services/data_ingest/` (Quellen-Import)
 
-## Was man auf `/virus-radar` sieht
+## Was man im `/cockpit` sieht
 
-Die Seite [Virus-Radar](https://fluxengine.labpulse.ai/virus-radar) ist die zentrale Entscheidungsseite.
+Das Cockpit beantwortet pro Woche drei Fragen:
+- **Welchen Shift empfehlen wir und mit welcher Sicherheit?**
+- **Wo läuft die Welle hoch, wo klingt sie ab?**
+- **Wie weit voraus sind wir gegenüber dem Meldewesen — und wie kalibriert ist der Fan?**
 
-Sie beantwortet vor allem drei Fragen:
-- **Welcher Virus ist gerade relevant?**
-- **Wie sahen die letzten Wochen aus und wie geht es voraussichtlich weiter?**
-- **Welche Bundesländer sollten diese Woche zuerst geprüft werden?**
-
-Der Hero-Graph oben zeigt immer **einen Virus auf einmal**:
-- **schwarze durchgezogene Linie** = die letzten beobachteten Wochenwerte
-- **farbige gestrichelte Linie** = die erwartete Entwicklung in den nächsten 7 Tagen
-- **Heute = 100** = die Darstellung ist auf den letzten beobachteten Punkt normiert, damit man die Richtung klar lesen kann
-
-Wichtig:
-- diese Normierung ist **nur für die Darstellung**
-- die eigentlichen Modelle rechnen intern weiter auf den echten Werten
+Die Darstellung hält sich bewusst an eine Regel: **wo der Forecast kein belastbares Signal hat, steht ein "—", nicht eine erfundene Zahl**. EUR-Beträge erscheinen nur, wenn ein Media-Plan verbunden ist. Prozentwerte tragen sichtbar entweder das Label *kalibriert* oder *heuristisch*, damit ein Score nie als Wahrscheinlichkeit missverstanden wird.
 
 ## Datenquellen
 
@@ -124,12 +127,12 @@ Vereinfacht:
 - bei kleinerem Sample `logistic / Platt`
 - sonst klar markierter Fallback auf Signal- statt Wahrscheinlichkeitssemantik
 
-### 4. Hero-Graph auf `Virus-Radar`
+### 4. Normierung für die Darstellung
 
-Der Hero-Graph oben benutzt für die Darstellung einen normierten Index:
+Wo das Cockpit einen Verlauf zeigt (Fan-Chart, Wellen-Atlas-Höhe, Ranking-Deltas), wird intern ein normierter Index verwendet:
 
 ```text
-hero_index = 100 * Wert / letzter_beobachteter_Wert
+index = 100 * Wert / letzter_beobachteter_Wert
 ```
 
 Das bedeutet:
@@ -137,17 +140,17 @@ Das bedeutet:
 - `110` = ungefähr 10 % höher als heute
 - `90` = ungefähr 10 % niedriger als heute
 
-So kann man die Richtung schnell lesen, ohne von absoluten Größenordnungen erschlagen zu werden.
+So lässt sich die Richtung schnell lesen, ohne von absoluten Größenordnungen erschlagen zu werden.
 
 ### 5. 7-Tage-Veränderung
 
-Die sichtbare Veränderung im Hero wird vereinfacht als Verhältnis zwischen Prognose und aktuellem Wert gelesen:
+Die sichtbare Veränderung auf dem Wellen-Atlas wird vereinfacht als Verhältnis zwischen Prognose und aktuellem Wert gelesen:
 
 ```text
 delta_7d = (forecast_7d - current_value) / current_value
 ```
 
-Das ist die Zahl, die dann als `+x %` oder `-x %` kommuniziert wird.
+Das ist die Zahl, die dann als `+x %` oder `-x %` im Roster und als Turmhöhe in der 3D-Skulptur kommuniziert wird.
 
 ### 6. Regionale Priorisierung
 

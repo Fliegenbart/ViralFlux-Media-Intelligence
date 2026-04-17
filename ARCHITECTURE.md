@@ -10,7 +10,10 @@ In einfachen Worten macht das System drei Dinge:
 3. Es uebersetzt die Prognose in eine sichtbare Entscheidung wie `Activate`, `Prepare` oder `Watch`.
 
 Die wichtigste Produktoberflaeche dafuer ist aktuell:
-- [`/virus-radar`](https://fluxengine.labpulse.ai/virus-radar)
+- [`/cockpit`](https://fluxengine.labpulse.ai/cockpit) (password-gated, single user-facing surface seit 2026-04-17)
+
+Historie:
+- Bis April 2026 war `/virus-radar` die Hauptseite, begleitet von `/jetzt`, `/regionen`, `/kampagnen`, `/evidenz` und der MediaShell. Diese Routes wurden im Zuge des GELO-Pilots konsolidiert und leiten client-seitig nach `/cockpit` um. Der Code liegt teilweise noch im Repo, wird aber nicht mehr gerendert.
 
 ---
 
@@ -245,48 +248,32 @@ Mit der Normierung wird sichtbar:
 
 ---
 
-## Was man auf `/virus-radar` sieht
+## Was man im `/cockpit` sieht
 
-`Virus-Radar` ist die wichtigste Entscheidungsseite.
+Das Cockpit ist die einzige user-facing Produktseite. Es besteht aus vier Tabs mit einem gemeinsamen Masthead und einem Virus-Scope-Toggle (Influenza A regional / RSV A national).
 
-Sie beantwortet im Kern:
-- welcher Virus ist gerade im Fokus
-- wie sieht sein Verlauf aus
-- welche Bundeslaender sind operativ zuerst relevant
-- was ist schon freigabereif
-- was bremst noch
+## Tab 01 — Entscheidung
 
-## Hero oben
+Die Empfehlung der Woche als editorial Lede. Ein warm-schwarzer Gallery-Hero nennt den konkreten Shift ("verschiebe EUR X aus Region A nach Region B") mit Konfidenz oder Signalstaerke. Darunter zwei paper-Landkarten mit den steigenden und abklingenden Bundeslaendern sowie eine Roster-Liste mit weiteren Shift-Kandidaten.
 
-Der Hero zeigt immer **einen Virus auf einmal**.
+## Tab 02 — Wellen-Atlas
 
-Er besteht aus:
-- kurzer Kernaussage
-- Verlauf der letzten Wochen
-- 7-Tage-Prognose
-- Umschaltern fuer vier Viren
+Die Signatur-Flaeche. 16 Bundeslaender als extrudierte three.js-Bloecke auf einer Keramikpalette; Turmhoehe = erwarteter Anstieg ueber den Horizont. Links im dunklen Hero die editorial Lede und eine Top-Riser-Liste, rechts der 3D-Canvas auf einem Sockel.
 
-Bedeutung:
-- **schwarz, durchgezogen** = letzte beobachtete Wochen
-- **farbig, gestrichelt** = naechste 7 Tage Prognose
-- **Heute = 100** = normierter Vergleichspunkt
+## Tab 03 — Forecast-Zeitreise
 
-Der Graph ist also **nicht imaginiert**, sondern:
-- echte letzte Werte
-- plus modellierte Prognose
+Fan-Chart mit Q10 bis Q90-Band, SURVSTAT-Meldung und Notaufnahme-Spur. Ein TimeScrubber macht jeden Tag anwaehlbar; die grossen Zahlen im Hero aktualisieren sich live. Zwei miniatur-Ehrlichkeits-Panel darunter zeigen Abdeckung 80/95 Prozent und den aktuellen Lag gegen die Notaufnahme-Aktivitaet.
 
-## Signal Map
+## Tab 04 — Wirkung und Feedback-Loop
 
-Darunter zeigt die Karte:
-- welche Bundeslaender diese Woche am wichtigsten sind
-- welche Region aktuell im Fokus ist
-- wie die Leiter der Top-Regionen aussieht
+Was wir gerade empfehlen, was in den letzten Wochen real passierte, und wo die Outcome-Daten andocken werden. Solange keine Verkaufsdaten fliessen, bleiben die entsprechenden Felder ehrlich leer statt auf Platzhalter-Zahlen zurueckzufallen.
 
-## Activation Queue / Campaign Readiness
+## Gemeinsame Regeln fuer alle Tabs
 
-Diese Karten uebersetzen Signal in operative Reihenfolge:
-- wer als naechstes geprueft wird
-- was schon review- oder freigabereif ist
+- wo der Forecast kein belastbares Signal hat, steht `—` statt einer erfundenen Zahl
+- EUR-Werte erscheinen nur mit verbundenem Media-Plan
+- Event-Scores tragen entweder das Label `kalibriert` (echte Wahrscheinlichkeit) oder `heuristisch` (Ranking-Score 0..1) -- nie beides zugleich
+- eine einzige Akzentfarbe (Terracotta) kennzeichnet Aktion, Empfehlung und Anstieg; alles andere bleibt in Cream, Hairlines und Mute-Grey
 
 ---
 
@@ -294,11 +281,22 @@ Diese Karten uebersetzen Signal in operative Reihenfolge:
 
 Die Plattform hat viele Endpunkte. Fuer das aktuelle Produktbild sind diese besonders wichtig:
 
+- `GET /api/v1/media/cockpit/snapshot?virus_typ=...`
+  - der Haupt-Endpoint der Live-Surface
+  - liefert die gesamte Payload des `/cockpit`: Hero, Regions, Timeline, ModelStatus, Sources
+  - geschuetzt ueber Session-Cookie ODER `X-API-Key` (M2M) ODER `cockpit_unlock`-Cookie (shared password gate, 30 Tage HMAC-signiert)
+
+- `POST /api/v1/media/cockpit/unlock`
+  - validiert das shared password aus `COCKPIT_ACCESS_PASSWORD` und setzt das gate-Cookie
+
+- `GET /api/v1/media/cockpit/impact`
+  - Tab 04: Live-Ranking, Truth-History, Outcome-Pipeline-Status
+
 - `GET /api/v1/forecast/regional/predict`
-  - regionale Forecasts je Virus und Horizont
+  - regionale Forecasts je Virus und Horizont (intern vom snapshot-builder genutzt)
 
 - `GET /api/v1/forecast/regional/hero-overview`
-  - schneller Hero-Pfad fuer `Virus-Radar`
+  - schneller Hero-Pfad (historisch fuer `/virus-radar`)
   - liest vorbereitete Snapshots / Wochenhistorie statt jedes Mal den schweren Portfolio-Pfad neu zu rechnen
 
 - `GET /api/v1/forecast/regional/media-allocation`

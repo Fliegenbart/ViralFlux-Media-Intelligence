@@ -89,6 +89,11 @@ SECRET_KEY=replace-me
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=replace-me
 
+# Shared password fuer /cockpit (setzt ein HMAC-Cookie, 30 Tage).
+# Leer = Gate bleibt geschlossen; das Backend weigert sich dann,
+# die /unlock-Route zu bedienen (kein stummer Default).
+COCKPIT_ACCESS_PASSWORD=peix26
+
 ENVIRONMENT=development
 DB_AUTO_CREATE_SCHEMA=true
 DB_ALLOW_RUNTIME_SCHEMA_UPDATES=false
@@ -156,13 +161,18 @@ Wichtig:
 docker compose --profile dev up -d frontend
 ```
 
-## 5. Login lokal
+## 5. Zugang lokal
 
-Es gibt keinen fest eingebauten Demo-User im Frontend.
+Die einzige live gerenderte Produktoberflaeche ist `/cockpit`. Sie laeuft hinter einem shared-password Gate.
 
-Lokal nutzt du die Werte aus deiner `.env`:
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
+Lokal:
+- `COCKPIT_ACCESS_PASSWORD` aus deiner `.env` ist das Gate-Passwort
+- oeffne [http://localhost:3000/cockpit](http://localhost:3000/cockpit), gib das Passwort ein, bekommst ein HMAC-signiertes Cookie (30 Tage)
+- ohne Cookie liefert `GET /api/v1/media/cockpit/snapshot` ein 401 — das Frontend rendert dann automatisch die Gate-Seite
+
+Admin-Login fuer interne / legacy-Endpunkte:
+- `ADMIN_EMAIL` und `ADMIN_PASSWORD` aus der `.env`
+- wird im aktuellen Produktbild nicht mehr von einer User-Surface benoetigt, bleibt aber fuer ops-Zugriffe via API
 
 ## Die 3 wichtigsten lokalen URLs
 

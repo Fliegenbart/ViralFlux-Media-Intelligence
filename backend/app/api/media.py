@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from app.api.media_routes_cockpit_impact import router as cockpit_impact_router
 from app.api.media_routes_cockpit_snapshot import router as cockpit_snapshot_router
 from app.api.media_routes_outcomes import router as outcomes_router
 from app.api.media_routes_recommendations import router as recommendations_router
@@ -18,6 +19,7 @@ router.include_router(weekly_brief_router)
 router.include_router(outcomes_router)
 router.include_router(recommendations_router)
 router.include_router(cockpit_snapshot_router)
+router.include_router(cockpit_impact_router)
 
 
 def _to_card_response(opp: dict[str, Any], include_preview: bool = True) -> dict[str, Any]:

@@ -8,6 +8,7 @@ import CockpitTabs, { type TabId } from '../../components/cockpit/peix/CockpitTa
 import DecisionPage from './DecisionPage';
 import AtlasPage from './AtlasPage';
 import TimelinePage from './TimelinePage';
+import ImpactPage from './ImpactPage';
 import { useCockpitSnapshot } from './useCockpitSnapshot';
 
 /**
@@ -201,6 +202,7 @@ export const CockpitShell: React.FC = () => {
           {tab === 'decision' && <DecisionPage key="decision" snapshot={snapshot} />}
           {tab === 'atlas' && <AtlasPage key="atlas" snapshot={snapshot} />}
           {tab === 'timeline' && <TimelinePage key="timeline" snapshot={snapshot} />}
+          {tab === 'impact' && <ImpactPage key="impact" snapshot={snapshot} />}
         </AnimatePresence>
       </div>
     </div>

@@ -259,8 +259,10 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       // Build initial meshes with height=base; the update effect will set
       // real heights.
       TILES.forEach((t) => {
-        const w = (t.w || 1) * cellSize + ((t.w || 1) - 1) * gap;
-        const d = (t.h || 1) * cellSize + ((t.h || 1) - 1) * gap;
+        const cellsW = t.w || 1;
+        const cellsD = t.h || 1;
+        const w = cellsW * cellSize + (cellsW - 1) * gap;
+        const d = cellsD * cellSize + (cellsD - 1) * gap;
         const baseHeight = 0.5;
         const geo = buildGeometry(w, d, baseHeight);
         geometryCache.set(t.code, { w, d, h: baseHeight });
@@ -273,11 +275,16 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
           reflectivity: 0.18,
         });
         const mesh = new THREE.Mesh(geo, mat);
-        // centre the sculpture: max x is ~6, max y (grid) is 6; shift by
-        // the centroid of the occupied grid so the sculpture sits on the
-        // pedestal centre.
-        const x = t.x * (cellSize + gap) - 3.6;
-        const z = t.y * (cellSize + gap) - 3.4;
+        // Position by the CENTRE of the mesh, not the grid origin. For
+        // single-cell tiles this is identical; for multi-cell tiles (BY 2×2,
+        // BW 1×2, NW 2×1, etc.) we must shift by half the tile's extra
+        // cells, otherwise neighbouring multi-cell tiles overlap by up to
+        // one cell and their side faces z-fight at the shared boundary.
+        // The 2026-04-17 flicker at the BY/BW border was exactly this.
+        const centreGridX = t.x + (cellsW - 1) / 2;
+        const centreGridY = t.y + (cellsD - 1) / 2;
+        const x = centreGridX * (cellSize + gap) - 3.6;
+        const z = centreGridY * (cellSize + gap) - 3.4;
         mesh.position.set(x, 0, z);
         mesh.userData = { code: t.code };
         group.add(mesh);
@@ -301,8 +308,13 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       };
       animate();
 
-      // --- Resize, debounced via rAF ---------------------------------------
+      // --- Resize, debounced via rAF + delta-gated -----------------------
+      // ResizeObserver fires on every sub-pixel layout tick; guarding with
+      // a > 1px delta avoids a resize-induced flicker when the parent grid
+      // rounds differently on scroll/hover transitions.
       let resizeScheduled = false;
+      let lastW = 0;
+      let lastH = 0;
       const resize = () => {
         if (resizeScheduled) return;
         resizeScheduled = true;
@@ -312,6 +324,9 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
           const w = mountRef.current.clientWidth;
           const h = mountRef.current.clientHeight;
           if (w === 0 || h === 0) return;
+          if (Math.abs(w - lastW) < 2 && Math.abs(h - lastH) < 2) return;
+          lastW = w;
+          lastH = h;
           camera.aspect = w / h;
           camera.updateProjectionMatrix();
           renderer.setSize(w, h);
@@ -385,9 +400,19 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
             mesh.userData.currentHeight = targetHeight;
           }
           if (mesh.material && mesh.material.color) {
-            mesh.material.color.setHex(pickColourHex(delta));
-            mesh.material.clearcoat = delta !== null && delta >= 0.2 ? 0.6 : 0.35;
-            mesh.material.needsUpdate = true;
+            // Only mutate material properties when they actually changed.
+            // Colour is a uniform — setting it does NOT require
+            // needsUpdate. Setting needsUpdate=true on every call forces
+            // Three.js to recompile the shader, which produces a one-frame
+            // flash ("flicker") on each SWR tick.
+            const newHex = pickColourHex(delta);
+            if (mesh.material.color.getHex() !== newHex) {
+              mesh.material.color.setHex(newHex);
+            }
+            const newClearcoat = delta !== null && delta >= 0.2 ? 0.6 : 0.35;
+            if (Math.abs((mesh.material.clearcoat ?? 0) - newClearcoat) > 0.001) {
+              mesh.material.clearcoat = newClearcoat;
+            }
           }
           mesh.userData.region = r || null;
         });

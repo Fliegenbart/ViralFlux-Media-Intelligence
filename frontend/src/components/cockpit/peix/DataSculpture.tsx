@@ -104,7 +104,7 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
     renderer: any;
     group: any;
     meshesByCode: Map<string, any>;
-    disposeGeometry: (code: string) => void;
+    applyRegions: (byCode: Map<Bundesland, RegionForecast>) => void;
     cancel: () => void;
   } | null>(null);
 
@@ -113,6 +113,12 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
     regions.forEach((r) => m.set(r.code, r));
     return m;
   }, [regions]);
+
+  // Keep the latest regionsByCode in a ref so the async `init()` can apply
+  // the most recent data once the scene is ready, regardless of whether the
+  // mount-effect closure captured an earlier/empty snapshot.
+  const latestRegionsRef = useRef<Map<Bundesland, RegionForecast>>(regionsByCode);
+  latestRegionsRef.current = regionsByCode;
 
   // Mount-once effect. Builds the whole scene the first time the component
   // renders, then never rebuilds — region updates go through the second
@@ -314,13 +320,6 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       const ro = new ResizeObserver(resize);
       ro.observe(el);
 
-      // Dispose helper — proper cleanup for geometry + material + renderer.
-      const disposeGeometry = (code: string) => {
-        const m = meshesByCode.get(code);
-        if (!m) return;
-        if (m.geometry) m.geometry.dispose();
-      };
-
       const cancel = () => {
         cancelAnimationFrame(raf);
         ro.disconnect();
@@ -340,6 +339,60 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
         }
       };
 
+      // Apply region data to existing meshes — mutates geometry and colour
+      // in place. Called once right after scene setup AND on every
+      // regionsByCode change (via the second effect below).
+      const applyRegions = (byCode: Map<Bundesland, RegionForecast>) => {
+        const cellSizeLocal = 1.18;
+        const gapLocal = 0.1;
+        TILES.forEach((t) => {
+          const mesh = meshesByCode.get(t.code);
+          if (!mesh) return;
+          const r = byCode.get(t.code);
+          const delta =
+            r && typeof r.delta7d === 'number' && Number.isFinite(r.delta7d)
+              ? r.delta7d
+              : null;
+          const targetHeight = delta === null ? 0.18 : heightForDelta(delta);
+          const oldHeight = mesh.userData.currentHeight;
+          if (oldHeight === undefined || Math.abs(oldHeight - targetHeight) > 0.02) {
+            const widthL = (t.w || 1) * cellSizeLocal + ((t.w || 1) - 1) * gapLocal;
+            const depthL = (t.h || 1) * cellSizeLocal + ((t.h || 1) - 1) * gapLocal;
+            const shapeL = new THREE.Shape();
+            const hwL = widthL / 2;
+            const hdL = depthL / 2;
+            const crL = 0.08;
+            shapeL.moveTo(-hwL + crL, -hdL);
+            shapeL.lineTo(hwL - crL, -hdL);
+            shapeL.quadraticCurveTo(hwL, -hdL, hwL, -hdL + crL);
+            shapeL.lineTo(hwL, hdL - crL);
+            shapeL.quadraticCurveTo(hwL, hdL, hwL - crL, hdL);
+            shapeL.lineTo(-hwL + crL, hdL);
+            shapeL.quadraticCurveTo(-hwL, hdL, -hwL, hdL - crL);
+            shapeL.lineTo(-hwL, -hdL + crL);
+            shapeL.quadraticCurveTo(-hwL, -hdL, -hwL + crL, -hdL);
+            const newGeo = new THREE.ExtrudeGeometry(shapeL, {
+              depth: Math.max(0.08, targetHeight),
+              bevelEnabled: true,
+              bevelThickness: 0.03,
+              bevelSize: 0.03,
+              bevelSegments: 2,
+              curveSegments: 4,
+            });
+            newGeo.rotateX(-Math.PI / 2);
+            if (mesh.geometry) mesh.geometry.dispose();
+            mesh.geometry = newGeo;
+            mesh.userData.currentHeight = targetHeight;
+          }
+          if (mesh.material && mesh.material.color) {
+            mesh.material.color.setHex(pickColourHex(delta));
+            mesh.material.clearcoat = delta !== null && delta >= 0.2 ? 0.6 : 0.35;
+            mesh.material.needsUpdate = true;
+          }
+          mesh.userData.region = r || null;
+        });
+      };
+
       sceneStateRef.current = {
         THREE,
         scene,
@@ -347,9 +400,14 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
         renderer,
         group,
         meshesByCode,
-        disposeGeometry,
+        applyRegions,
         cancel,
       };
+
+      // Apply whatever the most recent regions map is — guards against the
+      // mount-before-update race that otherwise leaves all towers at the
+      // default base-height / missing-colour.
+      applyRegions(latestRegionsRef.current);
     }
 
     init();
@@ -362,66 +420,13 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Data-update effect. Mutates existing mesh geometry and material colour
-  // when `regions` changes. No teardown, no flicker.
+  // Data-update effect. Delegates to the applyRegions callback stashed on
+  // the scene-state ref; that callback mutates existing mesh geometry and
+  // material colour in place — no scene teardown, no flicker.
+  // If the scene is not ready yet (async import still in flight), we skip;
+  // the mount-effect will pick up latestRegionsRef.current once it's done.
   useEffect(() => {
-    const state = sceneStateRef.current;
-    if (!state) return;
-    const { THREE, meshesByCode } = state;
-
-    const cellSize = 1.18;
-    const gap = 0.1;
-
-    TILES.forEach((t) => {
-      const mesh = meshesByCode.get(t.code);
-      if (!mesh) return;
-      const r = regionsByCode.get(t.code);
-      const delta = r && typeof r.delta7d === 'number' && Number.isFinite(r.delta7d)
-        ? r.delta7d
-        : null;
-      const targetHeight = delta === null ? 0.18 : heightForDelta(delta);
-
-      // Rebuild geometry only if height actually changed meaningfully.
-      const oldHeight = mesh.userData.currentHeight;
-      if (oldHeight === undefined || Math.abs(oldHeight - targetHeight) > 0.02) {
-        const width = (t.w || 1) * cellSize + ((t.w || 1) - 1) * gap;
-        const depth = (t.h || 1) * cellSize + ((t.h || 1) - 1) * gap;
-        const shape = new THREE.Shape();
-        const hw = width / 2;
-        const hd = depth / 2;
-        const cr = 0.08;
-        shape.moveTo(-hw + cr, -hd);
-        shape.lineTo(hw - cr, -hd);
-        shape.quadraticCurveTo(hw, -hd, hw, -hd + cr);
-        shape.lineTo(hw, hd - cr);
-        shape.quadraticCurveTo(hw, hd, hw - cr, hd);
-        shape.lineTo(-hw + cr, hd);
-        shape.quadraticCurveTo(-hw, hd, -hw, hd - cr);
-        shape.lineTo(-hw, -hd + cr);
-        shape.quadraticCurveTo(-hw, -hd, -hw + cr, -hd);
-        const newGeo = new THREE.ExtrudeGeometry(shape, {
-          depth: Math.max(0.08, targetHeight),
-          bevelEnabled: true,
-          bevelThickness: 0.03,
-          bevelSize: 0.03,
-          bevelSegments: 2,
-          curveSegments: 4,
-        });
-        newGeo.rotateX(-Math.PI / 2);
-        if (mesh.geometry) mesh.geometry.dispose();
-        mesh.geometry = newGeo;
-        mesh.userData.currentHeight = targetHeight;
-      }
-
-      // Colour update — always, even if height stayed.
-      if (mesh.material && mesh.material.color) {
-        mesh.material.color.setHex(pickColourHex(delta));
-        // Slight sheen bump on the strongest risers
-        mesh.material.clearcoat = delta !== null && delta >= 0.2 ? 0.6 : 0.35;
-        mesh.material.needsUpdate = true;
-      }
-      mesh.userData.region = r || null;
-    });
+    sceneStateRef.current?.applyRegions(regionsByCode);
   }, [regionsByCode]);
 
   // Side panel: top 4 risers, rendered outside the canvas for type quality.

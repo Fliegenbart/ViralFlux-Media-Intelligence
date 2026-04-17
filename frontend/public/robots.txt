@@ -1,0 +1,4 @@
+# Cockpit is password-gated and intended for invited users only.
+# Keep search engines out entirely.
+User-agent: *
+Disallow: /

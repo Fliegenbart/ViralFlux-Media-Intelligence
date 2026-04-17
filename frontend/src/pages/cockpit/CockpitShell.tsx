@@ -4,9 +4,11 @@ import '../../styles/peix.css';
 import '../../styles/peix-honesty.css';
 import '../../styles/peix-sculpture.css';
 import '../../styles/peix-timeline.css';
+import '../../styles/peix-gate.css';
 
 import Masthead from '../../components/cockpit/peix/Masthead';
 import CockpitTabs, { type TabId } from '../../components/cockpit/peix/CockpitTabs';
+import CockpitGate from './CockpitGate';
 import DecisionPage from './DecisionPage';
 import AtlasPage from './AtlasPage';
 import TimelinePage from './TimelinePage';
@@ -197,6 +199,18 @@ export const CockpitShell: React.FC = () => {
     leadTarget: 'ATEMWEGSINDEX',
   });
   const [tab, setTab] = useState<TabId>('decision');
+
+  // If the gate cookie is missing or invalid, the snapshot fetch comes back
+  // 401 — we render the password gate instead of a generic error. A 401
+  // error from SWR doesn't expose status explicitly but we pattern-match
+  // the message the backend emits.
+  const isAuth401 =
+    error &&
+    (((error as Error & { status?: number }).status === 401) ||
+      /HTTP 401/.test(error.message));
+  if (isAuth401 && !snapshot) {
+    return <CockpitGate />;
+  }
 
   if (loading && !snapshot) {
     return (

@@ -52,8 +52,10 @@ async function snapshotFetcher(url: string): Promise<CockpitSnapshot> {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    const message = `Cockpit-Snapshot konnte nicht geladen werden (HTTP ${response.status}). ${detail}`.trim();
+    // Keep the 401 path terse — the gate component recognises it by the
+    // status property and pattern-matches the HTTP code in the message
+    // as a fallback, so we include both.
+    const message = `HTTP ${response.status} — Cockpit-Snapshot nicht verfügbar`;
     const err = new Error(message);
     (err as Error & { status?: number }).status = response.status;
     throw err;

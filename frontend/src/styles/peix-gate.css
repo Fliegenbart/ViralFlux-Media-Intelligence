@@ -1,0 +1,165 @@
+/**
+ * Cockpit-Gate — minimale Password-Seite vor der eigentlichen Oberfläche.
+ *
+ * Design echoes the Atlas stage: near-black warm ground, single terracotta
+ * accent, serif display for the headline, mono for kicker and helper text.
+ * Centred vertically and horizontally so it reads as an arrival screen, not
+ * a form.
+ */
+
+.peix-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+  background:
+    radial-gradient(120% 80% at 20% 0%, rgba(214, 138, 90, 0.08) 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, rgba(108, 131, 148, 0.1) 0%, transparent 60%),
+    #14110d;
+  color: #efe8dc;
+  font-family: var(--peix-font-sans, 'Inter Tight', sans-serif);
+}
+
+.peix-gate__frame {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(28, 24, 20, 0.6);
+  border: 1px solid rgba(239, 232, 220, 0.1);
+  border-radius: 14px;
+  padding: 44px 40px 34px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.peix-gate__mark {
+  color: #d68a5a;
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-style: italic;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.peix-gate__kicker {
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #d68a5a;
+  margin-bottom: 18px;
+}
+
+.peix-gate__headline {
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-weight: 400;
+  font-size: 32px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: #efe8dc;
+  margin: 0 0 14px;
+}
+
+.peix-gate__headline em {
+  font-style: italic;
+  color: #d68a5a;
+  font-weight: 400;
+}
+
+.peix-gate__dek {
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-style: italic;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: rgba(239, 232, 220, 0.68);
+  margin: 0 0 26px;
+}
+
+.peix-gate__form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.peix-gate__label {
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(239, 232, 220, 0.6);
+}
+
+.peix-gate__input {
+  width: 100%;
+  padding: 12px 14px;
+  background: rgba(20, 17, 13, 0.8);
+  border: 1px solid rgba(239, 232, 220, 0.18);
+  border-radius: 6px;
+  color: #efe8dc;
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  outline: none;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.peix-gate__input:focus {
+  border-color: #d68a5a;
+  background: rgba(20, 17, 13, 1);
+}
+
+.peix-gate__input:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.peix-gate__submit {
+  margin-top: 6px;
+  padding: 11px 14px;
+  background: #d68a5a;
+  color: #14110d;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 11.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, transform 120ms ease;
+}
+
+.peix-gate__submit:hover:not(:disabled) {
+  background: #e3a26a;
+}
+
+.peix-gate__submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.peix-gate__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.peix-gate__error {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(217, 74, 44, 0.1);
+  border: 1px solid rgba(217, 74, 44, 0.35);
+  border-radius: 5px;
+  color: #e88b72;
+  font-size: 13px;
+  font-family: var(--peix-font-sans, 'Inter Tight', sans-serif);
+}
+
+.peix-gate__footer {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(239, 232, 220, 0.08);
+  font-size: 11.5px;
+  color: rgba(239, 232, 220, 0.55);
+  line-height: 1.5;
+}
+
+.peix-gate__mono {
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  color: rgba(239, 232, 220, 0.85);
+}

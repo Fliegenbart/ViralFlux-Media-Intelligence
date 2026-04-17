@@ -257,19 +257,38 @@ def _map_region_predictions(
                 "q50": 100.0,
                 "q90": round(q90 / q50 * 100.0, 1),
             }
-        # delta7d approximated from the signal when not explicitly provided.
-        delta7d = _optional_float(pred.get("delta_next_week_vs_current"))
+        # Regional service returns change_pct in PERCENT, not ratio.
+        change_pct_raw = pred.get("change_pct")
+        delta7d: float | None = None
+        if change_pct_raw is not None:
+            try:
+                delta7d = round(float(change_pct_raw) / 100.0, 4)
+            except (TypeError, ValueError):
+                delta7d = None
+        # Fallbacks if change_pct is missing.
         if delta7d is None:
-            current = pred.get("current_incidence")
+            delta7d = _optional_float(pred.get("delta_next_week_vs_current"))
+        if delta7d is None:
+            current = pred.get("current_known_incidence") or pred.get("current_incidence") or pred.get("current_load")
             if current and q50 is not None and float(current) > 0:
-                delta7d = round((q50 / float(current)) - 1.0, 3)
+                delta7d = round((q50 / float(current)) - 1.0, 4)
 
-        drivers_raw = (pred.get("reason_trace") or {}).get("signals") or []
+        # reason_trace exposes "why" (list[str]) as the human-readable driver
+        # list. Older code referred to a "signals" key which does not exist
+        # on the live payload; we keep it as a fallback for safety.
+        reason_trace = pred.get("reason_trace") or {}
         drivers: list[str] = []
-        for driver in drivers_raw[:3]:
-            message = str((driver or {}).get("message") or "").strip()
-            if message:
-                drivers.append(message)
+        why_list = reason_trace.get("why") or []
+        for entry in why_list[:3]:
+            text = str(entry or "").strip()
+            if text:
+                drivers.append(text)
+        if not drivers:
+            for driver in (reason_trace.get("signals") or [])[:3]:
+                if isinstance(driver, dict):
+                    message = str(driver.get("message") or "").strip()
+                    if message:
+                        drivers.append(message)
 
         decision = pred.get("decision") or {}
         decision_label = str(pred.get("decision_label") or decision.get("label") or "").strip() or None

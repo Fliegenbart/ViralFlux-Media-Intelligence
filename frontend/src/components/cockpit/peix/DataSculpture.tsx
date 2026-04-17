@@ -6,9 +6,11 @@ import { fmtSignedPct } from '../../../pages/cockpit/format';
  * The signature 3D map. Bundesländer are rendered as extruded
  * tiles whose height encodes delta7d (rising = tall warm, falling = sunk cool).
  *
- * Uses three.js (dynamically imported via a CDN-fallback for demo mode).
- * In the full app it will import from 'three' — add to package.json:
- *   "three": "^0.165.0"   "@types/three": "^0.165.0"
+ * Uses three.js. The library is listed in package.json, so the dynamic
+ * import below splits it into a separate chunk (the 3D library is large
+ * — ~500 KB — and we want the main bundle to stay lean). If loading the
+ * chunk fails for any reason, we fall back to a short user-facing message
+ * that redirects to the SVG choropleth in tab 1.
  */
 
 // Schematic grid matching GermanyChoropleth.tsx for visual continuity
@@ -47,12 +49,17 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
     async function init() {
       const el = mountRef.current;
       if (!el) return;
-      // Dynamic import keeps bundler happy when `three` is not yet installed.
-      // When running in the app with `three` in deps, this resolves immediately.
-      const THREE = await import(/* webpackIgnore: true */ 'three').catch(() => null);
-      if (!THREE) {
-        el.innerHTML = `<div style="padding:24px;color:#f5f3ee;font-family:'Inter Tight',sans-serif;font-size:13px;opacity:0.7">
-          3D-Stage benötigt <code>three</code> (package.json). Fallback: SVG-Karte siehe Tab 1.
+      // Dynamic import so the ~500 KB three.js bundle is code-split into its
+      // own chunk and only loaded when this tab is actually opened.
+      let THREE: any;
+      try {
+        THREE = await import('three');
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('DataSculpture: three.js chunk failed to load', err);
+        el.innerHTML = `<div style="padding:36px;color:#f5f3ee;font-family:var(--peix-font-sans, sans-serif);font-size:14px;line-height:1.5;opacity:0.75;text-align:center">
+          Der 3D-Atlas konnte gerade nicht geladen werden.<br/>
+          Dieselben Bundesländer-Daten findest du auch in Tab 1 &bdquo;Die Entscheidung&ldquo;.
         </div>`;
         return;
       }

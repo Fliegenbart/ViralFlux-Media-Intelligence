@@ -297,21 +297,52 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       // --- Motion: breath only --------------------------------------------
       // A single sine wave with very low amplitude. Readers who stare
       // will see it; readers who glance won't — that's the gallery feel.
+      //
+      // 2026-04-17 polish (gallery-refresh commit): the pure sine's direction
+      // reversal happened on a single frame, which read as a micro-hiccup
+      // ("zuppeln") every 6 s. We now map the sine through a soft easing —
+      // sign(sin) * sin² — so near the turnaround points the angular velocity
+      // decays to zero over ~500 ms rather than one frame. Also: the raf is
+      // paused via IntersectionObserver when the sculpture scrolls out of
+      // view, so hidden frames can't accumulate jitter that pops on return.
       let raf = 0;
+      let visible = true;
       const startedAt = performance.now();
       const animate = () => {
+        raf = requestAnimationFrame(animate);
+        if (!visible) return;
         const t = (performance.now() - startedAt) / 1000;
-        const breath = Math.sin(t * (Math.PI * 2) / 12) * 0.015; // ±0.86°
+        const phase = Math.sin(t * (Math.PI * 2) / 14); // slower: 14 s period
+        // sin² with preserved sign — velocity → 0 smoothly at the peaks,
+        // removing the single-frame reversal that read as a "zuppel".
+        const eased = Math.sign(phase) * phase * phase;
+        const breath = eased * 0.016;
         group.rotation.y = -0.14 + breath;
         renderer.render(scene, camera);
-        raf = requestAnimationFrame(animate);
       };
       animate();
 
+      // Pause rendering when the sculpture is off-screen. WebGL frames that
+      // no one sees are not just wasteful — on some browsers they pile up and
+      // produce a visible jump when the canvas re-enters view.
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            visible = entry.isIntersecting;
+          }
+        },
+        { threshold: 0.01 },
+      );
+      io.observe(el);
+
       // --- Resize, debounced via rAF + delta-gated -----------------------
       // ResizeObserver fires on every sub-pixel layout tick; guarding with
-      // a > 1px delta avoids a resize-induced flicker when the parent grid
+      // a > 3px delta avoids a resize-induced flicker when the parent grid
       // rounds differently on scroll/hover transitions.
+      //
+      // We also re-assert pixel-ratio here in case the user zoomed the page
+      // between mount and the first resize — otherwise we keep rendering at
+      // the old DPR and the canvas gradually "smears" until a full reload.
       let resizeScheduled = false;
       let lastW = 0;
       let lastH = 0;
@@ -324,12 +355,16 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
           const w = mountRef.current.clientWidth;
           const h = mountRef.current.clientHeight;
           if (w === 0 || h === 0) return;
-          if (Math.abs(w - lastW) < 2 && Math.abs(h - lastH) < 2) return;
+          // Gate harder (3 px) than before: sub-2-pixel width deltas happen
+          // routinely when browser scrollbars appear/disappear and triggered
+          // a noticeable rerender blink on the 3D scene.
+          if (Math.abs(w - lastW) < 3 && Math.abs(h - lastH) < 3) return;
           lastW = w;
           lastH = h;
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
           camera.aspect = w / h;
           camera.updateProjectionMatrix();
-          renderer.setSize(w, h);
+          renderer.setSize(w, h, false);
         });
       };
       const ro = new ResizeObserver(resize);
@@ -338,6 +373,7 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       const cancel = () => {
         cancelAnimationFrame(raf);
         ro.disconnect();
+        io.disconnect();
         meshesByCode.forEach((m) => {
           if (m.geometry) m.geometry.dispose();
           if (m.material) m.material.dispose();

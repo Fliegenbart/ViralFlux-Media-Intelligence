@@ -29,6 +29,7 @@ export const AtlasPage: React.FC<Props> = ({ snapshot }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
+      className="peix-gal-wrap"
     >
       <DataSculpture
         regions={snapshot.regions}
@@ -36,8 +37,15 @@ export const AtlasPage: React.FC<Props> = ({ snapshot }) => {
         dek={dek}
       />
 
-      <section className="peix-bento" style={{ marginTop: 28 }}>
-        <div className="peix-card peix-col-8">
+      <header className="peix-gal-section">
+        <span className="peix-gal-section__kicker">Signalquellen</span>
+        <h2 className="peix-gal-section__title">
+          Woher das Modell die nächsten Wochen <em>liest</em>.
+        </h2>
+      </header>
+
+      <section className="peix-bento">
+        <div className="peix-card peix-col-8 quiet">
           <div className="peix-kicker">signal-quellen hinter der skulptur</div>
           <h3 className="peix-headline" style={{ marginTop: 4, marginBottom: 12 }}>
             {snapshot.topDrivers.length > 0

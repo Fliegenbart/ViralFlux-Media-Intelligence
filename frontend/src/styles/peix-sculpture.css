@@ -195,6 +195,11 @@
   min-height: 520px;
   height: 100%;
   width: 100%;
+  /* Isolate from parent layout so content that lazy-loads below the canvas
+     cannot nudge the measured width by a sub-pixel and trigger a ResizeObserver
+     callback mid-frame. */
+  contain: layout size;
+  will-change: transform;
 }
 
 .peix-sculpture__canvas canvas {

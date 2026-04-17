@@ -5,6 +5,7 @@ import '../../styles/peix-honesty.css';
 import '../../styles/peix-sculpture.css';
 import '../../styles/peix-timeline.css';
 import '../../styles/peix-gate.css';
+import '../../styles/peix-gallery.css';
 
 import Masthead from '../../components/cockpit/peix/Masthead';
 import CockpitTabs, { type TabId } from '../../components/cockpit/peix/CockpitTabs';

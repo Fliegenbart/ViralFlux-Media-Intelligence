@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import '../../styles/peix.css';
 import '../../styles/peix-honesty.css';
+import '../../styles/peix-sculpture.css';
 
 import Masthead from '../../components/cockpit/peix/Masthead';
 import CockpitTabs, { type TabId } from '../../components/cockpit/peix/CockpitTabs';

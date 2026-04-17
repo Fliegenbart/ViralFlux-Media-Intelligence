@@ -1,19 +1,32 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import type { RegionForecast, Bundesland } from '../../../pages/cockpit/types';
 import { fmtSignedPct } from '../../../pages/cockpit/format';
 
 /**
- * The signature 3D map. Bundesländer are rendered as extruded
- * tiles whose height encodes delta7d (rising = tall warm, falling = sunk cool).
+ * Tab 02 — Wellen-Atlas.
  *
- * Uses three.js. The library is listed in package.json, so the dynamic
- * import below splits it into a separate chunk (the 3D library is large
- * — ~500 KB — and we want the main bundle to stay lean). If loading the
- * chunk fails for any reason, we fall back to a short user-facing message
- * that redirects to the SVG choropleth in tab 1.
+ * A data sculpture. 16 Bundesländer rise from a circular pedestal as
+ * extruded, bevel-edged blocks; their height encodes the 7-day delta.
+ *
+ * Aesthetic direction (2026-04-17 refactor): "exhibit piece in a gallery".
+ * We intentionally avoid demo-reel flourishes (spinning objects, colour
+ * cycles, chrome plastics). Instead:
+ *   - MeshPhysicalMaterial with clearcoat for a ceramic-on-wood feel
+ *   - Three-point museum lighting with warm key / cool fill / cool rim
+ *   - A soft circular pedestal instead of an infinite ground plane
+ *   - An almost-imperceptible breath animation (±0.85°) — the object is
+ *     still; the viewer is implied to move
+ *   - Warm-earth palette mapped to delta7d buckets
+ *
+ * Engineering:
+ *   - Scene mounts ONCE per virus scope. Region updates mutate geometry
+ *     and material on existing meshes, so SWR refetches no longer cause
+ *     a full teardown + rebuild ("zuppel" bug from 2026-04-17).
+ *   - ResizeObserver debounced via rAF to avoid layout-thrash loops.
+ *   - three.js is code-split via dynamic import so tab 01 stays lean.
  */
 
-// Schematic grid matching GermanyChoropleth.tsx for visual continuity
+// Schematic grid matching GermanyChoropleth.tsx for visual continuity.
 const TILES: Array<{ code: Bundesland; x: number; y: number; w?: number; h?: number }> = [
   { code: 'SH', x: 3, y: 0, w: 2 },
   { code: 'HH', x: 3, y: 1 },
@@ -39,25 +52,85 @@ interface Props {
   dek: string;
 }
 
+// --- Palette ---------------------------------------------------------------
+// Warm-earth scale for rising waves, muted-cool scale for falling. Hex values
+// picked to feel like pigment on paper rather than RGB-phosphor.
+const PALETTE = {
+  rising: {
+    strong: 0xb94a2e,  // fired terracotta
+    medium: 0xd16f3a,  // burnt ochre
+    soft:   0xe3a26a,  // sienna tint
+  },
+  falling: {
+    soft:   0x6b7a6a,  // aged moss
+    medium: 0x4b5962,  // cool slate
+    strong: 0x3a4450,  // deep slate
+  },
+  neutral: 0x8a7962,   // raw umber
+  missing: 0x2f2a26,   // very dim (no regional model)
+  pedestal: 0x2a241e,  // warm black, slightly lighter than bg
+  background: 0x14110d, // near-black with warm cast
+};
+
+function pickColourHex(d: number | null): number {
+  if (d === null || !Number.isFinite(d)) return PALETTE.missing;
+  if (d >= 0.20) return PALETTE.rising.strong;
+  if (d >= 0.10) return PALETTE.rising.medium;
+  if (d >= 0.04) return PALETTE.rising.soft;
+  if (d >= -0.04) return PALETTE.neutral;
+  if (d >= -0.12) return PALETTE.falling.soft;
+  if (d >= -0.20) return PALETTE.falling.medium;
+  return PALETTE.falling.strong;
+}
+
+// Map delta7d to tower height in scene units. The curve is asymmetric:
+// rising waves lift more than falling waves sink, because visually a "tall"
+// warm tower reads as alarming where a "buried" cool tower reads as absent
+// rather than relieving.
+function heightForDelta(delta: number): number {
+  const base = 0.35;
+  if (delta >= 0) return base + delta * 11.0;
+  return Math.max(0.12, base + delta * 1.1);
+}
+
 export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const stateRef = useRef<any>(null);
+  // Scene handles are kept in a ref so we can mutate them on region updates
+  // without tearing down the whole scene.
+  const sceneStateRef = useRef<{
+    THREE: any;
+    scene: any;
+    camera: any;
+    renderer: any;
+    group: any;
+    meshesByCode: Map<string, any>;
+    disposeGeometry: (code: string) => void;
+    cancel: () => void;
+  } | null>(null);
 
+  const regionsByCode = useMemo(() => {
+    const m = new Map<Bundesland, RegionForecast>();
+    regions.forEach((r) => m.set(r.code, r));
+    return m;
+  }, [regions]);
+
+  // Mount-once effect. Builds the whole scene the first time the component
+  // renders, then never rebuilds — region updates go through the second
+  // useEffect below.
   useEffect(() => {
     let disposed = false;
 
     async function init() {
       const el = mountRef.current;
       if (!el) return;
-      // Dynamic import so the ~500 KB three.js bundle is code-split into its
-      // own chunk and only loaded when this tab is actually opened.
+
       let THREE: any;
       try {
         THREE = await import('three');
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('DataSculpture: three.js chunk failed to load', err);
-        el.innerHTML = `<div style="padding:36px;color:#f5f3ee;font-family:var(--peix-font-sans, sans-serif);font-size:14px;line-height:1.5;opacity:0.75;text-align:center">
+        el.innerHTML = `<div class="peix-stage-fallback">
           Der 3D-Atlas konnte gerade nicht geladen werden.<br/>
           Dieselben Bundesländer-Daten findest du auch in Tab 1 &bdquo;Die Entscheidung&ldquo;.
         </div>`;
@@ -65,178 +138,352 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
       }
       if (disposed) return;
 
-      const width = el.clientWidth;
-      const height = el.clientHeight;
+      const width = el.clientWidth || 600;
+      const height = el.clientHeight || 420;
+
       const scene = new THREE.Scene();
-      scene.background = null;
-      scene.fog = new THREE.Fog(0x070911, 18, 42);
+      scene.background = null; // CSS supplies the gallery wall
+      scene.fog = new THREE.FogExp2(PALETTE.background, 0.032);
 
-      const camera = new THREE.PerspectiveCamera(38, width / height, 0.1, 100);
-      camera.position.set(7.5, 9, 13.5);
-      camera.lookAt(0, 0, 0);
+      // Camera: three-quarter view, slightly elevated. Static focal length;
+      // no zoom animation.
+      const camera = new THREE.PerspectiveCamera(34, width / height, 0.1, 120);
+      camera.position.set(8.4, 9.2, 13.8);
+      camera.lookAt(0, 1.0, 0);
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance',
+      });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(width, height);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      if ('toneMapping' in renderer) {
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+      }
       el.appendChild(renderer.domElement);
 
-      // Lights — two warm, one cool, strong rim to sculpt edges
-      const key = new THREE.DirectionalLight(0xffe8cc, 1.6);
-      key.position.set(6, 10, 5); scene.add(key);
-      const fill = new THREE.DirectionalLight(0x7ab6ff, 0.6);
-      fill.position.set(-6, 4, -4); scene.add(fill);
-      const amb = new THREE.AmbientLight(0x2a3142, 0.6); scene.add(amb);
+      // --- Lighting: museum three-point ------------------------------------
+      // Warm key from upper-left, cool fill from lower-right, cool rim
+      // behind. Values tuned by eye; clearcoat picks up the key sharply.
+      const key = new THREE.DirectionalLight(0xf9d9a5, 2.4);
+      key.position.set(8, 14, 6);
+      scene.add(key);
 
-      // Ground
-      const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(26, 26),
-        new THREE.MeshStandardMaterial({ color: 0x0d1220, roughness: 0.95, metalness: 0.1 }),
-      );
-      ground.rotation.x = -Math.PI / 2;
-      ground.position.y = -0.02;
-      scene.add(ground);
+      const fill = new THREE.DirectionalLight(0x9fb4c8, 0.55);
+      fill.position.set(-6, 3, 8);
+      scene.add(fill);
 
-      // Helper: map delta7d to height and colour. Null means no regional
-      // forecast — we paint a neutral low-opacity grey tower.
-      const colourFor = (d: number | null) => {
-        if (d === null || !Number.isFinite(d)) return new THREE.Color(0x3a4050);
-        if (d >= 0.25) return new THREE.Color(0xd94a2c);
-        if (d >= 0.15) return new THREE.Color(0xef7e44);
-        if (d >= 0.05) return new THREE.Color(0xf9b588);
-        if (d >= -0.05) return new THREE.Color(0x6b7180);
-        if (d >= -0.12) return new THREE.Color(0x2f998b);
-        return new THREE.Color(0x166a61);
-      };
+      const rim = new THREE.DirectionalLight(0xb8c4d8, 0.9);
+      rim.position.set(-3, 6, -10);
+      scene.add(rim);
 
+      const ambient = new THREE.AmbientLight(0x3a3229, 0.28);
+      scene.add(ambient);
+
+      // --- Pedestal ---------------------------------------------------------
+      // A low cylindrical base — not a flat infinite plane. Gives the
+      // sculpture a "displayed" quality.
+      const pedestalGeo = new THREE.CylinderGeometry(7.6, 7.9, 0.22, 96, 1, false);
+      const pedestalMat = new THREE.MeshStandardMaterial({
+        color: PALETTE.pedestal,
+        roughness: 0.9,
+        metalness: 0.0,
+      });
+      const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
+      pedestal.position.y = -0.11;
+      scene.add(pedestal);
+
+      // Subtle ground shadow catcher so the blocks feel planted.
+      const catcherGeo = new THREE.CircleGeometry(7.4, 96);
+      const catcherMat = new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.22,
+      });
+      const catcher = new THREE.Mesh(catcherGeo, catcherMat);
+      catcher.rotation.x = -Math.PI / 2;
+      catcher.position.y = 0.001;
+      scene.add(catcher);
+
+      // --- Group for the sculpture itself ----------------------------------
       const group = new THREE.Group();
       scene.add(group);
 
-      const regionByCode = new Map<Bundesland, RegionForecast>();
-      regions.forEach((r) => regionByCode.set(r.code, r));
+      // Per-code mesh registry so region updates can mutate in place.
+      const meshesByCode = new Map<string, any>();
+      const geometryCache = new Map<string, any>();
 
-      const cell = 1.3;
-      const gap = 0.06;
+      // Helper: build a bevelled extrude-geometry for a tower. ExtrudeBuffer
+      // lets us do a tiny bevel without paying much perf, which reads as
+      // crafted rather than generic-cube.
+      const cellSize = 1.18;
+      const gap = 0.1;
 
+      const buildGeometry = (width: number, depth: number, height: number) => {
+        const shape = new THREE.Shape();
+        const hw = width / 2;
+        const hd = depth / 2;
+        const r = 0.08; // corner radius
+        shape.moveTo(-hw + r, -hd);
+        shape.lineTo(hw - r, -hd);
+        shape.quadraticCurveTo(hw, -hd, hw, -hd + r);
+        shape.lineTo(hw, hd - r);
+        shape.quadraticCurveTo(hw, hd, hw - r, hd);
+        shape.lineTo(-hw + r, hd);
+        shape.quadraticCurveTo(-hw, hd, -hw, hd - r);
+        shape.lineTo(-hw, -hd + r);
+        shape.quadraticCurveTo(-hw, -hd, -hw + r, -hd);
+        const geo = new THREE.ExtrudeGeometry(shape, {
+          depth: Math.max(0.08, height),
+          bevelEnabled: true,
+          bevelThickness: 0.03,
+          bevelSize: 0.03,
+          bevelSegments: 2,
+          curveSegments: 4,
+        });
+        // ExtrudeGeometry extrudes along +Z by default; rotate so it grows
+        // up along +Y like a tower.
+        geo.rotateX(-Math.PI / 2);
+        return geo;
+      };
+
+      // Build initial meshes with height=base; the update effect will set
+      // real heights.
       TILES.forEach((t) => {
-        const r = regionByCode.get(t.code);
-        if (!r) return;
-        const w = (t.w || 1) * cell + ((t.w || 1) - 1) * gap;
-        const h = (t.h || 1) * cell + ((t.h || 1) - 1) * gap;
-        const delta = typeof r.delta7d === 'number' && Number.isFinite(r.delta7d) ? r.delta7d : 0;
-        const height = 0.4 + Math.max(0, delta) * 12 + Math.min(0, delta) * 1.2;
-        const z = t.y * (cell + gap) - 4;
-        const x = t.x * (cell + gap) - 3.6;
-
-        const geo = new THREE.BoxGeometry(w, Math.max(0.15, height), h);
-        const mat = new THREE.MeshStandardMaterial({
-          color: colourFor(r.delta7d),
-          roughness: 0.42,
-          metalness: 0.08,
-          transparent: true,
-          opacity: 0.94,
+        const w = (t.w || 1) * cellSize + ((t.w || 1) - 1) * gap;
+        const d = (t.h || 1) * cellSize + ((t.h || 1) - 1) * gap;
+        const baseHeight = 0.5;
+        const geo = buildGeometry(w, d, baseHeight);
+        geometryCache.set(t.code, { w, d, h: baseHeight });
+        const mat = new THREE.MeshPhysicalMaterial({
+          color: PALETTE.missing,
+          roughness: 0.55,
+          metalness: 0.0,
+          clearcoat: 0.35,
+          clearcoatRoughness: 0.4,
+          reflectivity: 0.18,
         });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(x, Math.max(0.075, height / 2), z);
-        mesh.userData = r;
+        // centre the sculpture: max x is ~6, max y (grid) is 6; shift by
+        // the centroid of the occupied grid so the sculpture sits on the
+        // pedestal centre.
+        const x = t.x * (cellSize + gap) - 3.6;
+        const z = t.y * (cellSize + gap) - 3.4;
+        mesh.position.set(x, 0, z);
+        mesh.userData = { code: t.code };
         group.add(mesh);
-
-        // Label sprite (Bundesland code)
-        const canvas = document.createElement('canvas');
-        canvas.width = 128; canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = 'rgba(245,243,238,0.92)';
-          ctx.font = 'bold 38px "Inter Tight", sans-serif';
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(t.code, 64, 32);
-        }
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.85 }));
-        sprite.position.set(x, Math.max(0.075, height / 2) + Math.max(0.15, height / 2) + 0.35, z);
-        sprite.scale.set(0.9, 0.45, 1);
-        group.add(sprite);
+        meshesByCode.set(t.code, mesh);
       });
 
-      // Subtle scene tilt animation
-      let angle = 0;
-      let target = 0;
+      // Slightly tilt the whole group for a three-quarter reading.
+      group.rotation.y = -0.14;
+
+      // --- Motion: breath only --------------------------------------------
+      // A single sine wave with very low amplitude. Readers who stare
+      // will see it; readers who glance won't — that's the gallery feel.
       let raf = 0;
+      const startedAt = performance.now();
       const animate = () => {
-        angle += 0.0018;
-        target = Math.sin(angle) * 0.25;
-        group.rotation.y = target;
+        const t = (performance.now() - startedAt) / 1000;
+        const breath = Math.sin(t * (Math.PI * 2) / 12) * 0.015; // ±0.86°
+        group.rotation.y = -0.14 + breath;
         renderer.render(scene, camera);
         raf = requestAnimationFrame(animate);
       };
       animate();
 
+      // --- Resize, debounced via rAF ---------------------------------------
+      let resizeScheduled = false;
       const resize = () => {
-        const w = el.clientWidth;
-        const h = el.clientHeight;
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-        renderer.setSize(w, h);
+        if (resizeScheduled) return;
+        resizeScheduled = true;
+        requestAnimationFrame(() => {
+          resizeScheduled = false;
+          if (!mountRef.current) return;
+          const w = mountRef.current.clientWidth;
+          const h = mountRef.current.clientHeight;
+          if (w === 0 || h === 0) return;
+          camera.aspect = w / h;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, h);
+        });
       };
       const ro = new ResizeObserver(resize);
       ro.observe(el);
 
-      stateRef.current = { scene, renderer, group, ro, cancel: () => {
+      // Dispose helper — proper cleanup for geometry + material + renderer.
+      const disposeGeometry = (code: string) => {
+        const m = meshesByCode.get(code);
+        if (!m) return;
+        if (m.geometry) m.geometry.dispose();
+      };
+
+      const cancel = () => {
         cancelAnimationFrame(raf);
         ro.disconnect();
+        meshesByCode.forEach((m) => {
+          if (m.geometry) m.geometry.dispose();
+          if (m.material) m.material.dispose();
+        });
+        pedestalGeo.dispose();
+        pedestalMat.dispose();
+        catcherGeo.dispose();
+        catcherMat.dispose();
         renderer.dispose();
-        el.removeChild(renderer.domElement);
-      } };
+        try {
+          el.removeChild(renderer.domElement);
+        } catch {
+          /* element already gone */
+        }
+      };
+
+      sceneStateRef.current = {
+        THREE,
+        scene,
+        camera,
+        renderer,
+        group,
+        meshesByCode,
+        disposeGeometry,
+        cancel,
+      };
     }
 
     init();
     return () => {
       disposed = true;
-      if (stateRef.current?.cancel) stateRef.current.cancel();
+      sceneStateRef.current?.cancel();
+      sceneStateRef.current = null;
     };
-  }, [regions]);
+    // Mount-only. Region updates go through the second effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Data-update effect. Mutates existing mesh geometry and material colour
+  // when `regions` changes. No teardown, no flicker.
+  useEffect(() => {
+    const state = sceneStateRef.current;
+    if (!state) return;
+    const { THREE, meshesByCode } = state;
+
+    const cellSize = 1.18;
+    const gap = 0.1;
+
+    TILES.forEach((t) => {
+      const mesh = meshesByCode.get(t.code);
+      if (!mesh) return;
+      const r = regionsByCode.get(t.code);
+      const delta = r && typeof r.delta7d === 'number' && Number.isFinite(r.delta7d)
+        ? r.delta7d
+        : null;
+      const targetHeight = delta === null ? 0.18 : heightForDelta(delta);
+
+      // Rebuild geometry only if height actually changed meaningfully.
+      const oldHeight = mesh.userData.currentHeight;
+      if (oldHeight === undefined || Math.abs(oldHeight - targetHeight) > 0.02) {
+        const width = (t.w || 1) * cellSize + ((t.w || 1) - 1) * gap;
+        const depth = (t.h || 1) * cellSize + ((t.h || 1) - 1) * gap;
+        const shape = new THREE.Shape();
+        const hw = width / 2;
+        const hd = depth / 2;
+        const cr = 0.08;
+        shape.moveTo(-hw + cr, -hd);
+        shape.lineTo(hw - cr, -hd);
+        shape.quadraticCurveTo(hw, -hd, hw, -hd + cr);
+        shape.lineTo(hw, hd - cr);
+        shape.quadraticCurveTo(hw, hd, hw - cr, hd);
+        shape.lineTo(-hw + cr, hd);
+        shape.quadraticCurveTo(-hw, hd, -hw, hd - cr);
+        shape.lineTo(-hw, -hd + cr);
+        shape.quadraticCurveTo(-hw, -hd, -hw + cr, -hd);
+        const newGeo = new THREE.ExtrudeGeometry(shape, {
+          depth: Math.max(0.08, targetHeight),
+          bevelEnabled: true,
+          bevelThickness: 0.03,
+          bevelSize: 0.03,
+          bevelSegments: 2,
+          curveSegments: 4,
+        });
+        newGeo.rotateX(-Math.PI / 2);
+        if (mesh.geometry) mesh.geometry.dispose();
+        mesh.geometry = newGeo;
+        mesh.userData.currentHeight = targetHeight;
+      }
+
+      // Colour update — always, even if height stayed.
+      if (mesh.material && mesh.material.color) {
+        mesh.material.color.setHex(pickColourHex(delta));
+        // Slight sheen bump on the strongest risers
+        mesh.material.clearcoat = delta !== null && delta >= 0.2 ? 0.6 : 0.35;
+        mesh.material.needsUpdate = true;
+      }
+      mesh.userData.region = r || null;
+    });
+  }, [regionsByCode]);
+
+  // Side panel: top 4 risers, rendered outside the canvas for type quality.
+  const topRisers = useMemo(
+    () =>
+      regions
+        .slice()
+        .filter((r) => typeof r.delta7d === 'number' && Number.isFinite(r.delta7d))
+        .sort((a, b) => (b.delta7d ?? 0) - (a.delta7d ?? 0))
+        .slice(0, 4),
+    [regions],
+  );
 
   return (
-    <section className="peix-stage peix-fade-in" data-stage="dark">
-      <div className="peix-stage-lede">
-        <div className="peix-kicker">wellen-atlas · live</div>
-        <h2>
+    <section className="peix-stage peix-sculpture peix-fade-in" data-stage="dark">
+      <div className="peix-sculpture__grain" aria-hidden />
+      <div className="peix-sculpture__vignette" aria-hidden />
+
+      <div className="peix-sculpture__lede">
+        <div className="peix-sculpture__kicker">
+          <span className="peix-sculpture__mark">◆</span>
+          <span>wellen-atlas</span>
+          <span className="peix-sculpture__sep">·</span>
+          <span>live</span>
+        </div>
+        <h2 className="peix-sculpture__headline">
           {headline.split('—').map((part, i) => (
             <span key={i}>
               {i === 0 ? part : <em>{part}</em>}
-              {i === 0 && '—'}
+              {i === 0 && <span className="peix-sculpture__emdash">—</span>}
             </span>
           ))}
         </h2>
-        <p className="dek">{dek}</p>
+        <p className="peix-sculpture__dek">{dek}</p>
 
-        <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
-          {regions
-            .slice()
-            .filter((r) => typeof r.delta7d === 'number' && Number.isFinite(r.delta7d))
-            .sort((a, b) => (b.delta7d ?? 0) - (a.delta7d ?? 0))
-            .slice(0, 4)
-            .map((r) => (
-              <div key={r.code} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-                padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.08)',
-                fontFamily: 'var(--peix-font-sans)', fontSize: 14,
-              }}>
-                <span style={{ color: '#f5f3ee' }}>{r.name}</span>
-                <span className="peix-num" style={{ color: '#ffb897', fontWeight: 500 }}>{fmtSignedPct(r.delta7d)}</span>
-              </div>
+        {topRisers.length > 0 && (
+          <ol className="peix-sculpture__roster">
+            {topRisers.map((r, idx) => (
+              <li key={r.code} className="peix-sculpture__roster-row">
+                <span className="peix-sculpture__roster-idx">{String(idx + 1).padStart(2, '0')}</span>
+                <span className="peix-sculpture__roster-name">{r.name}</span>
+                <span className="peix-sculpture__roster-rule" aria-hidden />
+                <span className="peix-sculpture__roster-delta">{fmtSignedPct(r.delta7d)}</span>
+              </li>
             ))}
-        </div>
+          </ol>
+        )}
       </div>
 
-      <div className="peix-stage-canvas" ref={mountRef} />
+      <div className="peix-sculpture__canvas" ref={mountRef} />
 
-      <div className="peix-stage-legend">
-        <span>niedrig · fallend</span>
-        <span className="bar" />
-        <span>hoch · steigend</span>
-      </div>
+      <figcaption className="peix-sculpture__caption">
+        <span className="peix-sculpture__caption-label">Legende</span>
+        <span className="peix-sculpture__caption-scale">
+          <span className="peix-sculpture__caption-tick">fallend</span>
+          <span className="peix-sculpture__caption-gradient" />
+          <span className="peix-sculpture__caption-tick">steigend</span>
+        </span>
+        <span className="peix-sculpture__caption-meta">
+          16 Bundesländer · Höhe ∝ Δ7d · keramische Darstellung
+        </span>
+      </figcaption>
     </section>
   );
 };

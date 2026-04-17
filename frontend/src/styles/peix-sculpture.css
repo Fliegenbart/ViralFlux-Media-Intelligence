@@ -1,0 +1,294 @@
+/**
+ * Wellen-Atlas (Tab 02) — editorial gallery treatment for DataSculpture.
+ *
+ * Aesthetic: Museum exhibit. Warm-black wall, narrow rules, serif display
+ * for the headline, monospace-tick for meta, controlled dense roster list
+ * with hair-line leaders. Grain + radial vignette overlays sit on top of
+ * the canvas without intercepting pointer events.
+ */
+
+.peix-sculpture {
+  --sc-bg: #14110d;
+  --sc-bg-soft: #1c1814;
+  --sc-ink: #efe8dc;
+  --sc-ink-mute: rgba(239, 232, 220, 0.6);
+  --sc-ink-faint: rgba(239, 232, 220, 0.35);
+  --sc-warm: #d68a5a;       /* ochre accent */
+  --sc-warm-deep: #b85c3a;  /* terracotta */
+  --sc-cool: #6c8394;       /* cold slate */
+  --sc-line: rgba(239, 232, 220, 0.12);
+  --sc-line-strong: rgba(239, 232, 220, 0.22);
+
+  position: relative;
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  grid-template-rows: 1fr auto;
+  gap: 0;
+  min-height: 620px;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 20% 0%, rgba(214, 138, 90, 0.08) 0%, transparent 55%),
+    radial-gradient(90% 70% at 100% 100%, rgba(108, 131, 148, 0.1) 0%, transparent 60%),
+    var(--sc-bg);
+  color: var(--sc-ink);
+  isolation: isolate;
+}
+
+/* --- Overlays ------------------------------------------------------------ */
+.peix-sculpture__grain {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0.12;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.87  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px;
+}
+
+.peix-sculpture__vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: radial-gradient(
+    150% 110% at 60% 45%,
+    transparent 40%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+}
+
+/* --- Lede (left column) -------------------------------------------------- */
+.peix-sculpture__lede {
+  position: relative;
+  z-index: 4;
+  padding: 48px 44px 48px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border-right: 1px solid var(--sc-line);
+  background: linear-gradient(180deg, rgba(20, 17, 13, 0) 0%, rgba(20, 17, 13, 0.35) 100%);
+}
+
+.peix-sculpture__kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--sc-warm);
+}
+
+.peix-sculpture__mark {
+  color: var(--sc-warm);
+  font-size: 10px;
+  transform: translateY(-1px);
+}
+
+.peix-sculpture__sep {
+  color: var(--sc-ink-faint);
+}
+
+.peix-sculpture__headline {
+  font-family: var(--peix-font-display, 'DM Serif Display', 'GT Sectra', Georgia, serif);
+  font-weight: 400;
+  font-size: clamp(30px, 3vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--sc-ink);
+  margin: 0;
+}
+
+.peix-sculpture__headline em {
+  font-style: italic;
+  color: var(--sc-warm);
+  font-weight: 400;
+}
+
+.peix-sculpture__emdash {
+  display: inline-block;
+  margin: 0 0.15em;
+  color: var(--sc-ink-mute);
+  font-style: normal;
+}
+
+.peix-sculpture__dek {
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-style: italic;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--sc-ink-mute);
+  margin: 0;
+  max-width: 46ch;
+}
+
+/* --- Roster list (top risers) ------------------------------------------ */
+.peix-sculpture__roster {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--sc-line);
+}
+
+.peix-sculpture__roster-row {
+  display: grid;
+  grid-template-columns: 36px auto 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--sc-line);
+  transition: background-color 180ms ease;
+}
+
+.peix-sculpture__roster-row:hover {
+  background-color: rgba(214, 138, 90, 0.04);
+}
+
+.peix-sculpture__roster-idx {
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.15em;
+  color: var(--sc-ink-faint);
+}
+
+.peix-sculpture__roster-name {
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-size: 17px;
+  color: var(--sc-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.peix-sculpture__roster-rule {
+  height: 1px;
+  background: var(--sc-line);
+  align-self: center;
+  margin: 0 10px;
+}
+
+.peix-sculpture__roster-delta {
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: var(--sc-warm);
+  letter-spacing: 0.02em;
+}
+
+/* --- Canvas stage (right column) --------------------------------------- */
+.peix-sculpture__canvas {
+  position: relative;
+  z-index: 1;
+  min-height: 520px;
+  height: 100%;
+  width: 100%;
+}
+
+.peix-sculpture__canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* --- Caption strip (full width) --------------------------------------- */
+.peix-sculpture__caption {
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 28px;
+  padding: 16px 48px;
+  border-top: 1px solid var(--sc-line);
+  background: rgba(20, 17, 13, 0.65);
+  backdrop-filter: blur(6px);
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--sc-ink-mute);
+}
+
+.peix-sculpture__caption-label {
+  color: var(--sc-warm);
+}
+
+.peix-sculpture__caption-scale {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.peix-sculpture__caption-tick {
+  color: var(--sc-ink-faint);
+  font-size: 10px;
+}
+
+.peix-sculpture__caption-gradient {
+  flex: 1;
+  height: 2px;
+  max-width: 320px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    #3a4450 0%,
+    #4b5962 18%,
+    #6b7a6a 36%,
+    #8a7962 50%,
+    #e3a26a 66%,
+    #d16f3a 82%,
+    #b94a2e 100%
+  );
+}
+
+.peix-sculpture__caption-meta {
+  color: var(--sc-ink-faint);
+  font-size: 10px;
+  text-align: right;
+  font-feature-settings: 'tnum';
+}
+
+/* --- Fallback (three.js failed to load) ------------------------------- */
+.peix-stage-fallback {
+  padding: 56px 36px;
+  color: var(--sc-ink-mute);
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-style: italic;
+  font-size: 15px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+/* --- Responsive -------------------------------------------------------- */
+@media (max-width: 960px) {
+  .peix-sculpture {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 440px auto;
+    min-height: 0;
+  }
+  .peix-sculpture__lede {
+    border-right: none;
+    border-bottom: 1px solid var(--sc-line);
+    padding: 32px 28px;
+  }
+  .peix-sculpture__canvas {
+    min-height: 420px;
+  }
+  .peix-sculpture__caption {
+    padding: 14px 28px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    text-align: left;
+  }
+  .peix-sculpture__caption-meta {
+    text-align: left;
+  }
+}

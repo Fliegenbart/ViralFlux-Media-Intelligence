@@ -1,0 +1,793 @@
+/**
+ * Forecast-Zeitreise (Tab 03) — editorial broadsheet treatment.
+ *
+ * Aesthetic: the front page of a serious weekly. Cream paper, hair-line
+ * rules, serif display type. The fan-chart carries the weight of the
+ * layout; the scrubber is a physical timeline; the two bottom panels
+ * are miniature editorial graphics, not disclaimer paragraphs.
+ *
+ * Palette intentionally harmonises with the sculpture tab — same
+ * terracotta warm, but on a paper ground instead of a gallery wall.
+ */
+
+.peix-timeline {
+  --tl-paper: #f6f0e4;         /* main cream ground */
+  --tl-paper-edge: #eadfcb;    /* slightly darker for edges / meta */
+  --tl-ink: #1f1a14;           /* near-black warm */
+  --tl-ink-soft: #554b3d;      /* body copy */
+  --tl-ink-faint: #8a7a64;     /* captions */
+  --tl-ink-ghost: rgba(31, 26, 20, 0.18);
+  --tl-warm: #b85c3a;          /* terracotta accent */
+  --tl-warm-deep: #8a3f25;     /* darker terracotta for numbers */
+  --tl-cool: #56708a;          /* cool accent for observed ink */
+  --tl-rule: rgba(31, 26, 20, 0.14);
+  --tl-rule-strong: rgba(31, 26, 20, 0.3);
+
+  width: 100%;
+  font-family: var(--peix-font-sans, 'Inter Tight', sans-serif);
+  color: var(--tl-ink);
+}
+
+/* --- Paper stage -------------------------------------------------------- */
+.peix-timeline__paper {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(110% 70% at 10% 0%, rgba(184, 92, 58, 0.06) 0%, transparent 55%),
+    radial-gradient(90% 60% at 100% 100%, rgba(86, 112, 138, 0.05) 0%, transparent 60%),
+    var(--tl-paper);
+  border: 1px solid var(--tl-paper-edge);
+  padding: 44px 48px 32px;
+  isolation: isolate;
+}
+
+.peix-timeline__grain {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.85  0 0 0 0 0.8  0 0 0 0 0.72  0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 200px 200px;
+}
+
+.peix-timeline__paper > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Masthead --------------------------------------------------------- */
+.peix-timeline__masthead {
+  border-bottom: 1px solid var(--tl-rule-strong);
+  padding-bottom: 22px;
+  margin-bottom: 32px;
+}
+
+.peix-timeline__edition {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--peix-font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--tl-warm);
+  margin-bottom: 12px;
+}
+
+.peix-timeline__edition-mark {
+  font-size: 13px;
+  color: var(--tl-warm-deep);
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-style: italic;
+  transform: translateY(-1px);
+}
+
+.peix-timeline__edition-sep {
+  color: var(--tl-ink-ghost);
+}
+
+.peix-timeline__headline {
+  font-family: var(--peix-font-display, 'DM Serif Display', 'GT Sectra', Georgia, serif);
+  font-weight: 400;
+  font-size: clamp(34px, 3.6vw, 52px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--tl-ink);
+  margin: 0;
+}
+
+.peix-timeline__headline em {
+  font-style: italic;
+  color: var(--tl-warm);
+  font-weight: 400;
+}
+
+.peix-timeline__dek {
+  font-family: var(--peix-font-display, 'DM Serif Display', Georgia, serif);
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--tl-ink-soft);
+  margin: 14px 0 0;
+  max-width: 62ch;
+}
+
+.peix-timeline__dek em {
+  font-style: italic;
+  color: var(--tl-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--tl-warm);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* --- Chart row -------------------------------------------------------- */
+.peix-timeline__chart-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(240px, 1fr);
+  gap: 28px;
+  margin-bottom: 32px;
+}
+
+.peix-timeline__chart-card {
+  padding-top: 4px;
+}
+
+.peix-timeline__chart-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  border-bottom: 1px solid var(--tl-rule);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.peix-timeline__chart-meta-label {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tl-warm);
+}
+
+.peix-timeline__chart-meta-title {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--tl-ink-soft);
+}
+
+/* --- Readout aside (right column) ------------------------------------- */
+.peix-timeline__readout {
+  border: 1px solid var(--tl-rule-strong);
+  padding: 20px 22px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  align-self: start;
+}
+
+.peix-timeline__readout-kicker {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tl-warm);
+}
+
+.peix-timeline__readout-date {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--tl-ink);
+  margin-top: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--tl-rule);
+}
+
+.peix-timeline__readout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px 20px;
+  margin-top: 16px;
+}
+
+.peix-timeline__readout-cell-label {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--tl-ink-faint);
+}
+
+.peix-timeline__readout-cell-value {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--tl-ink);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+
+.peix-timeline__readout-cell-value--emph {
+  color: var(--tl-warm-deep);
+  font-style: italic;
+}
+
+.peix-timeline__readout-cell-unit {
+  font-family: var(--peix-font-sans, sans-serif);
+  font-size: 11px;
+  color: var(--tl-ink-faint);
+  font-style: normal;
+  font-feature-settings: 'tnum';
+}
+
+/* --- Fan-chart SVG ----------------------------------------------------- */
+.peix-fanchart {
+  margin-top: 4px;
+  color: var(--tl-ink);
+}
+
+.peix-fanchart__grid {
+  stroke: var(--tl-rule);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.peix-fanchart__baseline {
+  stroke: var(--tl-ink);
+  stroke-width: 1.2;
+}
+
+.peix-fanchart__zone-label {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  fill: var(--tl-ink-faint);
+}
+
+.peix-fanchart__ytick {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10.5px;
+  fill: var(--tl-ink-faint);
+  font-feature-settings: 'tnum';
+}
+
+.peix-fanchart__xtick {
+  stroke: var(--tl-ink);
+  stroke-width: 0.8;
+}
+
+.peix-fanchart__xlabel {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10px;
+  fill: var(--tl-ink-faint);
+}
+
+.peix-fanchart__observed {
+  stroke: var(--tl-ink);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.peix-fanchart__observed-cap {
+  fill: var(--tl-ink);
+}
+
+.peix-fanchart__median {
+  stroke: var(--tl-warm-deep);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  stroke-dasharray: none;
+}
+
+.peix-fanchart__today line {
+  stroke: var(--tl-ink);
+  stroke-width: 1;
+}
+
+.peix-fanchart__today-flag {
+  fill: var(--tl-ink);
+  stroke: none;
+}
+
+.peix-fanchart__today-label {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  fill: var(--tl-paper);
+  font-weight: 600;
+}
+
+.peix-fanchart__focus-line {
+  stroke: var(--tl-warm-deep);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.85;
+}
+
+.peix-fanchart__focus-halo {
+  fill: rgba(184, 92, 58, 0.18);
+  stroke: none;
+}
+
+.peix-fanchart__focus-dot {
+  fill: var(--tl-warm-deep);
+  stroke: var(--tl-paper);
+  stroke-width: 1.2;
+}
+
+.peix-fanchart__callout-date {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  fill: var(--tl-ink-faint);
+}
+
+.peix-fanchart__callout-delta {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-size: 20px;
+  font-style: italic;
+  fill: var(--tl-warm-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.peix-fanchart__callout-unit {
+  font-family: var(--peix-font-sans, sans-serif);
+  font-style: normal;
+  font-size: 10.5px;
+  fill: var(--tl-ink-faint);
+}
+
+.peix-fanchart__horizon-end {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  fill: var(--tl-ink-faint);
+}
+
+.peix-fanchart__caption {
+  margin-top: 10px;
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-style: italic;
+  font-size: 12.5px;
+  color: var(--tl-ink-faint);
+}
+
+/* --- Time-scrubber --------------------------------------------------- */
+.peix-time-scrubber {
+  margin-top: 30px;
+}
+
+.peix-time-scrubber__track {
+  position: relative;
+  height: 58px;
+  border-top: 1px solid var(--tl-rule);
+  border-bottom: 1px solid var(--tl-rule);
+  background: transparent;
+}
+
+.peix-time-scrubber__band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.peix-time-scrubber__band--observed {
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    rgba(31, 26, 20, 0.05) 6px 7px
+  );
+}
+
+.peix-time-scrubber__band--forecast {
+  background: linear-gradient(
+    180deg,
+    rgba(184, 92, 58, 0.06) 0%,
+    rgba(184, 92, 58, 0.12) 100%
+  );
+}
+
+.peix-time-scrubber__tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--tl-ink-ghost);
+}
+
+.peix-time-scrubber__tick--today {
+  border-left-color: var(--tl-ink);
+}
+
+.peix-time-scrubber__tick--boundary {
+  border-left-color: var(--tl-rule-strong);
+}
+
+.peix-time-scrubber__tick-label {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  transform: translateX(-50%);
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  color: var(--tl-ink-faint);
+  white-space: nowrap;
+}
+
+.peix-time-scrubber__tick--today .peix-time-scrubber__tick-label {
+  color: var(--tl-ink);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.peix-time-scrubber__handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  pointer-events: none;
+  z-index: 3;
+  transition: left 120ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.peix-time-scrubber__handle-caption {
+  position: absolute;
+  top: -28px;
+  left: 0;
+  transform: translateX(-50%);
+  background: var(--tl-ink);
+  color: var(--tl-paper);
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 5px 9px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.peix-time-scrubber__handle-caption::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--tl-ink);
+}
+
+.peix-time-scrubber__handle-pin {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  background: var(--tl-warm-deep);
+  border-radius: 50%;
+  border: 2px solid var(--tl-paper);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.peix-time-scrubber__handle-stem {
+  position: absolute;
+  top: 6px;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--tl-warm-deep);
+}
+
+.peix-time-scrubber__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: ew-resize;
+  margin: 0;
+}
+
+.peix-time-scrubber__input:focus-visible + .peix-time-scrubber__legend {
+  outline: 2px solid var(--tl-warm);
+  outline-offset: 2px;
+}
+
+.peix-time-scrubber__legend {
+  margin-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tl-ink-faint);
+}
+
+.peix-time-scrubber__legend-mid {
+  color: var(--tl-ink);
+  font-weight: 600;
+}
+
+/* --- Two panels below ----------------------------------------------- */
+.peix-timeline__panels {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 28px;
+  margin-top: 12px;
+  padding-top: 28px;
+  border-top: 1px solid var(--tl-rule);
+}
+
+.peix-timeline__panel {
+  padding: 4px 0;
+}
+
+.peix-timeline__panel-kicker {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tl-warm);
+}
+
+.peix-timeline__panel-headline {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--tl-ink);
+  margin: 6px 0 14px;
+  letter-spacing: -0.01em;
+}
+
+.peix-timeline__panel-headline em {
+  font-style: italic;
+  color: var(--tl-warm);
+}
+
+.peix-timeline__panel-body {
+  margin: 14px 0 0;
+  font-family: var(--peix-font-sans, sans-serif);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--tl-ink-soft);
+  max-width: 52ch;
+}
+
+.peix-timeline__panel-body em {
+  font-style: italic;
+  color: var(--tl-ink);
+}
+
+/* --- Coverage bars ---------------------------------------------------- */
+.peix-timeline__coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.peix-timeline__coverage-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 80px;
+  align-items: center;
+  gap: 14px;
+}
+
+.peix-timeline__coverage-label {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--tl-ink-faint);
+}
+
+.peix-timeline__coverage-rail {
+  position: relative;
+  height: 12px;
+  background: rgba(31, 26, 20, 0.06);
+  border-radius: 2px;
+  overflow: visible;
+}
+
+.peix-timeline__coverage-fill {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  background: var(--tl-warm);
+  border-radius: 1.5px;
+  min-width: 2px;
+  transition: width 300ms ease;
+}
+
+.peix-timeline__coverage-target {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--tl-ink);
+  transform: translateX(-50%);
+  z-index: 2;
+}
+
+.peix-timeline__coverage-target::after {
+  content: 'Ziel';
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-ink);
+  white-space: nowrap;
+}
+
+.peix-timeline__coverage-value {
+  text-align: right;
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-style: italic;
+  font-size: 17px;
+  color: var(--tl-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.peix-timeline__coverage-delta {
+  display: block;
+  font-family: var(--peix-font-mono, monospace);
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  margin-top: 2px;
+}
+
+.peix-timeline__coverage-delta--ok {
+  color: #3a6b45;
+}
+
+.peix-timeline__coverage-delta--off {
+  color: var(--tl-warm-deep);
+}
+
+/* --- Lag axis ---------------------------------------------------------- */
+.peix-timeline__panel--lag {
+  position: relative;
+}
+
+.peix-timeline__lag-axis {
+  position: relative;
+  height: 110px;
+  margin-top: 20px;
+  padding: 0 8px;
+}
+
+.peix-timeline__lag-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--tl-ink) 0%,
+    var(--tl-ink) 30%,
+    var(--tl-ink-ghost) 100%
+  );
+}
+
+.peix-timeline__lag-ref {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100px;
+}
+
+.peix-timeline__lag-ref-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tl-paper);
+  border: 1.5px solid var(--tl-ink);
+}
+
+.peix-timeline__lag-ref-label {
+  margin-top: 6px;
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tl-ink-soft);
+}
+
+.peix-timeline__lag-ref-day {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-style: italic;
+  font-size: 11.5px;
+  color: var(--tl-ink-faint);
+  margin-top: 1px;
+}
+
+.peix-timeline__lag-marker {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.peix-timeline__lag-marker-pin {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--tl-warm-deep);
+  border: 2px solid var(--tl-paper);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  margin-top: calc(55px - 6px);
+}
+
+.peix-timeline__lag-marker-label {
+  margin-top: 8px;
+  font-family: var(--peix-font-sans, sans-serif);
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--tl-ink);
+  background: rgba(246, 240, 228, 0.9);
+  padding: 4px 8px;
+  border-radius: 2px;
+  border: 1px solid var(--tl-rule-strong);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.peix-timeline__lag-marker-label strong {
+  color: var(--tl-warm-deep);
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 13px;
+}
+
+/* --- Footer ------------------------------------------------------------ */
+.peix-timeline__footer {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--tl-rule);
+}
+
+/* --- Responsive ------------------------------------------------------- */
+@media (max-width: 960px) {
+  .peix-timeline__paper { padding: 28px 22px; }
+  .peix-timeline__chart-row,
+  .peix-timeline__panels {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+  .peix-timeline__headline { font-size: 32px; }
+  .peix-timeline__readout-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
+}

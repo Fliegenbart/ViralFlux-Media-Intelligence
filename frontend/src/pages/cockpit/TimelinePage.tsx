@@ -9,14 +9,16 @@ import { fmtDate, fmtSignedPct } from './format';
 interface Props { snapshot: CockpitSnapshot; }
 
 /**
- * Tab 03 — forecast timeline.
+ * Tab 03 — Forecast-Zeitreise.
  *
- * After the 2026-04-16 math audit the reliability/calibration panel now
- * gates on snapshot.modelStatus.calibrationMode; a handcrafted reliability
- * diagram with invented percentages ("Wir sagen 72 %, es passiert in 69 %")
- * was removed. Historical claims that the tool "predicted peak X days
- * before" were also removed — the actual best_lag_days signal is shown
- * instead.
+ * Editorial newspaper-infographic take on the timeline. Cream/paper
+ * background, serif display type, hairline rules. Chart is a fan-chart
+ * with flag-style today marker and monument-style focus annotation.
+ *
+ * Two panels under the chart render calibration status and lag honesty
+ * as miniature editorial graphics rather than paragraph copy.
+ *
+ * No fabricated numbers — all values come from snapshot.modelStatus.
  */
 export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
   const timeline: TimelinePoint[] = useMemo(
@@ -36,10 +38,7 @@ export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
   );
 
   const focus = useMemo(
-    () =>
-      timeline.find((p) => p.horizonDays === focusDay) ??
-      timeline[0] ??
-      null,
+    () => timeline.find((p) => p.horizonDays === focusDay) ?? timeline[0] ?? null,
     [timeline, focusDay],
   );
 
@@ -60,126 +59,290 @@ export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
   const calibrated = snapshot.modelStatus?.calibrationMode === 'calibrated';
   const coverage80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
   const coverage95 = snapshot.modelStatus?.intervalCoverage95Pct ?? null;
-  const bestLag = snapshot.modelStatus?.bestLagDays ?? null;
+  const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? snapshot.modelStatus?.bestLagDays ?? null;
+  const leadHorizon = snapshot.modelStatus?.lead?.horizonDays ?? snapshot.modelStatus?.horizonDays ?? 14;
+  const leadTargetLabel = snapshot.modelStatus?.lead?.targetLabel ?? 'Notaufnahme-Syndromsurveillance';
+
+  const dateFor = (d: number) => timeline.find((p) => p.horizonDays === d)?.date ?? null;
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.24 }}
+      transition={{ duration: 0.28 }}
+      className="peix-timeline"
     >
-      <section className="peix-hero">
-        <div className="peix-hero-lede">
-          <div className="peix-kicker kick">forecast-zeitreise</div>
-          <h1 className="peix-display">
-            Spulen Sie vor. <em>Dann zurück.</em>
-            <br />Sehen Sie, wie sich die Empfehlung wandelt.
+      <div className="peix-timeline__paper">
+        <div className="peix-timeline__grain" aria-hidden />
+
+        <header className="peix-timeline__masthead">
+          <div className="peix-timeline__edition">
+            <span className="peix-timeline__edition-mark">§</span>
+            <span>Forecast-Zeitreise</span>
+            <span className="peix-timeline__edition-sep">·</span>
+            <span>Ausgabe {snapshot.isoWeek}</span>
+          </div>
+          <h1 className="peix-timeline__headline">
+            Spulen Sie vor.
+            <em> Dann zurück.</em>
           </h1>
-          <p className="dek">
-            Links die beobachtete Vergangenheit, rechts die Prognose mit Q10/Q90-Band.
-            Je weiter wir in die Zukunft blicken, desto breiter wird die Unsicherheit —
-            bewusst sichtbar gemacht, nicht geglättet.
+          <p className="peix-timeline__dek">
+            Links die beobachtete Vergangenheit, rechts die Prognose mit Q10–Q90-Fan.
+            Je weiter in die Zukunft, desto breiter das Band —
+            <em> bewusst sichtbar, nicht geglättet.</em>
           </p>
-        </div>
-        <aside className="peix-hero-card">
-          <div className="row">
-            <span className="label">Ausgewählter Tag</span>
-            <span className="val" style={{ fontSize: 18 }}>
+        </header>
+
+        <section className="peix-timeline__chart-row">
+          <div className="peix-timeline__chart-card">
+            <div className="peix-timeline__chart-meta">
+              <span className="peix-timeline__chart-meta-label">Diagramm 01</span>
+              <span className="peix-timeline__chart-meta-title">
+                Q50 · Q10–Q90 Fan · Beobachtung vs. Prognose
+              </span>
+            </div>
+            <ConfidenceCloud
+              series={timeline}
+              focusDay={focusDay}
+              height={360}
+              leadHorizonDays={leadHorizon}
+              caption={null as unknown as string}
+            />
+            <TimeScrubber
+              min={min}
+              max={max}
+              value={focusDay}
+              onChange={setFocusDay}
+              dateFor={dateFor}
+              labelLeft="beobachtet / nowcast"
+              labelMid="heute"
+              labelRight="prognose-fan"
+            />
+          </div>
+
+          <aside className="peix-timeline__readout">
+            <div className="peix-timeline__readout-kicker">Ausgewählter Tag</div>
+            <div className="peix-timeline__readout-date">
               {focus ? fmtDate(focus.date) : '—'}
-            </span>
-          </div>
-          <div className="row">
-            <span className="label">Horizont</span>
-            <span className="val peix-num">
-              {focusDay === 0 ? 'heute' : focusDay > 0 ? `+${focusDay} Tage` : `${focusDay} Tage`}
-            </span>
-          </div>
-          <div className="row">
-            <span className="label">Prognose · Q50</span>
-            <span className="val peix-num">
-              {delta !== null ? fmtSignedPct(delta) : '—'}
-              <small>· vs heute</small>
-            </span>
-          </div>
-          <div className="row">
-            <span className="label">Intervall-Breite</span>
-            <span className="val peix-num">
-              {width !== null ? `${width.toFixed(1)} Pkt` : '—'}
-              <small>· Q10–Q90</small>
-            </span>
-          </div>
-        </aside>
-      </section>
+            </div>
+            <div className="peix-timeline__readout-grid">
+              <div>
+                <div className="peix-timeline__readout-cell-label">Horizont</div>
+                <div className="peix-timeline__readout-cell-value">
+                  {focusDay === 0 ? 'heute' : focusDay > 0 ? `+${focusDay} Tage` : `${focusDay} Tage`}
+                </div>
+              </div>
+              <div>
+                <div className="peix-timeline__readout-cell-label">Q50 vs. heute</div>
+                <div className="peix-timeline__readout-cell-value peix-timeline__readout-cell-value--emph">
+                  {delta !== null ? fmtSignedPct(delta) : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="peix-timeline__readout-cell-label">Intervall</div>
+                <div className="peix-timeline__readout-cell-value">
+                  {width !== null ? `${width.toFixed(1)} Pkt` : '—'}
+                  <span className="peix-timeline__readout-cell-unit"> · Q10–Q90</span>
+                </div>
+              </div>
+              <div>
+                <div className="peix-timeline__readout-cell-label">Lead-Horizont</div>
+                <div className="peix-timeline__readout-cell-value">
+                  {leadHorizon} Tage
+                </div>
+              </div>
+            </div>
+          </aside>
+        </section>
 
-      <section className="peix-bento">
-        <div className="peix-card peix-col-12">
-          <ConfidenceCloud
-            series={timeline}
-            focusDay={focusDay}
-            height={320}
-            caption="Dunkle Linie: beobachtet/nowcast (letzte 14 Tage). Blau: Median-Forecast mit Q10–Q90-Band. Breite = Unsicherheit, nicht geglättet."
+        <section className="peix-timeline__panels">
+          <CalibrationPanel
+            calibrated={calibrated}
+            coverage80={coverage80}
+            coverage95={coverage95}
           />
-          <TimeScrubber
-            min={min}
-            max={max}
-            value={focusDay}
-            onChange={setFocusDay}
+          <LagPanel
+            bestLag={bestLag}
+            leadTargetLabel={leadTargetLabel}
+            leadHorizon={leadHorizon}
           />
-        </div>
+        </section>
 
-        <div className="peix-card peix-col-7">
-          <div className="peix-kicker">kalibrierungs-status</div>
-          {calibrated ? (
-            <>
-              <h3 className="peix-headline" style={{ marginTop: 4 }}>
-                Intervall-Abdeckung liegt an den Zielwerten.
-              </h3>
-              <p className="peix-body" style={{ marginTop: 10 }}>
-                Ziel: 80 % der tatsächlichen Werte liegen im Q10–Q90-Band; 95 % im
-                weiteren Band. Aktueller Backtest:
-                <strong> {coverage80 !== null ? `${coverage80.toFixed(1)} %` : '—'}</strong> bei 80 %,
-                <strong> {coverage95 !== null ? `${coverage95.toFixed(1)} %` : '—'}</strong> bei 95 %.
-              </p>
-            </>
-          ) : (
-            <>
-              <h3 className="peix-headline" style={{ marginTop: 4 }}>
-                Signalstärke ist ein <em>Ranking-Score</em>, keine %-Wahrscheinlichkeit.
-              </h3>
-              <p className="peix-body" style={{ marginTop: 10 }}>
-                Die BL-Scores (0–1) werden für Priorisierung genutzt — volle Kalibrierung
-                gegen echte Verkaufsdaten entsteht sobald der Feedback-Loop läuft
-                (Tab „Wirkung"). Intervall-Abdeckung (80/95&nbsp;%):
-                <strong> {coverage80 !== null ? `${coverage80.toFixed(1)} %` : '—'}</strong> /
-                <strong> {coverage95 !== null ? `${coverage95.toFixed(1)} %` : '—'}</strong>.
-              </p>
-            </>
-          )}
-        </div>
-
-        <div className="peix-card peix-col-5 quiet">
-          <div className="peix-kicker">lag-ehrlichkeit</div>
-          <h3 className="peix-headline" style={{ marginTop: 4 }}>
-            Vorlauf gegen <em>{snapshot.modelStatus?.lead?.targetLabel ?? 'die Realität'}</em>
-          </h3>
-          <p className="peix-body">
-            Der {snapshot.modelStatus?.lead?.horizonDays ?? 14}-Tage-Forecast wird gegen
-            {' '}{snapshot.modelStatus?.lead?.targetLabel ?? 'die Notaufnahme-Aktivität'} gemessen.
-            Aktueller Best-Lag: <strong>{bestLag !== null
-              ? `${bestLag === 0 ? '0' : bestLag > 0 ? `+${bestLag}` : bestLag} Tage`
-              : '—'}</strong>
-            {snapshot.modelStatus?.lead?.correlationAtHorizon
-              ? ` bei Korrelation ${snapshot.modelStatus.lead.correlationAtHorizon.toFixed(2)}`
-              : ''}.
-            {bestLag !== null && bestLag >= 0
-              ? ' Der Forecast läuft der echten Krankheitsbelastung also nicht hinterher — und dem RKI-Meldewesen strukturell 7–10 Tage voraus.'
-              : ' Gegen das RKI-Meldewesen bleibt der Vorlauf strukturell erhalten, weil das Meldewesen selbst 7–10 Tage hinter der Realität läuft.'}
-          </p>
-        </div>
-      </section>
-
-      <SourcesStrip sources={snapshot.sources} />
+        <footer className="peix-timeline__footer">
+          <SourcesStrip sources={snapshot.sources} />
+        </footer>
+      </div>
     </motion.div>
+  );
+};
+
+// --------------------------------------------------------------------------
+// Calibration panel — a miniature reliability-style graphic instead of the
+// generic "two-coverage-numbers-in-a-sentence" layout.
+// --------------------------------------------------------------------------
+const CalibrationPanel: React.FC<{
+  calibrated: boolean;
+  coverage80: number | null;
+  coverage95: number | null;
+}> = ({ calibrated, coverage80, coverage95 }) => (
+  <div className="peix-timeline__panel">
+    <div className="peix-timeline__panel-kicker">Kalibrierungs-Status</div>
+    <h3 className="peix-timeline__panel-headline">
+      {calibrated
+        ? 'Abdeckung liegt auf Ziel.'
+        : 'Signalwerte sind ein Ranking-Score — keine %-Wahrscheinlichkeit.'}
+    </h3>
+
+    <div className="peix-timeline__coverage">
+      <CoverageBar
+        label="Band 80 %"
+        actual={coverage80}
+        target={80}
+      />
+      <CoverageBar
+        label="Band 95 %"
+        actual={coverage95}
+        target={95}
+      />
+    </div>
+
+    <p className="peix-timeline__panel-body">
+      {calibrated ? (
+        <>
+          Ziel: 80 % der tatsächlichen Werte liegen im Q10–Q90-Band, 95 % im weiteren Band.
+          Die Balken zeigen die aktuelle Abdeckung aus dem letzten Backtest.
+        </>
+      ) : (
+        <>
+          Die BL-Scores (0–1) werden für Priorisierung genutzt — volle Kalibrierung
+          gegen echte Verkaufsdaten entsteht sobald der Feedback-Loop läuft
+          <em> (Tab „Wirkung")</em>.
+        </>
+      )}
+    </p>
+  </div>
+);
+
+const CoverageBar: React.FC<{
+  label: string;
+  actual: number | null;
+  target: number;
+}> = ({ label, actual, target }) => {
+  const actualPct = typeof actual === 'number' && Number.isFinite(actual) ? actual : null;
+  const delta = actualPct !== null ? actualPct - target : null;
+  return (
+    <div className="peix-timeline__coverage-row">
+      <div className="peix-timeline__coverage-label">{label}</div>
+      <div className="peix-timeline__coverage-rail">
+        <span
+          className="peix-timeline__coverage-target"
+          style={{ left: `${target}%` }}
+          aria-label={`Ziel ${target} %`}
+        />
+        {actualPct !== null && (
+          <span
+            className="peix-timeline__coverage-fill"
+            style={{ width: `${Math.min(Math.max(actualPct, 0), 100)}%` }}
+          />
+        )}
+      </div>
+      <div className="peix-timeline__coverage-value">
+        {actualPct !== null ? `${actualPct.toFixed(1)} %` : '—'}
+        {delta !== null && (
+          <span
+            className={
+              'peix-timeline__coverage-delta ' +
+              (Math.abs(delta) <= 3
+                ? 'peix-timeline__coverage-delta--ok'
+                : 'peix-timeline__coverage-delta--off')
+            }
+          >
+            {delta > 0 ? '+' : ''}
+            {delta.toFixed(1)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --------------------------------------------------------------------------
+// Lag panel — a linear "wave → ED → RKI" timeline with our forecast point
+// placed on it, instead of a paragraph that reads like a disclaimer.
+// --------------------------------------------------------------------------
+const LagPanel: React.FC<{
+  bestLag: number | null;
+  leadTargetLabel: string;
+  leadHorizon: number;
+}> = ({ bestLag, leadTargetLabel, leadHorizon }) => {
+  // Conceptual timeline anchors (in "days after the real wave"). These are
+  // documented-literature approximations (AMELAG ~2d, ED ~3d, RKI ~10d),
+  // used here as an explanatory diagram, NOT as precise per-run metrics.
+  const REFS = [
+    { at: 0, label: 'Echte Welle' },
+    { at: 2, label: 'AMELAG' },
+    { at: 3, label: 'Notaufnahme' },
+    { at: 10, label: 'RKI-Meldung' },
+  ];
+  const domainMin = -4;
+  const domainMax = 14;
+  const pctFor = (d: number) => ((d - domainMin) / (domainMax - domainMin)) * 100;
+
+  // Our model's lag is measured *against* lead target (Notaufnahme at day 3).
+  // bestLag < 0 means forecast trails the target by |bestLag| days.
+  // So the model point on this axis sits at NOTAUFNAHME_DAY + bestLag.
+  const NOTAUFNAHME_DAY = 3;
+  const modelDay = bestLag !== null ? NOTAUFNAHME_DAY + bestLag : null;
+
+  return (
+    <div className="peix-timeline__panel peix-timeline__panel--lag">
+      <div className="peix-timeline__panel-kicker">Lag-Ehrlichkeit</div>
+      <h3 className="peix-timeline__panel-headline">
+        Vorlauf gegen <em>{leadTargetLabel}</em>
+      </h3>
+
+      <div className="peix-timeline__lag-axis" aria-hidden>
+        <div className="peix-timeline__lag-rail" />
+        {REFS.map((r) => (
+          <div
+            key={r.label}
+            className="peix-timeline__lag-ref"
+            style={{ left: `${pctFor(r.at)}%` }}
+          >
+            <span className="peix-timeline__lag-ref-dot" />
+            <span className="peix-timeline__lag-ref-label">{r.label}</span>
+            <span className="peix-timeline__lag-ref-day">
+              {r.at === 0 ? 'Tag 0' : `+${r.at}d`}
+            </span>
+          </div>
+        ))}
+
+        {modelDay !== null && (
+          <div
+            className="peix-timeline__lag-marker"
+            style={{ left: `${pctFor(modelDay)}%` }}
+          >
+            <span className="peix-timeline__lag-marker-pin" />
+            <span className="peix-timeline__lag-marker-label">
+              Forecast ({leadHorizon}d)
+              <br />
+              <strong>
+                {bestLag! === 0 ? '0' : bestLag! > 0 ? `+${bestLag}` : bestLag} Tage Lag
+              </strong>
+            </span>
+          </div>
+        )}
+      </div>
+
+      <p className="peix-timeline__panel-body">
+        Die Zeitleiste zeigt typische Verzüge zwischen der tatsächlichen Infektion und den
+        verfügbaren Signalen. Der Forecast bleibt dem
+        <em> RKI-Meldewesen</em> um circa 7–10 Tage voraus —
+        {bestLag !== null && bestLag >= 0
+          ? ' und läuft der Notaufnahme-Aktivität derzeit nicht hinterher.'
+          : ' und liegt gegen die Notaufnahme-Aktivität aktuell leicht zurück, bleibt dem Meldewesen aber strukturell vor.'}
+      </p>
+    </div>
   );
 };
 

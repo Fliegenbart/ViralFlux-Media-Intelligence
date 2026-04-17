@@ -20,7 +20,8 @@ interface Props { snapshot: CockpitSnapshot; }
 export const ImpactPage: React.FC<Props> = ({ snapshot }) => {
   const { data, loading, error, reload } = useImpact({
     virusTyp: snapshot.virusTyp,
-    horizonDays: snapshot.modelStatus?.horizonDays ?? 7,
+    horizonDays: snapshot.modelStatus?.horizonDays ?? 14,
+    leadTarget: (snapshot.modelStatus?.lead?.targetSource as 'ATEMWEGSINDEX' | 'RKI_ARE' | 'SURVSTAT' | undefined) ?? 'ATEMWEGSINDEX',
     client: snapshot.client,
     weeksBack: 12,
   });
@@ -51,9 +52,15 @@ export const ImpactPage: React.FC<Props> = ({ snapshot }) => {
             <span className="val">{snapshot.virusTyp}</span>
           </div>
           <div className="row">
-            <span className="label">Horizont</span>
+            <span className="label">Lead-Horizont</span>
             <span className="val peix-num">
-              {snapshot.modelStatus?.horizonDays ?? 7} Tage
+              {snapshot.modelStatus?.lead?.horizonDays ?? 14} Tage
+            </span>
+          </div>
+          <div className="row">
+            <span className="label">Lead-Target</span>
+            <span className="val" style={{ fontSize: 12 }}>
+              {snapshot.modelStatus?.lead?.targetLabel ?? '—'}
             </span>
           </div>
           <div className="row">

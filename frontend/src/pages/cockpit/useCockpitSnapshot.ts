@@ -17,8 +17,18 @@ import type { CockpitSnapshot } from './types';
 export interface UseCockpitSnapshotOptions {
   /** Backend virus_typ query parameter. */
   virusTyp?: string;
-  /** Forecast horizon — currently only 7 is a champion scope. */
+  /**
+   * Lead-time horizon for the headline story. Default 14 days — that is the
+   * horizon at which the backtest against Notaufnahme-Aktivität shows the
+   * strongest honest lead. Accepted: 7, 14, 21.
+   */
   horizonDays?: number;
+  /**
+   * Truth target for the lead-time claim. Default `ATEMWEGSINDEX`
+   * (Notaufnahme-Syndromsurveillance). Set to `RKI_ARE` to reproduce the
+   * pre-2026-04-17 "vs Meldewesen" story.
+   */
+  leadTarget?: 'ATEMWEGSINDEX' | 'RKI_ARE' | 'SURVSTAT';
   /** Client label, cosmetic. */
   client?: string;
   /** Brand passthrough for the regional forecast service. */
@@ -54,16 +64,23 @@ async function snapshotFetcher(url: string): Promise<CockpitSnapshot> {
 export function useCockpitSnapshot(
   options: UseCockpitSnapshotOptions = {},
 ): UseCockpitSnapshotResult {
-  const { virusTyp = 'Influenza A', horizonDays = 7, client = 'GELO', brand } = options;
+  const {
+    virusTyp = 'Influenza A',
+    horizonDays = 14,
+    leadTarget = 'ATEMWEGSINDEX',
+    client = 'GELO',
+    brand,
+  } = options;
 
   const queryUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set('virus_typ', virusTyp);
     params.set('horizon_days', String(horizonDays));
+    params.set('lead_target', leadTarget);
     params.set('client', client);
     if (brand) params.set('brand', brand);
     return `${SNAPSHOT_URL}?${params.toString()}`;
-  }, [virusTyp, horizonDays, client, brand]);
+  }, [virusTyp, horizonDays, leadTarget, client, brand]);
 
   const { data, error, isLoading, mutate } = useSWR<CockpitSnapshot, Error>(
     queryUrl,

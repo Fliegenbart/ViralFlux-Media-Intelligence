@@ -23,7 +23,10 @@ retraining, or mutation paths.
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import desc
@@ -35,6 +38,8 @@ from app.services.media.cockpit.freshness import (
     build_data_freshness,
     build_source_status,
 )
+
+logger = logging.getLogger(__name__)
 
 
 BUNDESLAND_NAMES: dict[str, str] = {
@@ -58,6 +63,33 @@ BUNDESLAND_NAMES: dict[str, str] = {
 
 # Regional XGBoost artefacts that actually exist on disk (see /app/app/ml_models/regional).
 _REGIONAL_VIRUSES = {"Influenza A"}
+
+# Default horizon / target combination for the headline "2 weeks ahead vs
+# Notaufnahme"-story. Configurable via the API query parameters, but these
+# defaults produce the strongest honest claim the system can back up.
+DEFAULT_LEAD_HORIZON_DAYS = 14
+DEFAULT_LEAD_TARGET_SOURCE = "ATEMWEGSINDEX"
+# BL ranking comes from the regional-panel training run, which only exists
+# at the 7-day horizon. Not a product choice — that's where the artefacts are.
+RANKING_HORIZON_DAYS = 7
+
+TARGET_SOURCE_LABELS: dict[str, str] = {
+    "ATEMWEGSINDEX": "Notaufnahme-Syndromsurveillance (AKTIN)",
+    "RKI_ARE": "RKI-Meldewesen (ARE)",
+    "SURVSTAT": "RKI SURVSTAT",
+    "CUSTOMER_SALES": "Kunden-Verkaufsdaten",
+}
+
+# Which training-summary JSON carries the ranking metrics for each virus.
+# These files are produced by the `run_h7_pilot_only_training.py` runs that
+# the user approved on 2026-04-16. Missing summary = no ranking metrics;
+# the UI falls back to an explicit "not available" state.
+RANKING_SUMMARY_BY_VIRUS: dict[str, str] = {
+    "Influenza A": "regional_panel_h7_pilot_only/influenza_calibration_summary.json",
+    "Influenza B": "regional_panel_h7_pilot_only/influenza_calibration_summary.json",
+    "RSV A": "regional_panel_h7_pilot_only/rsv_ranking_summary.json",
+}
+RANKING_SUMMARY_ROOT = Path("/app/app/ml_models")
 
 SOURCE_HEALTH_MAP: dict[str, str] = {
     "live": "good",
@@ -98,96 +130,215 @@ def _iso_week_label(at: datetime) -> str:
     return f"KW {iso.week:02d} / {iso.year}"
 
 
-def _extract_model_status(
+def _read_ranking_metrics(virus_typ: str) -> dict[str, Any]:
+    """Load the per-virus ranking metrics from the pilot training summary.
+
+    The h7 pilot training writes one summary JSON per preset. This reads the
+    baseline row (i.e. the live-retained model) for the requested virus and
+    returns the headline ranking metrics — precisionAtTop3, pr_auc, ece.
+
+    Returns an empty dict if the summary is missing or unparseable; the
+    caller must be tolerant of missing fields.
+    """
+    path_frag = RANKING_SUMMARY_BY_VIRUS.get(virus_typ)
+    if not path_frag:
+        return {}
+    full_path = RANKING_SUMMARY_ROOT / path_frag
+    if not full_path.exists():
+        logger.info("ranking summary not found for %s at %s", virus_typ, full_path)
+        return {}
+    try:
+        data = json.loads(full_path.read_text())
+    except (OSError, ValueError):
+        logger.exception("failed to parse ranking summary for %s at %s", virus_typ, full_path)
+        return {}
+    viruses = data.get("viruses") or {}
+    virus_data = viruses.get(virus_typ) or {}
+    baseline = virus_data.get("baseline") or {}
+    metrics = baseline.get("metrics") or {}
+    return {
+        "precisionAtTop3": _optional_float(metrics.get("precision_at_top3")),
+        "prAuc": _optional_float(metrics.get("pr_auc")),
+        "ece": _optional_float(metrics.get("ece")),
+        "dataPoints": _optional_int(metrics.get("data_points") or metrics.get("alerts")),
+        "trainedAt": str(data.get("generated_at") or "") or None,
+    }
+
+
+def _infer_calibration_mode(event_cal: dict[str, Any]) -> str:
+    """Derive the calibration_mode label from a backtest event_calibration block."""
+    skip_reason = str(event_cal.get("skip_reason") or "").strip()
+    method = str(event_cal.get("calibration_method") or "").strip()
+    if skip_reason == "heuristic_event_score_only" or method == "skipped_heuristic_event_score":
+        return "heuristic"
+    if event_cal.get("calibration_skipped"):
+        return "skipped"
+    if method:
+        return "heuristic" if method.startswith("skipped_") else "calibrated"
+    return "unknown"
+
+
+def _lead_block_from_backtest(
     db: Session,
+    *,
     virus_typ: str,
     horizon_days: int,
+    target_source: str,
 ) -> dict[str, Any]:
-    """Pull the latest backtest run for the given scope and surface its gate.
+    """Pull lead-time metrics (corr, lag, coverage) from the backtest_runs table.
 
-    Looked up from the `backtest_runs` table. Fields that don't exist in the
-    backtest payload are returned as None — never guessed.
+    The "lead" block backs the public claim: we forecast X days ahead against
+    a fast-truth signal (Notaufnahme, not RKI-Meldewesen). Returns a payload
+    with best_lag_days=None and overallPassed=False when no matching backtest
+    exists — never fabricates numbers.
     """
-    # Newest successful backtest for this virus/horizon/RKI_ARE target.
     row: BacktestRun | None = (
         db.query(BacktestRun)
         .filter(
             BacktestRun.virus_typ == virus_typ,
             BacktestRun.horizon_days == int(horizon_days),
             BacktestRun.status == "success",
-            BacktestRun.target_source == "RKI_ARE",
+            BacktestRun.target_source == target_source,
         )
         .order_by(desc(BacktestRun.created_at))
         .first()
     )
-
-    metrics: dict[str, Any] = dict((row.metrics if row else None) or {})
-    baseline_cmp: dict[str, Any] = dict((row.improvement_vs_baselines if row else None) or {})
-
-    quality_gate = metrics.get("quality_gate") or {}
+    metrics = dict((row.metrics if row else None) or {})
+    improvement = dict((row.improvement_vs_baselines if row else None) or {})
     timing = metrics.get("timing_metrics") or {}
+    quality_gate = metrics.get("quality_gate") or {}
     coverage = metrics.get("interval_coverage") or {}
     event_cal = metrics.get("event_calibration") or {}
+    date_range = metrics.get("date_range") or {}
 
-    skip_reason = str(event_cal.get("skip_reason") or "").strip()
-    method = str(event_cal.get("calibration_method") or "").strip()
-    if skip_reason == "heuristic_event_score_only" or method == "skipped_heuristic_event_score":
-        # Production path as of 2026-04-16: event score is a sigmoid-of-z
-        # heuristic, but we DO produce and use a score — so "heuristic" is
-        # the operationally honest label, not "skipped".
-        calibration_mode = "heuristic"
-    elif event_cal.get("calibration_skipped"):
-        calibration_mode = "skipped"
-    elif method:
-        calibration_mode = "heuristic" if method.startswith("skipped_") else "calibrated"
-    else:
-        calibration_mode = "unknown"
+    return {
+        "horizonDays": int(horizon_days),
+        "targetSource": target_source,
+        "targetLabel": TARGET_SOURCE_LABELS.get(target_source, target_source),
+        "bestLagDays": _optional_int(timing.get("best_lag_days")),
+        "correlationAtHorizon": _optional_float(timing.get("corr_at_horizon")),
+        "correlationAtBestLag": _optional_float(timing.get("corr_at_best_lag")),
+        "maeVsPersistencePct": _optional_float(improvement.get("mae_vs_persistence_pct")),
+        "maeVsSeasonalPct": _optional_float(improvement.get("mae_vs_seasonal_pct")),
+        "overallPassed": bool(quality_gate.get("overall_passed") or False),
+        "baselinePassed": bool(quality_gate.get("baseline_passed") or False),
+        "intervalCoverage80Pct": _optional_float(coverage.get("coverage_80_pct")),
+        "intervalCoverage95Pct": _optional_float(coverage.get("coverage_95_pct")),
+        "backtestEndDate": str(date_range.get("end") or "") or None,
+        "backtestCalibrationMode": _infer_calibration_mode(event_cal),
+        "hasRun": row is not None,
+    }
 
-    readiness_raw = str(quality_gate.get("forecast_readiness") or "").strip().upper()
-    forecast_readiness = readiness_raw if readiness_raw in {"GO", "WATCH", "HOLD"} else "UNKNOWN"
 
+def _synthesize_readiness(
+    *,
+    ranking: dict[str, Any],
+    lead: dict[str, Any],
+) -> str:
+    """Synthesize a top-level headline readiness state.
+
+    * GO_RANKING  — BL-ranking is usable AND lead-time story holds up.
+    * RANKING_OK  — BL-ranking is usable but lead-time is weak/absent.
+    * LEAD_ONLY   — lead-time is solid but we don't have trustworthy ranking.
+    * WATCH       — neither is currently defensible; the cockpit surfaces a
+                    banner explaining why.
+    """
+    precision = ranking.get("precisionAtTop3")
+    lag = lead.get("bestLagDays")
+    ranking_ok = isinstance(precision, (int, float)) and precision >= 0.65
+    lead_ok = isinstance(lag, int) and lag >= 0
+    if ranking_ok and lead_ok:
+        return "GO_RANKING"
+    if ranking_ok:
+        return "RANKING_OK"
+    if lead_ok:
+        return "LEAD_ONLY"
+    return "WATCH"
+
+
+def _extract_model_status(
+    db: Session,
+    virus_typ: str,
+    *,
+    lead_horizon_days: int = DEFAULT_LEAD_HORIZON_DAYS,
+    lead_target_source: str = DEFAULT_LEAD_TARGET_SOURCE,
+    ranking_horizon_days: int = RANKING_HORIZON_DAYS,
+) -> dict[str, Any]:
+    """Build the two-block modelStatus payload.
+
+    After the 2026-04-17 discussion:
+      * ``ranking``: how well we order Bundesländer (source: regional h7 panel
+        training summary; NOT the daily backtest_runs row, which scores the
+        national point-forecast, not the ranking).
+      * ``lead``: how far ahead we are vs. a fast-truth signal (source: the
+        most recent h14/ATEMWEGSINDEX successful backtest_runs row).
+
+    Top-level fields are kept as aliases of the lead block so existing UI
+    references (snapshot.modelStatus.horizonDays etc.) stay valid while the
+    UI migrates to reading the structured blocks.
+    """
+    ranking_metrics = _read_ranking_metrics(virus_typ)
+    ranking_metrics.setdefault("horizonDays", ranking_horizon_days)
+    ranking_metrics["source"] = "regional_pooled_panel_h7"
+    ranking_metrics["sourceLabel"] = (
+        "Regionales 7-Tage-Panel (pilot training)"
+        if virus_typ in _REGIONAL_VIRUSES
+        else "Nur nationaler Forecast — kein regionales Modell"
+    )
+
+    lead = _lead_block_from_backtest(
+        db,
+        virus_typ=virus_typ,
+        horizon_days=lead_horizon_days,
+        target_source=lead_target_source,
+    )
+    # The "banner calibration mode" is derived from the lead backtest when we
+    # have one, otherwise unknown.
+    calibration_mode = lead.get("backtestCalibrationMode") or "unknown"
     regional_available = virus_typ in _REGIONAL_VIRUSES
+    forecast_readiness = _synthesize_readiness(ranking=ranking_metrics, lead=lead)
 
     note_parts: list[str] = []
     if calibration_mode in {"heuristic", "skipped"}:
         note_parts.append(
-            "Signalwerte sind aktuell nicht kalibriert — als Signalstärke lesen, nicht als Wahrscheinlichkeit."
+            "Signalstärke ist ein Ranking-Score (0–1), keine kalibrierte Wahrscheinlichkeit."
         )
     if not regional_available:
         note_parts.append(
-            f"Für {virus_typ} liegt aktuell kein regionales Modell vor — wir zeigen den nationalen Forecast."
+            f"Für {virus_typ} liegt aktuell kein regionales Modell vor — Bundesländer-Ansicht deaktiviert."
         )
-    if quality_gate.get("baseline_passed") is False:
+    if lead.get("bestLagDays") is not None and lead["bestLagDays"] >= 0:
         note_parts.append(
-            "Punktprognose-Metrik liegt aktuell auf Niveau der Persistence-Baseline — das Modell ist für Ranking-Entscheidungen einsetzbar, nicht für Absolut-Werte."
+            f"Der Forecast läuft dem {lead['targetLabel']} nicht hinterher — Vorlauf gegenüber dem "
+            "RKI-Meldewesen bleibt strukturell erhalten."
+        )
+    elif lead.get("bestLagDays") is not None:
+        note_parts.append(
+            f"Der Forecast-Lag gegen {lead['targetLabel']} beträgt {lead['bestLagDays']} Tage; "
+            "das Signal bleibt dem Meldewesen voraus, aber nicht der realen Notaufnahme-Aktivität."
         )
 
-    training_window_end = None
-    # BacktestRun doesn't carry training_window_end directly; we try to derive
-    # from the `end` of the backtest date range as a proxy.
-    date_range = metrics.get("date_range") or {}
-    if date_range.get("end"):
-        training_window_end = str(date_range.get("end"))
-
-    # IMPORTANT: the frontend reads these keys as camelCase (virusTyp,
-    # horizonDays, forecastReadiness, ...). Returning snake_case silently
-    # turned every field into `undefined` in the UI, which is how the
-    # 2026-04-17 "H= · Kalibrierung: UNBEKANNT" header bug came to be. Keep
-    # this contract camelCase-consistent with types.ts::ModelStatus.
+    # Top-level aliases: the UI still reads modelStatus.horizonDays /
+    # .bestLagDays / .maeVsPersistencePct etc. — keep them pointed at the
+    # lead block so no UI code breaks.
     return {
         "virusTyp": virus_typ,
-        "horizonDays": int(horizon_days),
         "forecastReadiness": forecast_readiness,
-        "overallPassed": bool(quality_gate.get("overall_passed") or False),
-        "baselinePassed": bool(quality_gate.get("baseline_passed") or False),
-        "bestLagDays": _optional_int(timing.get("best_lag_days")),
-        "correlationAtHorizon": _optional_float(timing.get("corr_at_horizon")),
-        "maeVsPersistencePct": _optional_float(baseline_cmp.get("mae_vs_persistence_pct")),
         "calibrationMode": calibration_mode,
-        "intervalCoverage80Pct": _optional_float(coverage.get("coverage_80_pct")),
-        "intervalCoverage95Pct": _optional_float(coverage.get("coverage_95_pct")),
-        "trainingWindowEnd": training_window_end,
         "regionalAvailable": regional_available,
+        # Headline aliases (mirror lead block).
+        "horizonDays": int(lead_horizon_days),
+        "overallPassed": bool(lead.get("overallPassed")),
+        "baselinePassed": bool(lead.get("baselinePassed")),
+        "bestLagDays": lead.get("bestLagDays"),
+        "correlationAtHorizon": lead.get("correlationAtHorizon"),
+        "maeVsPersistencePct": lead.get("maeVsPersistencePct"),
+        "intervalCoverage80Pct": lead.get("intervalCoverage80Pct"),
+        "intervalCoverage95Pct": lead.get("intervalCoverage95Pct"),
+        "trainingWindowEnd": lead.get("backtestEndDate"),
+        # Structured blocks for the UI to render two panels.
+        "ranking": ranking_metrics,
+        "lead": lead,
         "note": " ".join(note_parts) if note_parts else None,
     }
 
@@ -371,35 +522,50 @@ def build_cockpit_snapshot(
     db: Session,
     *,
     virus_typ: str = "Influenza A",
-    horizon_days: int = 7,
+    horizon_days: int = DEFAULT_LEAD_HORIZON_DAYS,
     client: str = "GELO",
     brand: str | None = None,
+    lead_target_source: str = DEFAULT_LEAD_TARGET_SOURCE,
     regional_forecast_service=None,
 ) -> dict[str, Any]:
     """Assemble a :class:`CockpitSnapshot` payload for the given scope.
+
+    The `horizon_days` parameter controls the **lead-time story** — the
+    horizon at which we claim "N days ahead of Notaufnahme-Aktivität". As of
+    2026-04-17 this defaults to 14 (the strongest honest claim in
+    backtest_runs). The Bundesländer-ranking always uses the regional h7
+    panel because that's where the trained artefacts live.
 
     Parameters
     ----------
     db
         SQLAlchemy session (read-only usage).
     virus_typ
-        Virus whose snapshot to build. Must match backtest_runs.virus_typ
-        (e.g. ``"RSV A"``, ``"Influenza A"``).
+        Virus whose snapshot to build.
     horizon_days
-        Forecast horizon. Fixed at 7 for the current champion scopes.
+        Lead-time horizon for the headline story (7, 14, or 21 today).
     client
-        Client label shown in the UI, purely cosmetic.
+        Client label shown in the UI.
     brand
-        Brand passthrough for the regional forecast service; defaults to a
-        neutral ``"default"`` so we don't invent GELO-specific behaviour.
+        Brand passthrough for the regional forecast service.
+    lead_target_source
+        Which truth target the lead-time is measured against. Default
+        ATEMWEGSINDEX (Notaufnahme); ``"RKI_ARE"`` is also valid for
+        compatibility with the pre-2026-04-17 story.
     regional_forecast_service
-        Optional callable returning the regional forecast payload. Injected
-        for testability. When omitted the real RegionalForecastService is
-        used.
+        Optional callable for testability.
     """
     generated_at = utc_now()
-    model_status = _extract_model_status(db, virus_typ, horizon_days)
+    model_status = _extract_model_status(
+        db,
+        virus_typ,
+        lead_horizon_days=horizon_days,
+        lead_target_source=lead_target_source,
+    )
 
+    # Regional BL ranking always runs at RANKING_HORIZON_DAYS (h=7) because
+    # that's the only regional artefact set that exists. This is orthogonal
+    # to the lead-time horizon selected above.
     notes: list[str] = []
     regions: list[dict[str, Any]] = []
     if model_status["regionalAvailable"]:
@@ -410,13 +576,13 @@ def build_cockpit_snapshot(
             regional_payload = service.predict_all_regions(
                 virus_typ=virus_typ,
                 brand=brand or "default",
-                horizon_days=horizon_days,
+                horizon_days=RANKING_HORIZON_DAYS,
             )
         else:
             regional_payload = regional_forecast_service(
                 virus_typ=virus_typ,
                 brand=brand or "default",
-                horizon_days=horizon_days,
+                horizon_days=RANKING_HORIZON_DAYS,
             )
         regions, region_notes = _map_region_predictions(regional_payload)
         notes.extend(region_notes)

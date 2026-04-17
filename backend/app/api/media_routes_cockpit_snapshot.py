@@ -33,6 +33,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _SUPPORTED_VIRUSES = {"RSV A", "Influenza A", "Influenza B", "SARS-CoV-2"}
+_SUPPORTED_HORIZONS = {7, 14, 21}
+_SUPPORTED_LEAD_TARGETS = {"ATEMWEGSINDEX", "RKI_ARE", "SURVSTAT"}
 
 
 def _verify_m2m_header(x_api_key: str | None) -> bool:
@@ -64,8 +66,27 @@ async def require_cockpit_auth(
 
 @router.get("/cockpit/snapshot", dependencies=[Depends(require_cockpit_auth)])
 async def get_cockpit_snapshot(
-    virus_typ: str = Query("Influenza A", description="Champion-scope virus (RSV A / Influenza A / Influenza B / SARS-CoV-2)."),
-    horizon_days: int = Query(7, description="Forecast horizon in days. Currently only 7 is a champion scope."),
+    virus_typ: str = Query(
+        "Influenza A",
+        description="Champion-scope virus (RSV A / Influenza A / Influenza B / SARS-CoV-2).",
+    ),
+    horizon_days: int = Query(
+        14,
+        description=(
+            "Lead-time horizon for the headline story. Default 14 days — that's the horizon at "
+            "which the backtest against Notaufnahme-Aktivität shows the strongest honest lead. "
+            "Accepted: 7, 14, 21."
+        ),
+    ),
+    lead_target_source: str = Query(
+        "ATEMWEGSINDEX",
+        alias="lead_target",
+        description=(
+            "Truth target the lead-time is measured against. Default ATEMWEGSINDEX "
+            "(Notaufnahme-Syndromsurveillance). Alternatives: RKI_ARE (Meldewesen, slower), "
+            "SURVSTAT."
+        ),
+    ),
     client: str = Query("GELO", description="Client label shown in the UI."),
     brand: str | None = Query(default=None, description="Brand identifier passed through to the regional forecast service."),
     db: Session = Depends(get_db),
@@ -78,11 +99,16 @@ async def get_cockpit_snapshot(
                 f"Expected one of: {sorted(_SUPPORTED_VIRUSES)}."
             ),
         )
-    if horizon_days != 7:
-        # Champion-scope contract: only h=7 is promoted to production.
+    if horizon_days not in _SUPPORTED_HORIZONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only horizon_days=7 is an active champion scope.",
+            detail=f"Unsupported horizon_days={horizon_days}; expected one of {sorted(_SUPPORTED_HORIZONS)}.",
+        )
+    target_key = (lead_target_source or "").strip().upper()
+    if target_key not in _SUPPORTED_LEAD_TARGETS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported lead_target={target_key!r}; expected one of {sorted(_SUPPORTED_LEAD_TARGETS)}.",
         )
     try:
         return build_cockpit_snapshot(
@@ -91,6 +117,7 @@ async def get_cockpit_snapshot(
             horizon_days=horizon_days,
             client=client,
             brand=brand,
+            lead_target_source=target_key,
         )
     except Exception:  # pragma: no cover - safety net, logged for ops
         logger.exception("build_cockpit_snapshot failed for virus=%s h=%s", virus_typ, horizon_days)

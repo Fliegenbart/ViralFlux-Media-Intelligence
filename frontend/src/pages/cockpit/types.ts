@@ -21,8 +21,72 @@ export type Bundesland =
   | 'SH' | 'HH' | 'NI' | 'HB' | 'NW' | 'HE' | 'RP' | 'SL'
   | 'BW' | 'BY' | 'BE' | 'BB' | 'MV' | 'SN' | 'ST' | 'TH';
 
-export type ForecastReadiness = 'GO' | 'WATCH' | 'HOLD' | 'UNKNOWN';
+/**
+ * After the 2026-04-17 two-block refactor, the cockpit synthesises a headline
+ * readiness that expresses the ranking/lead-time dichotomy explicitly:
+ *   - GO_RANKING: BL-ranking is usable AND lead-time is defensible (lag >= 0
+ *     against the selected truth target).
+ *   - RANKING_OK: ranking is usable but the forecast still lags the selected
+ *     truth target in time.
+ *   - LEAD_ONLY: lead-time is defensible but the BL-ranking precision is
+ *     too low to trust.
+ *   - WATCH: neither currently defensible.
+ *   - UNKNOWN: no backtest data at all.
+ */
+export type ForecastReadiness =
+  | 'GO_RANKING'
+  | 'RANKING_OK'
+  | 'LEAD_ONLY'
+  | 'WATCH'
+  | 'UNKNOWN';
 export type CalibrationMode = 'calibrated' | 'heuristic' | 'skipped' | 'unknown';
+
+/**
+ * Ranking-Block — how well we order the 16 Bundesländer. Populated from the
+ * regional-panel training summary at h=7 (the only regional artefact set
+ * that exists today).
+ */
+export interface ModelRankingStatus {
+  horizonDays: number;
+  /** Stable identifier for the upstream model family. */
+  source: string;
+  /** Human-readable label for the banner. */
+  sourceLabel: string;
+  /** Precision of the top-3 Bundesländer-ranking against truth. */
+  precisionAtTop3: number | null;
+  /** Area under the precision-recall curve. */
+  prAuc: number | null;
+  /** Expected Calibration Error. */
+  ece: number | null;
+  dataPoints: number | null;
+  /** ISO timestamp of the training run that produced this row. */
+  trainedAt: string | null;
+}
+
+/**
+ * Lead-Block — how far ahead we see the wave against a fast-truth target.
+ * Populated from the most recent successful backtest_runs row for
+ * (virus_typ, horizon, target_source).
+ */
+export interface ModelLeadStatus {
+  horizonDays: number;
+  /** "ATEMWEGSINDEX" | "RKI_ARE" | "SURVSTAT" | etc. */
+  targetSource: string;
+  /** Human-readable label. */
+  targetLabel: string;
+  bestLagDays: number | null;
+  correlationAtHorizon: number | null;
+  correlationAtBestLag: number | null;
+  maeVsPersistencePct: number | null;
+  maeVsSeasonalPct: number | null;
+  overallPassed: boolean;
+  baselinePassed: boolean;
+  intervalCoverage80Pct: number | null;
+  intervalCoverage95Pct: number | null;
+  backtestEndDate: string | null;
+  backtestCalibrationMode: CalibrationMode;
+  hasRun: boolean;
+}
 
 export interface RegionForecast {
   code: Bundesland;
@@ -89,28 +153,36 @@ export interface SourceStatus {
 /**
  * Operational honesty payload — always shown in the cockpit so the user can
  * judge whether the numbers are production-grade or watch/warn state.
+ *
+ * Top-level fields (horizonDays, bestLagDays, etc.) are kept as aliases of
+ * the `lead` block for backwards compatibility with existing UI code.
+ * New code should read the structured `ranking` and `lead` blocks directly.
  */
 export interface ModelStatus {
   virusTyp: string;
-  horizonDays: number;
-  /** From backtest_runs.metrics.quality_gate.forecast_readiness. */
+  /** Synthesised readiness headline — combines ranking + lead state. */
   forecastReadiness: ForecastReadiness;
+  /** Calibration label applied to the lead-time backtest's event score. */
+  calibrationMode: CalibrationMode;
+  /** Whether a regional (per-BL) model exists for this virus. */
+  regionalAvailable: boolean;
+
+  /** Alias of lead.horizonDays for backwards compat. */
+  horizonDays: number;
   overallPassed: boolean;
-  /** True only if the model beats the persistence baseline on MAE. */
   baselinePassed: boolean;
-  /** Lag at which correlation with truth is maximal. Negative = model lags behind reality. */
   bestLagDays: number | null;
   correlationAtHorizon: number | null;
-  /** Negative = model worse than "next week = this week". */
   maeVsPersistencePct: number | null;
-  /** How event-probability is derived. `heuristic`/`skipped` => do NOT label as "Konfidenz". */
-  calibrationMode: CalibrationMode;
   intervalCoverage80Pct: number | null;
   intervalCoverage95Pct: number | null;
   /** Training-window end of the currently promoted artifact. */
   trainingWindowEnd: string | null;
-  /** Whether a regional (per-BL) model exists for this virus. */
-  regionalAvailable: boolean;
+
+  /** New: structured blocks for the two-source banner. */
+  ranking: ModelRankingStatus;
+  lead: ModelLeadStatus;
+
   note?: string | null;
 }
 

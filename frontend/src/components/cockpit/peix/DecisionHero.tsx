@@ -74,8 +74,8 @@ export const DecisionHero: React.FC<Props> = ({ snap }) => {
         </h1>
 
         <p className="dek">
-          {rec.why} {snap.modelStatus?.bestLagDays !== null && snap.modelStatus?.bestLagDays !== undefined && snap.modelStatus.bestLagDays < 0
-            ? 'Hinweis: der aktuelle Backtest zeigt Lag < 0 — lies den Vorschlag als Priorisierungshilfe, nicht als Punktprognose.'
+          {rec.why} {snap.modelStatus?.lead?.bestLagDays !== null && snap.modelStatus?.lead?.bestLagDays !== undefined && snap.modelStatus.lead.bestLagDays < 0
+            ? `Hinweis: gegenüber ${snap.modelStatus.lead.targetLabel ?? 'dem Meldewesen'} beträgt der Lag ${snap.modelStatus.lead.bestLagDays} Tage — nutzen Sie den Vorschlag für Priorisierung, nicht als Punktprognose.`
             : ''}
         </p>
 

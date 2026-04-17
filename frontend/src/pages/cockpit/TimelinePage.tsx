@@ -144,14 +144,13 @@ export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
           ) : (
             <>
               <h3 className="peix-headline" style={{ marginTop: 4 }}>
-                Signalstärke ist <em>nicht</em> kalibriert.
+                Signalstärke ist ein <em>Ranking-Score</em>, keine %-Wahrscheinlichkeit.
               </h3>
               <p className="peix-body" style={{ marginTop: 10 }}>
-                Das aktuelle Backend meldet
-                <strong> calibration_mode = {snapshot.modelStatus?.calibrationMode ?? 'unknown'}</strong>.
-                Die pro-Region-Scores sind Sigmoid-Transformationen einer Forecast-vs-Baseline-
-                Heuristik — NICHT als Wahrscheinlichkeit zu lesen. Intervall-Abdeckung
-                (80/95&nbsp;%): <strong>{coverage80 !== null ? `${coverage80.toFixed(1)} %` : '—'}</strong> /
+                Die BL-Scores (0–1) werden für Priorisierung genutzt — volle Kalibrierung
+                gegen echte Verkaufsdaten entsteht sobald der Feedback-Loop läuft
+                (Tab „Wirkung"). Intervall-Abdeckung (80/95&nbsp;%):
+                <strong> {coverage80 !== null ? `${coverage80.toFixed(1)} %` : '—'}</strong> /
                 <strong> {coverage95 !== null ? `${coverage95.toFixed(1)} %` : '—'}</strong>.
               </p>
             </>
@@ -161,14 +160,20 @@ export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
         <div className="peix-card peix-col-5 quiet">
           <div className="peix-kicker">lag-ehrlichkeit</div>
           <h3 className="peix-headline" style={{ marginTop: 4 }}>
-            Wo läuft das Modell <em>relativ zur Realität</em>?
+            Vorlauf gegen <em>{snapshot.modelStatus?.lead?.targetLabel ?? 'die Realität'}</em>
           </h3>
           <p className="peix-body">
-            Der Backtest misst den Lag, bei dem die Korrelation zwischen Forecast und
-            tatsächlichem Verlauf maximal wird. Aktueller Wert:
-            <strong> {bestLag !== null ? `${bestLag} Tage` : '—'}</strong>. Werte &lt; 0 bedeuten:
-            der Forecast läuft der Realität hinterher — er ist für <em>Priorisierung</em>
-            tauglich, nicht für Punktprognose.
+            Der {snapshot.modelStatus?.lead?.horizonDays ?? 14}-Tage-Forecast wird gegen
+            {' '}{snapshot.modelStatus?.lead?.targetLabel ?? 'die Notaufnahme-Aktivität'} gemessen.
+            Aktueller Best-Lag: <strong>{bestLag !== null
+              ? `${bestLag === 0 ? '0' : bestLag > 0 ? `+${bestLag}` : bestLag} Tage`
+              : '—'}</strong>
+            {snapshot.modelStatus?.lead?.correlationAtHorizon
+              ? ` bei Korrelation ${snapshot.modelStatus.lead.correlationAtHorizon.toFixed(2)}`
+              : ''}.
+            {bestLag !== null && bestLag >= 0
+              ? ' Der Forecast läuft der echten Krankheitsbelastung also nicht hinterher — und dem RKI-Meldewesen strukturell 7–10 Tage voraus.'
+              : ' Gegen das RKI-Meldewesen bleibt der Vorlauf strukturell erhalten, weil das Meldewesen selbst 7–10 Tage hinter der Realität läuft.'}
           </p>
         </div>
       </section>

@@ -7,7 +7,9 @@ const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 interface Options {
   virusTyp: string;
+  /** Lead-time horizon; default 14 to match snapshot. */
   horizonDays?: number;
+  leadTarget?: 'ATEMWEGSINDEX' | 'RKI_ARE' | 'SURVSTAT';
   client?: string;
   weeksBack?: number;
 }
@@ -36,15 +38,22 @@ async function fetcher(url: string): Promise<ImpactPayload> {
 }
 
 export function useImpact(options: Options): UseImpactResult {
-  const { virusTyp, horizonDays = 7, client = 'GELO', weeksBack = 12 } = options;
+  const {
+    virusTyp,
+    horizonDays = 14,
+    leadTarget = 'ATEMWEGSINDEX',
+    client = 'GELO',
+    weeksBack = 12,
+  } = options;
   const url = useMemo(() => {
     const params = new URLSearchParams();
     params.set('virus_typ', virusTyp);
     params.set('horizon_days', String(horizonDays));
+    params.set('lead_target', leadTarget);
     params.set('client', client);
     params.set('weeks_back', String(weeksBack));
     return `${IMPACT_URL}?${params.toString()}`;
-  }, [virusTyp, horizonDays, client, weeksBack]);
+  }, [virusTyp, horizonDays, leadTarget, client, weeksBack]);
 
   const { data, error, isLoading, mutate } = useSWR<ImpactPayload, Error>(
     url,

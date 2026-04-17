@@ -50,75 +50,114 @@ function calibrationLabel(mode: string | undefined): string {
   }
 }
 
+function readinessLabel(readiness: string | undefined): string {
+  switch (readiness) {
+    case 'GO_RANKING':
+      return 'GO · Ranking';
+    case 'RANKING_OK':
+      return 'Ranking OK';
+    case 'LEAD_ONLY':
+      return 'Lead-Time';
+    case 'WATCH':
+      return 'Watch';
+    default:
+      return 'Unbekannt';
+  }
+}
+
 function readinessBadgeClass(readiness: string | undefined): string {
   switch (readiness) {
-    case 'GO':
+    case 'GO_RANKING':
       return 'peix-readiness peix-readiness--go';
-    case 'WATCH':
+    case 'RANKING_OK':
+    case 'LEAD_ONLY':
       return 'peix-readiness peix-readiness--watch';
-    case 'HOLD':
+    case 'WATCH':
       return 'peix-readiness peix-readiness--hold';
     default:
       return 'peix-readiness peix-readiness--unknown';
   }
 }
 
+function fmtPctValue(v: number | null | undefined, digits = 0): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '—';
+  return `${(v * 100).toFixed(digits)} %`;
+}
+
+function fmtNumber(v: number | null | undefined, digits = 2): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return '—';
+  return v.toFixed(digits);
+}
+
 const ModelStatusBanner: React.FC<{ status: import('./types').ModelStatus; notes: string[] }> = ({
   status,
   notes,
 }) => {
-  const shouldWarn =
-    !status.overallPassed ||
-    status.calibrationMode === 'heuristic' ||
-    status.calibrationMode === 'skipped' ||
-    status.baselinePassed === false;
-
-  if (!shouldWarn && notes.length === 0) {
-    return null;
-  }
-
+  const ranking = status.ranking;
+  const lead = status.lead;
   return (
     <div className="peix-model-status" role="status">
       <div className="peix-model-status__header">
         <span className={readinessBadgeClass(status.forecastReadiness)}>
-          {status.forecastReadiness}
+          {readinessLabel(status.forecastReadiness)}
         </span>
         <span className="peix-kicker">
-          {status.virusTyp} · h={status.horizonDays} · Kalibrierung: {calibrationLabel(status.calibrationMode)}
+          {status.virusTyp} · Lead-Story gegen {lead?.targetLabel ?? '—'} · Kalibrierung: {calibrationLabel(status.calibrationMode)}
         </span>
       </div>
-      <ul className="peix-model-status__list">
-        {!status.overallPassed && (
-          <li>
-            Quality-Gate: <strong>FAIL</strong>
-            {status.baselinePassed === false ? ' — Modell schlägt die Persistence-Baseline nicht.' : '.'}
-          </li>
-        )}
-        {status.bestLagDays !== null && status.bestLagDays < 0 && (
-          <li>
-            Best Lag {status.bestLagDays} Tage — der Forecast folgt der Realität mit Verzögerung,
-            kein echter 7-Tage-Vorlauf.
-          </li>
-        )}
-        {status.maeVsPersistencePct !== null && status.maeVsPersistencePct < 0 && (
-          <li>
-            MAE vs. Persistence: {status.maeVsPersistencePct.toFixed(2)}% (Modell schlechter als
-            „nächste Woche = diese Woche").
-          </li>
-        )}
-        {(status.calibrationMode === 'heuristic' || status.calibrationMode === 'skipped') && (
-          <li>
-            Signalwerte sind <strong>nicht kalibriert</strong> — als „Signalstärke" interpretieren,
-            nicht als %-Wahrscheinlichkeit.
-          </li>
-        )}
-        {!status.regionalAvailable && (
-          <li>Kein regionales Modell — nur nationaler Forecast.</li>
-        )}
-        {notes.map((note, idx) => (
-          <li key={`note-${idx}`}>{note}</li>
-        ))}
-      </ul>
+
+      <div className="peix-model-status__grid">
+        <div className="peix-model-status__col">
+          <div className="peix-model-status__col-kicker">BL-Ranking · {ranking?.horizonDays ?? 7} Tage</div>
+          <div className="peix-model-status__col-headline">
+            {ranking?.precisionAtTop3 !== null && ranking?.precisionAtTop3 !== undefined
+              ? `${fmtPctValue(ranking.precisionAtTop3)} Top-3-Präzision`
+              : 'Ranking-Metriken liegen nicht vor'}
+          </div>
+          <div className="peix-model-status__col-sub">
+            PR-AUC {fmtNumber(ranking?.prAuc)} · ECE {fmtNumber(ranking?.ece, 3)}
+          </div>
+          <div className="peix-model-status__col-footnote">
+            Quelle: {ranking?.sourceLabel ?? 'regionales Panel'}
+          </div>
+        </div>
+        <div className="peix-model-status__divider" aria-hidden />
+        <div className="peix-model-status__col">
+          <div className="peix-model-status__col-kicker">
+            Lead-Zeit · {lead?.horizonDays ?? 14} Tage
+          </div>
+          <div className="peix-model-status__col-headline">
+            {typeof lead?.bestLagDays === 'number'
+              ? lead.bestLagDays >= 0
+                ? `${lead.bestLagDays === 0 ? '0' : `+${lead.bestLagDays}`} Tage Vorlauf`
+                : `${lead.bestLagDays} Tage Lag`
+              : 'Lead-Metriken liegen nicht vor'}
+            {lead?.correlationAtHorizon !== null && lead?.correlationAtHorizon !== undefined
+              ? ` · corr ${fmtNumber(lead.correlationAtHorizon)}`
+              : ''}
+          </div>
+          <div className="peix-model-status__col-sub">
+            vs. Persistence {lead?.maeVsPersistencePct !== null && lead?.maeVsPersistencePct !== undefined
+              ? `${lead.maeVsPersistencePct > 0 ? '+' : ''}${lead.maeVsPersistencePct.toFixed(1)} %`
+              : '—'}
+            {lead?.intervalCoverage80Pct
+              ? ` · Abdeckung 80 % ≈ ${lead.intervalCoverage80Pct.toFixed(1)} %`
+              : ''}
+          </div>
+          <div className="peix-model-status__col-footnote">
+            Gegen {lead?.targetLabel ?? '—'}
+          </div>
+        </div>
+      </div>
+
+      {(notes.length > 0 || status.note) && (
+        <ul className="peix-model-status__list">
+          {status.note && <li>{status.note}</li>}
+          {notes.map((note, idx) => (
+            <li key={`note-${idx}`}>{note}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 };
@@ -150,7 +189,11 @@ const VirusToggle: React.FC<{
 
 export const CockpitShell: React.FC = () => {
   const [virusTyp, setVirusTyp] = useState<VirusOption['value']>('Influenza A');
-  const { snapshot, loading, error, reload } = useCockpitSnapshot({ virusTyp, horizonDays: 7 });
+  const { snapshot, loading, error, reload } = useCockpitSnapshot({
+    virusTyp,
+    horizonDays: 14,
+    leadTarget: 'ATEMWEGSINDEX',
+  });
   const [tab, setTab] = useState<TabId>('decision');
 
   if (loading && !snapshot) {

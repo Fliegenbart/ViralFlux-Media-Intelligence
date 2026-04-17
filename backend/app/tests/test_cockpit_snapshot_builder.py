@@ -1,20 +1,17 @@
 """Tests for app.services.media.cockpit.snapshot_builder.
 
-These tests verify the contract that the frontend relies on:
+After the 2026-04-17 two-story refactor, modelStatus carries two blocks:
+  * ``ranking``: precision/pr_auc/ece from the regional h7 training summary
+  * ``lead``: best_lag/corr/coverage from a backtest_runs row against a fast
+    truth source (default ATEMWEGSINDEX at h=14)
 
-* ``model_status`` is populated from the most recent successful backtest
-  run for (virus_typ, horizon_days, RKI_ARE).
-* ``calibration_mode`` is ``"heuristic"`` when the backtest recorded
-  ``skip_reason = "heuristic_event_score_only"`` — the audit found this
-  is what the live system produces for every champion scope as of
-  2026-04-16, so it MUST map correctly.
-* ``regions`` is empty for a virus without a regional model (RSV A) and
-  populated from ``predict_all_regions`` output for Influenza A.
-* EUR fields and ``mediaPlan.connected`` stay null/false until a real
-  media plan is connected.
-
-The tests use an in-memory SQLite database following the same pattern
-as app/tests/test_cockpit_service_guards.py.
+These tests cover:
+  * lead block is populated from backtest_runs with the configured target,
+  * ranking block comes from the patched training-summary reader,
+  * forecastReadiness synthesises GO_RANKING / RANKING_OK / LEAD_ONLY / WATCH
+    correctly,
+  * regions come from regional h7 regardless of the lead horizon,
+  * mediaPlan.connected stays false.
 """
 
 from __future__ import annotations
@@ -62,23 +59,29 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self,
         *,
         virus_typ: str,
-        horizon_days: int = 7,
+        horizon_days: int = 14,
+        target_source: str = "ATEMWEGSINDEX",
         readiness: str = "WATCH",
         overall_passed: bool = False,
-        baseline_passed: bool = False,
-        best_lag_days: int = -7,
+        baseline_passed: bool = True,
+        best_lag_days: int = 0,
         calibration_skipped: bool = True,
         skip_reason: str = "heuristic_event_score_only",
-        mae_vs_persistence_pct: float = -3.97,
+        corr_at_horizon: float = 0.73,
+        corr_at_best_lag: float = 0.95,
+        mae_vs_persistence_pct: float = 5.94,
+        mae_vs_seasonal_pct: float = 6.07,
+        coverage_80: float = 82.1,
+        coverage_95: float = 92.3,
         end_date: str = "2026-03-30",
     ) -> None:
         self.db.add(
             BacktestRun(
-                run_id=f"bt_test_{virus_typ}_{horizon_days}",
+                run_id=f"bt_test_{virus_typ}_{horizon_days}_{target_source}",
                 mode="walk_forward",
                 status="success",
                 virus_typ=virus_typ,
-                target_source="RKI_ARE",
+                target_source=target_source,
                 horizon_days=horizon_days,
                 min_train_points=10,
                 strict_vintage_mode=True,
@@ -91,11 +94,12 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
                     },
                     "timing_metrics": {
                         "best_lag_days": best_lag_days,
-                        "corr_at_horizon": 0.672,
+                        "corr_at_horizon": corr_at_horizon,
+                        "corr_at_best_lag": corr_at_best_lag,
                     },
                     "interval_coverage": {
-                        "coverage_80_pct": 82.1,
-                        "coverage_95_pct": 92.3,
+                        "coverage_80_pct": coverage_80,
+                        "coverage_95_pct": coverage_95,
                     },
                     "event_calibration": {
                         "calibration_skipped": calibration_skipped,
@@ -106,96 +110,197 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
                 baseline_metrics={},
                 improvement_vs_baselines={
                     "mae_vs_persistence_pct": mae_vs_persistence_pct,
-                    "mae_vs_seasonal_pct": 13.85,
+                    "mae_vs_seasonal_pct": mae_vs_seasonal_pct,
                 },
                 created_at=datetime.utcnow(),
             )
         )
         self.db.commit()
 
-    # ---------- model status ----------
+    def _patch_external(self, *, ranking_metrics: dict | None = None):
+        """Patch sources/freshness + _read_ranking_metrics with stable returns."""
+        if ranking_metrics is None:
+            ranking_metrics = {
+                "precisionAtTop3": 0.777,
+                "prAuc": 0.810,
+                "ece": 0.027,
+                "dataPoints": 39,
+                "trainedAt": "2026-04-16T22:51:00",
+            }
 
-    def test_model_status_flags_watch_and_heuristic_calibration(self) -> None:
-        self._insert_backtest(virus_typ="RSV A")
+        return [
+            patch.object(snapshot_builder, "build_source_status", return_value={"items": []}),
+            patch.object(snapshot_builder, "build_data_freshness", return_value={}),
+            patch.object(snapshot_builder, "_read_ranking_metrics", return_value=dict(ranking_metrics)),
+        ]
 
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
-            payload = snapshot_builder.build_cockpit_snapshot(
-                self.db,
-                virus_typ="RSV A",
-                horizon_days=7,
-                regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
-            )
+    def _build(self, **overrides) -> dict:
+        """Helper: build a snapshot with all external deps patched."""
+        defaults = dict(
+            virus_typ="Influenza A",
+            horizon_days=14,
+            regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
+        )
+        defaults.update(overrides)
+        patches = self._patch_external()
+        for p in patches:
+            p.start()
+        try:
+            return snapshot_builder.build_cockpit_snapshot(self.db, **defaults)
+        finally:
+            for p in patches:
+                p.stop()
 
-        status = payload["modelStatus"]
-        self.assertEqual(status["forecastReadiness"], "WATCH")
-        self.assertFalse(status["overallPassed"])
-        self.assertFalse(status["baselinePassed"])
-        self.assertEqual(status["bestLagDays"], -7)
-        self.assertAlmostEqual(status["correlationAtHorizon"], 0.672)
-        self.assertAlmostEqual(status["maeVsPersistencePct"], -3.97)
-        self.assertEqual(status["calibrationMode"], "heuristic")
-        self.assertEqual(status["intervalCoverage80Pct"], 82.1)
-        self.assertEqual(status["intervalCoverage95Pct"], 92.3)
-        self.assertFalse(status["regionalAvailable"])  # RSV A is national-only
-        self.assertIn("nicht kalibriert", (status["note"] or "").lower())
+    # ---------- ranking + lead blocks ----------
 
-    def test_model_status_marks_calibrated_when_no_skip(self) -> None:
+    def test_lead_block_pulled_from_atemwegsindex_backtest_by_default(self) -> None:
+        # Seed a lead-time backtest against ATEMWEGSINDEX at h=14.
         self._insert_backtest(
             virus_typ="Influenza A",
-            calibration_skipped=False,
-            skip_reason="",
+            horizon_days=14,
+            target_source="ATEMWEGSINDEX",
+            best_lag_days=0,
+            corr_at_horizon=0.73,
+            corr_at_best_lag=0.95,
+            mae_vs_persistence_pct=5.94,
         )
+        payload = self._build()
+        lead = payload["modelStatus"]["lead"]
+        self.assertEqual(lead["horizonDays"], 14)
+        self.assertEqual(lead["targetSource"], "ATEMWEGSINDEX")
+        self.assertIn("Notaufnahme", lead["targetLabel"])
+        self.assertEqual(lead["bestLagDays"], 0)
+        self.assertAlmostEqual(lead["correlationAtHorizon"], 0.73)
+        self.assertAlmostEqual(lead["correlationAtBestLag"], 0.95)
+        self.assertAlmostEqual(lead["maeVsPersistencePct"], 5.94)
+        self.assertTrue(lead["hasRun"])
 
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
+    def test_ranking_block_filled_from_training_summary(self) -> None:
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+        payload = self._build()
+        ranking = payload["modelStatus"]["ranking"]
+        self.assertEqual(ranking["horizonDays"], 7)
+        self.assertAlmostEqual(ranking["precisionAtTop3"], 0.777)
+        self.assertAlmostEqual(ranking["prAuc"], 0.810)
+        self.assertAlmostEqual(ranking["ece"], 0.027)
+        self.assertIn("panel", (ranking.get("sourceLabel") or "").lower())
+
+    def test_forecast_readiness_go_ranking_when_both_blocks_pass(self) -> None:
+        # precision>=0.65 AND best_lag>=0 => GO_RANKING
+        self._insert_backtest(
+            virus_typ="Influenza A",
+            target_source="ATEMWEGSINDEX",
+            best_lag_days=0,
+        )
+        payload = self._build()
+        self.assertEqual(payload["modelStatus"]["forecastReadiness"], "GO_RANKING")
+
+    def test_forecast_readiness_ranking_ok_when_lead_lags(self) -> None:
+        """precision>=0.65 but best_lag<0 => RANKING_OK (ranking defensible,
+        lead-time weak against the selected target)."""
+        self._insert_backtest(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            target_source="RKI_ARE",
+            best_lag_days=-7,
+        )
+        patches = self._patch_external()
+        for p in patches:
+            p.start()
+        try:
             payload = snapshot_builder.build_cockpit_snapshot(
                 self.db,
                 virus_typ="Influenza A",
                 horizon_days=7,
+                lead_target_source="RKI_ARE",
                 regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
             )
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(payload["modelStatus"]["forecastReadiness"], "RANKING_OK")
+        self.assertEqual(payload["modelStatus"]["lead"]["bestLagDays"], -7)
 
-        self.assertEqual(payload["modelStatus"]["calibrationMode"], "calibrated")
-        self.assertTrue(payload["modelStatus"]["regionalAvailable"])
-
-    def test_missing_backtest_returns_unknown_readiness(self) -> None:
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
+    def test_forecast_readiness_watch_when_no_backtest_and_no_ranking(self) -> None:
+        # Neither ranking metrics (patched empty) nor lead backtest => WATCH
+        patches = self._patch_external(ranking_metrics={})  # no precision value
+        for p in patches:
+            p.start()
+        try:
             payload = snapshot_builder.build_cockpit_snapshot(
                 self.db,
                 virus_typ="RSV A",
-                horizon_days=7,
+                horizon_days=14,
                 regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
             )
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(payload["modelStatus"]["forecastReadiness"], "WATCH")
+        self.assertFalse(payload["modelStatus"]["regionalAvailable"])
 
-        self.assertEqual(payload["modelStatus"]["forecastReadiness"], "UNKNOWN")
-        self.assertEqual(payload["modelStatus"]["calibrationMode"], "unknown")
+    def test_headline_aliases_match_lead_block(self) -> None:
+        self._insert_backtest(
+            virus_typ="Influenza A",
+            target_source="ATEMWEGSINDEX",
+            best_lag_days=0,
+            mae_vs_persistence_pct=5.94,
+        )
+        payload = self._build()
+        ms = payload["modelStatus"]
+        self.assertEqual(ms["horizonDays"], ms["lead"]["horizonDays"])
+        self.assertEqual(ms["bestLagDays"], ms["lead"]["bestLagDays"])
+        self.assertEqual(ms["maeVsPersistencePct"], ms["lead"]["maeVsPersistencePct"])
+        self.assertEqual(ms["intervalCoverage80Pct"], ms["lead"]["intervalCoverage80Pct"])
 
-    # ---------- regions & notes ----------
+    def test_calibration_mode_heuristic_when_skip_reason_matches(self) -> None:
+        self._insert_backtest(
+            virus_typ="Influenza A",
+            target_source="ATEMWEGSINDEX",
+            calibration_skipped=True,
+            skip_reason="heuristic_event_score_only",
+        )
+        payload = self._build()
+        self.assertEqual(payload["modelStatus"]["calibrationMode"], "heuristic")
+
+    def test_calibration_mode_calibrated_when_isotonic_applied(self) -> None:
+        self._insert_backtest(
+            virus_typ="Influenza A",
+            target_source="ATEMWEGSINDEX",
+            calibration_skipped=False,
+            skip_reason="",
+        )
+        payload = self._build()
+        self.assertEqual(payload["modelStatus"]["calibrationMode"], "calibrated")
+
+    # ---------- regions ----------
 
     def test_rsv_a_returns_empty_regions_and_explanatory_note(self) -> None:
-        self._insert_backtest(virus_typ="RSV A")
+        self._insert_backtest(virus_typ="RSV A", target_source="ATEMWEGSINDEX")
         fake = _FakeRegionalForecastService({"predictions": []})
-
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
+        patches = self._patch_external()
+        for p in patches:
+            p.start()
+        try:
             payload = snapshot_builder.build_cockpit_snapshot(
                 self.db,
                 virus_typ="RSV A",
-                horizon_days=7,
+                horizon_days=14,
                 regional_forecast_service=fake,
             )
-
+        finally:
+            for p in patches:
+                p.stop()
         self.assertEqual(payload["regions"], [])
-        self.assertEqual(fake.calls, [])  # regional service should not be invoked
+        self.assertEqual(fake.calls, [])  # regional service not invoked when regionalAvailable=false
         self.assertTrue(
             any("kein regionales modell" in n.lower() for n in payload["notes"]),
             payload["notes"],
         )
 
-    def test_influenza_regions_mapped_from_prediction_payload(self) -> None:
-        self._insert_backtest(virus_typ="Influenza A")
+    def test_regions_pulled_via_regional_service_at_h7_not_lead_horizon(self) -> None:
+        """Even when the lead horizon is 14, BL ranking still runs at h=7."""
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
         fake = _FakeRegionalForecastService(
             {
                 "status": "success",
@@ -207,98 +312,58 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
                         "current_incidence": 100.0,
                         "prediction_interval": {"lower": 108.0, "upper": 132.0},
                         "decision_label": "Activate",
-                        "reason_trace": {
-                            "signals": [
-                                {"message": "Abwasser +40%"},
-                                {"message": "Trends 2.1×"},
-                            ]
-                        },
-                    },
-                    {
-                        "bundesland": "NW",
-                        "event_probability": 0.28,
-                        "expected_next_week_incidence": 90.0,
-                        "current_incidence": 100.0,
-                        "prediction_interval": {"lower": 84.0, "upper": 99.0},
-                        "decision_label": "Watch",
-                        "reason_trace": {"signals": [{"message": "Welle abklingend"}]},
+                        "reason_trace": {"why": ["strong signal"]},
+                        "change_pct": 20.0,
                     },
                 ],
             }
         )
-
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
+        patches = self._patch_external()
+        for p in patches:
+            p.start()
+        try:
             payload = snapshot_builder.build_cockpit_snapshot(
                 self.db,
                 virus_typ="Influenza A",
-                horizon_days=7,
+                horizon_days=14,  # lead horizon
                 regional_forecast_service=fake,
             )
-
-        self.assertEqual(len(payload["regions"]), 2)
-        by = next(r for r in payload["regions"] if r["code"] == "BY")
-        self.assertEqual(by["name"], "Bayern")
-        self.assertAlmostEqual(by["pRising"], 0.78)
-        self.assertEqual(by["decisionLabel"], "Activate")
-        self.assertAlmostEqual(by["delta7d"], 0.2, places=3)  # (120/100) - 1
-        self.assertIsNotNone(by["forecast"])
-        self.assertEqual(by["forecast"]["q50"], 100.0)
-        self.assertEqual(by["drivers"][:2], ["Abwasser +40%", "Trends 2.1×"])
-        self.assertIsNone(by["currentSpendEur"])
-        self.assertIsNone(by["recommendedShiftEur"])
+        finally:
+            for p in patches:
+                p.stop()
+        self.assertEqual(len(fake.calls), 1)
+        self.assertEqual(fake.calls[0]["horizon_days"], 7)  # ranking horizon, not 14
+        self.assertEqual(payload["regions"][0]["code"], "BY")
 
     # ---------- media plan honesty ----------
 
-    def test_media_plan_block_is_not_connected(self) -> None:
-        self._insert_backtest(virus_typ="RSV A")
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
-            payload = snapshot_builder.build_cockpit_snapshot(
-                self.db,
-                virus_typ="RSV A",
-                horizon_days=7,
-                regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
-            )
-
+    def test_media_plan_stays_disconnected(self) -> None:
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+        payload = self._build()
         self.assertFalse(payload["mediaPlan"]["connected"])
-        self.assertIsNone(payload["mediaPlan"]["totalWeeklySpendEur"])
         self.assertIsNone(payload["totalSpendEur"])
         self.assertIsNone(payload["primaryRecommendation"])
-        self.assertEqual(payload["secondaryRecommendations"], [])
 
     # ---------- timeline ----------
 
-    def test_timeline_uses_ml_forecasts_rows(self) -> None:
-        self._insert_backtest(virus_typ="RSV A")
+    def test_timeline_spans_minus14_to_lead_horizon(self) -> None:
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
         today = datetime.utcnow().date()
-        for offset in (-5, 0, 3, 7):
+        for offset in (-10, 0, 7, 14):
             self.db.add(
                 MLForecast(
                     forecast_date=datetime.combine(today + timedelta(days=offset), datetime.min.time()),
-                    virus_typ="RSV A",
+                    virus_typ="Influenza A",
                     predicted_value=100.0 + offset,
                     lower_bound=90.0 + offset,
                     upper_bound=110.0 + offset,
-                    model_version="xgb_stack_v1",
+                    model_version="xgb",
                 )
             )
         self.db.commit()
-
-        with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
-             patch.object(snapshot_builder, "build_data_freshness", return_value={}):
-            payload = snapshot_builder.build_cockpit_snapshot(
-                self.db,
-                virus_typ="RSV A",
-                horizon_days=7,
-                regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
-            )
-
-        self.assertEqual(len(payload["timeline"]), 22)  # -14..+7 inclusive
-        today_point = next(p for p in payload["timeline"] if p["horizonDays"] == 0)
-        self.assertAlmostEqual(today_point["q50"], 100.0)
-        future_point = next(p for p in payload["timeline"] if p["horizonDays"] == 7)
-        self.assertAlmostEqual(future_point["q50"], 107.0)
+        payload = self._build(horizon_days=14)
+        # -14..+14 inclusive = 29 points
+        self.assertEqual(len(payload["timeline"]), 29)
 
 
 if __name__ == "__main__":

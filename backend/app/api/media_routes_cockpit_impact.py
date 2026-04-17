@@ -26,12 +26,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _SUPPORTED_VIRUSES = {"RSV A", "Influenza A", "Influenza B", "SARS-CoV-2"}
+_SUPPORTED_HORIZONS = {7, 14, 21}
+_SUPPORTED_LEAD_TARGETS = {"ATEMWEGSINDEX", "RKI_ARE", "SURVSTAT"}
 
 
 @router.get("/cockpit/impact", dependencies=[Depends(require_cockpit_auth)])
 async def get_cockpit_impact(
     virus_typ: str = Query("Influenza A"),
-    horizon_days: int = Query(7),
+    horizon_days: int = Query(14),
+    lead_target_source: str = Query("ATEMWEGSINDEX", alias="lead_target"),
     client: str = Query("GELO"),
     brand: str | None = Query(default=None),
     weeks_back: int = Query(12, ge=1, le=52),
@@ -46,10 +49,16 @@ async def get_cockpit_impact(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported virus_typ={virus_typ!r}.",
         )
-    if horizon_days != 7:
+    if horizon_days not in _SUPPORTED_HORIZONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only horizon_days=7 is an active champion scope.",
+            detail=f"Unsupported horizon_days={horizon_days}; expected one of {sorted(_SUPPORTED_HORIZONS)}.",
+        )
+    target_key = (lead_target_source or "").strip().upper()
+    if target_key not in _SUPPORTED_LEAD_TARGETS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported lead_target={target_key!r}; expected one of {sorted(_SUPPORTED_LEAD_TARGETS)}.",
         )
     snapshot: dict[str, Any] | None = None
     if include_snapshot:
@@ -60,6 +69,7 @@ async def get_cockpit_impact(
                 horizon_days=horizon_days,
                 client=client,
                 brand=brand,
+                lead_target_source=target_key,
             )
         except Exception:  # pragma: no cover
             logger.exception("snapshot build failed inside impact endpoint")

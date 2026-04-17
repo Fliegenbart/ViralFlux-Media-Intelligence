@@ -100,16 +100,20 @@ const ModelStatusBanner: React.FC<{ status: import('./types').ModelStatus; notes
 }) => {
   const ranking = status.ranking;
   const lead = status.lead;
+  const hasNotes = notes.length > 0 || Boolean(status.note);
   return (
-    <div className="peix-model-status" role="status">
-      <div className="peix-model-status__header">
+    <details className="peix-model-status" role="status">
+      <summary className="peix-model-status__header">
         <span className={readinessBadgeClass(status.forecastReadiness)}>
           {readinessLabel(status.forecastReadiness)}
         </span>
         <span className="peix-kicker">
           {status.virusTyp} · Lead-Story gegen {lead?.targetLabel ?? '—'} · Kalibrierung: {calibrationLabel(status.calibrationMode)}
         </span>
-      </div>
+        <span className="peix-model-status__chevron" aria-hidden>
+          Details
+        </span>
+      </summary>
 
       <div className="peix-model-status__grid">
         <div className="peix-model-status__col">
@@ -155,7 +159,7 @@ const ModelStatusBanner: React.FC<{ status: import('./types').ModelStatus; notes
         </div>
       </div>
 
-      {(notes.length > 0 || status.note) && (
+      {hasNotes && (
         <ul className="peix-model-status__list">
           {status.note && <li>{status.note}</li>}
           {notes.map((note, idx) => (
@@ -163,7 +167,7 @@ const ModelStatusBanner: React.FC<{ status: import('./types').ModelStatus; notes
           ))}
         </ul>
       )}
-    </div>
+    </details>
   );
 };
 

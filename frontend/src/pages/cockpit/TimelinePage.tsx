@@ -110,9 +110,10 @@ export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
       className="peix-gal-wrap"
     >
       <GalleryHero
@@ -219,17 +220,7 @@ const CalibrationPanel: React.FC<{
     <div className="peix-gal-section__kicker" style={{ fontSize: 10.5 }}>
       Kalibrierungs-Status
     </div>
-    <h3
-      style={{
-        fontFamily: 'var(--peix-font-display)',
-        fontWeight: 500,
-        fontSize: 22,
-        lineHeight: 1.15,
-        letterSpacing: '-0.015em',
-        color: 'var(--peix-ink)',
-        margin: '12px 0 20px',
-      }}
-    >
+    <h3 className="peix-gal-h3">
       {calibrated
         ? 'Abdeckung liegt auf Ziel.'
         : 'Signalwerte sind ein Ranking-Score — keine %-Wahrscheinlichkeit.'}
@@ -240,17 +231,7 @@ const CalibrationPanel: React.FC<{
       <CoverageBar label="Band 95 %" actual={coverage95} target={95} />
     </div>
 
-    <p
-      style={{
-        fontFamily: 'var(--peix-font-display)',
-        fontStyle: 'italic',
-        fontSize: 14.5,
-        lineHeight: 1.55,
-        color: 'var(--peix-ink-soft)',
-        margin: 0,
-        maxWidth: '50ch',
-      }}
-    >
+    <p className="peix-gal-note">
       {calibrated ? (
         <>
           Ziel: 80 % der tatsächlichen Werte liegen im Q10–Q90-Band, 95 % im weiteren Band.
@@ -389,18 +370,8 @@ const LagPanel: React.FC<{
       <div className="peix-gal-section__kicker" style={{ fontSize: 10.5 }}>
         Lag-Ehrlichkeit
       </div>
-      <h3
-        style={{
-          fontFamily: 'var(--peix-font-display)',
-          fontWeight: 500,
-          fontSize: 22,
-          lineHeight: 1.15,
-          letterSpacing: '-0.015em',
-          color: 'var(--peix-ink)',
-          margin: '12px 0 22px',
-        }}
-      >
-        Vorlauf gegen <em style={{ color: 'var(--peix-warm-peak, #b94a2e)' }}>{leadTargetLabel}</em>
+      <h3 className="peix-gal-h3">
+        Vorlauf gegen <em>{leadTargetLabel}</em>
       </h3>
 
       <div
@@ -517,17 +488,7 @@ const LagPanel: React.FC<{
         )}
       </div>
 
-      <p
-        style={{
-          fontFamily: 'var(--peix-font-display)',
-          fontStyle: 'italic',
-          fontSize: 14.5,
-          lineHeight: 1.55,
-          color: 'var(--peix-ink-soft)',
-          margin: 0,
-          maxWidth: '50ch',
-        }}
-      >
+      <p className="peix-gal-note">
         Typische Verzüge zwischen realer Infektion und verfügbaren Signalen. Der Forecast
         bleibt dem <em>RKI-Meldewesen</em> um circa 7–10 Tage voraus —
         {bestLag !== null && bestLag >= 0

@@ -59,16 +59,59 @@
   border: 1px solid var(--peix-line, #e2dfd8);
   background: var(--peix-card-dim, #f6f4ee);
   border-radius: 12px;
-  padding: 14px 18px;
+  padding: 10px 18px;
   margin-bottom: 22px;
   font-family: var(--peix-font-sans, sans-serif);
+}
+
+.peix-model-status[open] {
+  padding: 14px 18px;
 }
 
 .peix-model-status__header {
   display: flex;
   gap: 12px;
   align-items: center;
+  cursor: pointer;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  user-select: none;
+}
+
+.peix-model-status__header::-webkit-details-marker {
+  display: none;
+}
+
+.peix-model-status[open] .peix-model-status__header {
   margin-bottom: 8px;
+  border-bottom: 1px solid var(--peix-line, #e2dfd8);
+  padding-bottom: 10px;
+}
+
+.peix-model-status__chevron {
+  margin-left: auto;
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--peix-ink-mute, #6b7280);
+  transition: color 160ms ease;
+}
+
+.peix-model-status[open] .peix-model-status__chevron {
+  color: var(--peix-ink, #0b0d10);
+}
+
+.peix-model-status__chevron::after {
+  content: ' \2193';
+  display: inline-block;
+  margin-left: 2px;
+  transition: transform 200ms ease;
+}
+
+.peix-model-status[open] .peix-model-status__chevron::after {
+  transform: rotate(180deg);
 }
 
 .peix-model-status__list {

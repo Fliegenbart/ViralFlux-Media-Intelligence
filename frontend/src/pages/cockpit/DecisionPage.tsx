@@ -76,6 +76,15 @@ export const DecisionPage: React.FC<Props> = ({ snapshot }) => {
         warum diese Empfehlung →
       </button>
     </>
+  ) : !mediaConnected ? (
+    <>
+      <button type="button" className="peix-gal-btn">
+        Media-Plan verbinden
+      </button>
+      <button type="button" className="peix-gal-btn peix-gal-btn--ghost">
+        was das Cockpit braucht →
+      </button>
+    </>
   ) : null;
 
   const heroVisual = rec ? (
@@ -149,9 +158,10 @@ export const DecisionPage: React.FC<Props> = ({ snapshot }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
       className="peix-gal-wrap"
     >
       <GalleryHero

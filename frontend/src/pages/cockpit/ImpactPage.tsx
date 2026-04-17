@@ -90,9 +90,10 @@ export const ImpactPage: React.FC<Props> = ({ snapshot }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
       className="peix-gal-wrap"
     >
       <GalleryHero
@@ -224,16 +225,7 @@ export const ImpactPage: React.FC<Props> = ({ snapshot }) => {
                   }}
                 >
                   {data.notes.map((n, i) => (
-                    <li
-                      key={i}
-                      style={{
-                        fontFamily: 'var(--peix-font-display)',
-                        fontStyle: 'italic',
-                        fontSize: 14.5,
-                        lineHeight: 1.55,
-                        color: 'var(--peix-ink-soft)',
-                      }}
-                    >
+                    <li key={i} className="peix-gal-note">
                       {n}
                     </li>
                   ))}
@@ -417,10 +409,7 @@ const OutcomePipelineBody: React.FC<{ pipeline: ImpactOutcomePipeline }> = ({
 }) => (
   <>
     <div className="peix-kicker">outcome-pipeline</div>
-    <h3
-      className="peix-headline"
-      style={{ marginTop: 6, color: 'var(--gal-ink, #efe8dc)' }}
-    >
+    <h3 className="peix-gal-h3 peix-gal-h3--dark" style={{ marginTop: 6 }}>
       {pipeline.connected
         ? 'Feedback-Loop läuft — das Modell lernt mit jedem Datensatz.'
         : 'Pipeline steht, Daten fehlen. Hier docken die Verkaufsdaten an.'}

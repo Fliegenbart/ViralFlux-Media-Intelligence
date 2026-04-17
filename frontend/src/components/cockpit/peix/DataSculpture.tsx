@@ -547,7 +547,7 @@ export const DataSculpture: React.FC<Props> = ({ regions, headline, dek }) => {
           <span className="peix-sculpture__caption-tick">steigend</span>
         </span>
         <span className="peix-sculpture__caption-meta">
-          16 Bundesländer · Höhe ∝ Δ7d · keramische Darstellung
+          16 Bundesländer · Höhe ∝ Δ über 7&ndash;14&nbsp;Tage
         </span>
       </figcaption>
     </section>

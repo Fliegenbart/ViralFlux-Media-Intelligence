@@ -22,7 +22,7 @@
   --gal-bg-soft: #1c1814;
   --gal-ink: #efe8dc;
   --gal-ink-mute: rgba(239, 232, 220, 0.62);
-  --gal-ink-faint: rgba(239, 232, 220, 0.36);
+  --gal-ink-faint: rgba(239, 232, 220, 0.54);
   --gal-warm: #d68a5a;
   --gal-warm-deep: #b85c3a;
   --gal-warm-peak: #b94a2e;
@@ -440,6 +440,44 @@
   color: var(--peix-ink-soft);
   margin: 6px 0 0;
   max-width: 60ch;
+}
+
+/* Panel-level H3 — used by CalibrationPanel, LagPanel, OutcomePipelineBody.
+   Replaces inline fontFamily/fontSize overrides with a single token. */
+.peix-gal-h3 {
+  font-family: var(--peix-font-display);
+  font-weight: 500;
+  font-size: clamp(20px, 1.9vw, 24px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--peix-ink);
+  margin: 12px 0 20px;
+}
+.peix-gal-h3 em {
+  font-style: italic;
+  color: var(--peix-warm-peak, #b94a2e);
+  font-weight: 500;
+}
+.peix-gal-h3--dark {
+  color: var(--gal-ink);
+}
+.peix-gal-h3--dark em {
+  color: var(--gal-warm);
+}
+
+/* Paragraph below a panel H3 — italic display, consistent across panels. */
+.peix-gal-note {
+  font-family: var(--peix-font-display);
+  font-style: italic;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--peix-ink-soft);
+  margin: 0;
+  max-width: 50ch;
+}
+.peix-gal-note em {
+  color: var(--peix-warm-peak, #b94a2e);
+  font-style: italic;
 }
 
 /* ================================================================

@@ -225,7 +225,7 @@ export interface CockpitSnapshot {
   regions: RegionForecast[];
   timeline: TimelinePoint[];
   sources: SourceStatus[];
-  topDrivers: { label: string; value: string }[];
+  topDrivers: { label: string; value: string; subtitle?: string }[];
   /** Always populated — UI uses this for WATCH banners, calibration warnings, etc. */
   modelStatus: ModelStatus;
   /** Always populated — UI uses this to decide whether to show EUR values or "—". */

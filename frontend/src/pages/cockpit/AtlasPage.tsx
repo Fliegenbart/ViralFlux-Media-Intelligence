@@ -38,29 +38,46 @@ export const AtlasPage: React.FC<Props> = ({ snapshot }) => {
 
       <section className="peix-bento" style={{ marginTop: 28 }}>
         <div className="peix-card peix-col-8">
-          <div className="peix-kicker">top-treiber laut modell</div>
+          <div className="peix-kicker">signal-quellen hinter der skulptur</div>
           <h3 className="peix-headline" style={{ marginTop: 4, marginBottom: 12 }}>
             {snapshot.topDrivers.length > 0
-              ? 'Signale mit der höchsten Gewichtung diese Woche'
-              : 'Aktuell keine dominierenden Treiber vom Modell zurückgemeldet'}
+              ? 'Woher das Modell die nächsten Wochen liest'
+              : 'Keine Signalquellen aktuell verfügbar'}
           </h3>
           {snapshot.topDrivers.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
               {snapshot.topDrivers.slice(0, 3).map((d, i) => (
                 <div key={`${d.label}-${i}`}>
-                  <div className="peix-eyebrow">{`${i + 1} · ${d.label}`}</div>
-                  <p className="peix-body" style={{ marginTop: 6 }}>
-                    {d.value || 'Treiber aus Modell-reason_trace — aktuell ohne numerische Ausprägung.'}
+                  <div className="peix-eyebrow">{`${String(i + 1).padStart(2, '0')} · ${d.label}`}</div>
+                  <p
+                    className="peix-body"
+                    style={{
+                      marginTop: 6,
+                      fontFamily: 'var(--peix-font-display, Georgia, serif)',
+                      fontStyle: 'italic',
+                      fontSize: 17,
+                      lineHeight: 1.3,
+                      color: 'var(--peix-ink, #17171a)',
+                    }}
+                  >
+                    {d.value || '—'}
                   </p>
+                  {d.subtitle && (
+                    <div
+                      className="peix-eyebrow"
+                      style={{ marginTop: 4, opacity: 0.7, fontSize: 10.5 }}
+                    >
+                      {d.subtitle}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           ) : (
             <p className="peix-body" style={{ marginTop: 6, color: 'var(--peix-ink-soft)' }}>
-              Das Modell liefert in diesem Durchlauf keine Top-Treiber im
-              reason_trace. Das passiert, wenn das Event-Signal homogen oder
-              schwach ist, oder wenn die Kalibrierung übersprungen wurde
-              (siehe Modell-Status).
+              Keine der drei zentralen Signalquellen (Abwasser, Notaufnahme, Suchsignale)
+              liefert aktuell verwertbare Daten — im Regelbetrieb ein seltenes Ereignis,
+              vermutlich ein Ingest-Ausfall. Siehe Quellen-Status unten.
             </p>
           )}
         </div>

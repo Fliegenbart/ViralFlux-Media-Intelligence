@@ -392,6 +392,84 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
+# Which three data sources we surface as the "top drivers" of the atlas —
+# selected for narrative alignment with the lead-time pitch ("Abwasser /
+# Notaufnahme / Suchsignale laufen dem RKI-Meldewesen voraus"). Ordered by
+# how much they carry the story, not alphabetically.
+_ATLAS_DRIVER_SOURCES: tuple[tuple[str, str, str], ...] = (
+    (
+        "AMELAG Abwasser",
+        "Abwasser-Viruslast",
+        "AMELAG · wöchentlich · strukturell voraus",
+    ),
+    (
+        "RKI/AKTIN Notaufnahme",
+        "Notaufnahme-Aktivität",
+        "AKTIN · täglich · ARI 7-Tage-MA",
+    ),
+    (
+        "Google Trends",
+        "Suchsignale",
+        "Google · täglich · Verhaltens-Proxy",
+    ),
+)
+
+
+def _format_driver_freshness(latency_days: Any, health: str) -> str:
+    """Turn a source's latencyDays + health into a human-readable chip."""
+    try:
+        d = int(latency_days) if latency_days is not None else None
+    except (TypeError, ValueError):
+        d = None
+    if d is None:
+        return "keine Daten"
+    if d <= 0:
+        return "tagesaktuell"
+    if d == 1:
+        return "1 Tag alt"
+    tag = f"{d} Tage alt"
+    if health == "stale":
+        tag = f"{tag} · veraltet"
+    elif health == "delayed":
+        tag = f"{tag} · verzögert"
+    return tag
+
+
+def _top_drivers_from_sources(
+    sources: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    """Build the 3-tile Atlas driver panel from the real source-freshness map.
+
+    Replaces the previous implementation that surfaced ``reason_trace.why``
+    strings verbatim — those were English model-internal debug messages
+    ("Event probability 0.01 stays below the rule set ...") and landed as
+    tiles in the UI, which is both off-brand and unhelpful for a media
+    manager.
+
+    Now we show three canonical truth sources with their current freshness.
+    If a source is missing from the sources list (e.g. never ingested), we
+    skip it rather than render a placeholder.
+    """
+    by_name: dict[str, dict[str, Any]] = {
+        str(s.get("name") or ""): s for s in sources
+    }
+    out: list[dict[str, str]] = []
+    for canonical_name, label, subtitle in _ATLAS_DRIVER_SOURCES:
+        item = by_name.get(canonical_name)
+        if not item:
+            continue
+        out.append(
+            {
+                "label": label,
+                "value": _format_driver_freshness(
+                    item.get("latencyDays"), str(item.get("health") or "")
+                ),
+                "subtitle": subtitle,
+            }
+        )
+    return out
+
+
 def _build_sources(db: Session) -> list[dict[str, Any]]:
     data_freshness = build_data_freshness(
         db, normalize_freshness_timestamp=_normalize_freshness_timestamp
@@ -833,20 +911,7 @@ def build_cockpit_snapshot(
     average_confidence = round(sum(p_values) / len(p_values), 4) if p_values else None
 
     sources = _build_sources(db)
-
-    top_drivers: list[dict[str, str]] = []
-    # Pull top driver labels from the first few regions' reason_trace,
-    # de-duplicated.
-    seen = set()
-    for region in regions:
-        for driver in region.get("drivers") or []:
-            if driver not in seen:
-                seen.add(driver)
-                top_drivers.append({"label": driver, "value": ""})
-            if len(top_drivers) >= 4:
-                break
-        if len(top_drivers) >= 4:
-            break
+    top_drivers = _top_drivers_from_sources(sources)
 
     return {
         "client": client,

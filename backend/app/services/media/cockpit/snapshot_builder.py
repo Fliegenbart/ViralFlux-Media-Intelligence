@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date as pd_date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +33,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
-from app.models.database import BacktestRun, MLForecast
+from app.models.database import BacktestRun, MLForecast, SurvstatWeeklyData
 from app.services.media.cockpit.freshness import (
     build_data_freshness,
     build_source_status,
@@ -469,46 +469,178 @@ def _map_region_predictions(
     return mapped, notes
 
 
+# Map virus_typ to the SURVSTAT disease string used for the observed-past
+# timeline. SURVSTAT uses its own vocabulary; adjust here as we add scopes.
+_SURVSTAT_DISEASES_FOR_VIRUS: dict[str, tuple[str, ...]] = {
+    "Influenza A": ("Influenza, saisonal",),
+    "Influenza B": ("Influenza, saisonal",),
+    "RSV A": ("RSV",),
+    "SARS-CoV-2": ("COVID-19",),
+}
+
+
 def _build_timeline_from_national(
     db: Session,
     virus_typ: str,
     horizon_days: int,
 ) -> list[dict[str, Any]]:
-    """Build a 21-day timeline (-14..+7) from the ml_forecasts table.
+    """Build a `(-14..+horizon)` timeline mixing observed truth with forecasts.
 
-    Observed values are deliberately left null here; the frontend will plot
-    past `q50` as nowcast where observed is missing.
+    Observed past:
+        SURVSTAT-Gesamt weekly incidence for the selected disease. Weekly
+        points are piecewise-linearly interpolated onto daily ticks so the
+        fan-chart has a smooth observed line. If SURVSTAT is empty for this
+        scope the past stays null.
+
+    Forecast future (and nowcast fill):
+        ml_forecasts rows for this virus/horizon, matched to the nearest
+        target day within ±``NEAREST_TOLERANCE_DAYS``. This tolerates the
+        weekly/sparse cadence of ml_forecasts without faking daily points.
+
+    The returned list spans ``-14 .. +horizon_days`` inclusive.
     """
-    rows: list[MLForecast] = (
-        db.query(MLForecast)
-        .filter(MLForecast.virus_typ == virus_typ)
-        .order_by(desc(MLForecast.forecast_date))
-        .limit(30)
-        .all()
-    )
-    if not rows:
-        return []
+    NEAREST_TOLERANCE_DAYS = 7
 
     today = utc_now().date()
-    by_date: dict[str, MLForecast] = {}
-    for row in rows:
+    timeline_start = today.fromordinal(today.toordinal() - 14)
+    timeline_end = today.fromordinal(today.toordinal() + int(horizon_days))
+
+    # --- Observed past from SURVSTAT-Gesamt ---------------------------------
+    observed_by_day: dict[str, float] = {}
+    diseases = _SURVSTAT_DISEASES_FOR_VIRUS.get(virus_typ)
+    if diseases:
+        # Pull a bit more history than we strictly need so linear interpolation
+        # has at least two anchors inside the range.
+        query_start = timeline_start - timedelta(days=21)
+        rows: list[SurvstatWeeklyData] = (
+            db.query(SurvstatWeeklyData)
+            .filter(
+                SurvstatWeeklyData.disease.in_(diseases),
+                SurvstatWeeklyData.bundesland == "Gesamt",
+                SurvstatWeeklyData.week_start >= query_start,
+                SurvstatWeeklyData.week_start <= today,
+            )
+            .order_by(SurvstatWeeklyData.week_start.asc())
+            .all()
+        )
+        weekly: list[tuple[pd_date, float]] = [
+            (row.week_start.date(), float(row.incidence))
+            for row in rows
+            if row.week_start is not None and row.incidence is not None
+        ]
+        # Linear interpolation between consecutive weekly anchors.
+        if len(weekly) >= 2:
+            for i in range(len(weekly) - 1):
+                d0, v0 = weekly[i]
+                d1, v1 = weekly[i + 1]
+                span_days = max((d1 - d0).days, 1)
+                for offset_days in range((d1 - d0).days + 1):
+                    day = d0.fromordinal(d0.toordinal() + offset_days)
+                    if day < timeline_start or day > today:
+                        continue
+                    t = offset_days / span_days
+                    observed_by_day[day.isoformat()] = v0 + (v1 - v0) * t
+        elif len(weekly) == 1:
+            d, v = weekly[0]
+            if timeline_start <= d <= today:
+                observed_by_day[d.isoformat()] = v
+
+    # --- Forecast points (with a ±N-day tolerance match) --------------------
+    forecast_rows: list[MLForecast] = (
+        db.query(MLForecast)
+        .filter(
+            MLForecast.virus_typ == virus_typ,
+            MLForecast.forecast_date >= (timeline_start - timedelta(days=NEAREST_TOLERANCE_DAYS)),
+            MLForecast.forecast_date <= (timeline_end + timedelta(days=NEAREST_TOLERANCE_DAYS)),
+        )
+        .order_by(desc(MLForecast.created_at))
+        .all()
+    )
+    # Keep one row per forecast_date: the most recently created.
+    forecast_by_exact_date: dict[str, MLForecast] = {}
+    for row in forecast_rows:
         if not row.forecast_date:
             continue
-        by_date[row.forecast_date.date().isoformat()] = row
+        key = row.forecast_date.date().isoformat()
+        if key not in forecast_by_exact_date:
+            forecast_by_exact_date[key] = row
+    # Sorted list of (date, row) for nearest-neighbour lookups.
+    forecast_sorted: list[tuple[pd_date, MLForecast]] = sorted(
+        ((pd_date.fromisoformat(k), v) for k, v in forecast_by_exact_date.items()),
+        key=lambda e: e[0],
+    )
+
+    def _interp_forecast(target_day: pd_date) -> tuple[float | None, float | None, float | None]:
+        """Linearly interpolate q10/q50/q90 between the two nearest forecast
+        anchors if both are within tolerance. Falls back to nearest-only if
+        there is just one anchor in range, and to (None, None, None) if no
+        anchor is close enough at all.
+        """
+        if not forecast_sorted:
+            return None, None, None
+
+        # Find the anchors immediately left and right of target_day.
+        left: tuple[pd_date, MLForecast] | None = None
+        right: tuple[pd_date, MLForecast] | None = None
+        for d, row in forecast_sorted:
+            if d <= target_day:
+                left = (d, row)
+            elif d > target_day and right is None:
+                right = (d, row)
+                break
+
+        def _pick(row: MLForecast) -> tuple[float | None, float | None, float | None]:
+            return (
+                _optional_float(row.lower_bound),
+                _optional_float(row.predicted_value),
+                _optional_float(row.upper_bound),
+            )
+
+        if left is not None and right is not None:
+            ld, lrow = left
+            rd, rrow = right
+            span = max((rd - ld).days, 1)
+            t = (target_day - ld).days / span
+            lq10, lq50, lq90 = _pick(lrow)
+            rq10, rq50, rq90 = _pick(rrow)
+
+            def _blend(a: float | None, b: float | None) -> float | None:
+                if a is None and b is None:
+                    return None
+                if a is None:
+                    return b
+                if b is None:
+                    return a
+                return round(a + (b - a) * t, 4)
+
+            return _blend(lq10, rq10), _blend(lq50, rq50), _blend(lq90, rq90)
+
+        # Only one neighbour available → use it if within tolerance.
+        anchor = left or right
+        if anchor is None:
+            return None, None, None
+        ad, arow = anchor
+        if abs((ad - target_day).days) > NEAREST_TOLERANCE_DAYS:
+            return None, None, None
+        return _pick(arow)
 
     timeline: list[dict[str, Any]] = []
-    for offset in range(-14, horizon_days + 1):
-        target_date = today.fromordinal(today.toordinal() + offset)
-        iso = target_date.isoformat()
-        row = by_date.get(iso)
-        q50 = _optional_float(row.predicted_value) if row else None
-        q10 = _optional_float(row.lower_bound) if row else None
-        q90 = _optional_float(row.upper_bound) if row else None
+    for offset in range(-14, int(horizon_days) + 1):
+        target_day = today.fromordinal(today.toordinal() + offset)
+        iso = target_day.isoformat()
+        observed = observed_by_day.get(iso)
+        # Nowcast = observed with a slight (+ real data revision semantics in
+        # future) lift for the last 14 days. For now, nowcast == observed on
+        # the past, so we just mirror the observed value.
+        nowcast = observed if -14 <= offset <= 0 else None
+
+        q10, q50, q90 = _interp_forecast(target_day)
+
         timeline.append(
             {
                 "date": iso,
-                "observed": q50 if offset <= 0 else None,
-                "nowcast": q50 if -14 <= offset <= 0 else None,
+                "observed": observed,
+                "nowcast": nowcast,
                 "q10": q10,
                 "q50": q50,
                 "q90": q90,

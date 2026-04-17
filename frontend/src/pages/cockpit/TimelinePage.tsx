@@ -98,7 +98,8 @@ export const TimelinePage: React.FC<Props> = ({ snapshot }) => {
             <div className="peix-timeline__chart-meta">
               <span className="peix-timeline__chart-meta-label">Diagramm 01</span>
               <span className="peix-timeline__chart-meta-title">
-                Q50 · Q10–Q90 Fan · Beobachtung vs. Prognose
+                Oben · Q50 mit Q10–Q90-Fan + SURVSTAT-Meldung.&nbsp;
+                <em>Unten · Notaufnahme-ARI 7d-MA — läuft dem Meldewesen 7–10 Tage voraus.</em>
               </span>
             </div>
             <ConfidenceCloud

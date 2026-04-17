@@ -357,6 +357,60 @@
   fill: var(--tl-ink-faint);
 }
 
+/* --- Secondary sparkline: Notaufnahme ARI ----------------------------- */
+.peix-fanchart__divider {
+  stroke: var(--tl-rule);
+  stroke-width: 1;
+}
+
+.peix-fanchart__ed-kicker {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  fill: var(--tl-cool);
+}
+
+.peix-fanchart__ed-meta {
+  font-family: var(--peix-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  fill: var(--tl-ink-faint);
+  font-feature-settings: 'tnum';
+}
+
+.peix-fanchart__ed-label {
+  font-family: var(--peix-font-display, Georgia, serif);
+  font-style: italic;
+  font-size: 12.5px;
+  fill: var(--tl-ink-faint);
+}
+
+.peix-fanchart__ed-baseline {
+  stroke: var(--tl-ink-ghost);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.peix-fanchart__ed-area {
+  fill: rgba(86, 112, 138, 0.14);
+  stroke: none;
+}
+
+.peix-fanchart__ed-line {
+  stroke: var(--tl-cool);
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.peix-fanchart__ed-cap {
+  fill: var(--tl-cool);
+  stroke: var(--tl-paper);
+  stroke-width: 1.4;
+}
+
 .peix-fanchart__caption {
   margin-top: 10px;
   font-family: var(--peix-font-display, Georgia, serif);

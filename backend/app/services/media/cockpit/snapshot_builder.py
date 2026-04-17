@@ -33,7 +33,12 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
-from app.models.database import BacktestRun, MLForecast, SurvstatWeeklyData
+from app.models.database import (
+    BacktestRun,
+    MLForecast,
+    NotaufnahmeSyndromData,
+    SurvstatWeeklyData,
+)
 from app.services.media.cockpit.freshness import (
     build_data_freshness,
     build_source_status,
@@ -624,6 +629,34 @@ def _build_timeline_from_national(
             return None, None, None
         return _pick(arow)
 
+    # --- Secondary truth: Notaufnahme ARI 7-day MA (daily, national) --------
+    # Only meaningful for respiratory-ish viruses; skip for SARS-CoV-2 where
+    # we would use a different syndrome (COVID), and RSV where ARI is noisy.
+    ed_by_day: dict[str, float] = {}
+    if virus_typ in {"Influenza A", "Influenza B"}:
+        ed_rows: list[NotaufnahmeSyndromData] = (
+            db.query(NotaufnahmeSyndromData)
+            .filter(
+                NotaufnahmeSyndromData.syndrome == "ARI",
+                NotaufnahmeSyndromData.ed_type == "all",
+                NotaufnahmeSyndromData.age_group == "00+",
+                NotaufnahmeSyndromData.datum >= timeline_start,
+                NotaufnahmeSyndromData.datum <= today,
+            )
+            .order_by(NotaufnahmeSyndromData.datum.asc())
+            .all()
+        )
+        for row in ed_rows:
+            if row.datum is None:
+                continue
+            key = row.datum.date().isoformat()
+            # Prefer the 7-day moving average for smooth fan-chart display.
+            val = row.relative_cases_7day_ma
+            if val is None:
+                val = row.relative_cases
+            if val is not None:
+                ed_by_day[key] = float(val)
+
     timeline: list[dict[str, Any]] = []
     for offset in range(-14, int(horizon_days) + 1):
         target_day = today.fromordinal(today.toordinal() + offset)
@@ -633,6 +666,7 @@ def _build_timeline_from_national(
         # future) lift for the last 14 days. For now, nowcast == observed on
         # the past, so we just mirror the observed value.
         nowcast = observed if -14 <= offset <= 0 else None
+        ed_value = ed_by_day.get(iso) if offset <= 0 else None
 
         q10, q50, q90 = _interp_forecast(target_day)
 
@@ -641,6 +675,7 @@ def _build_timeline_from_national(
                 "date": iso,
                 "observed": observed,
                 "nowcast": nowcast,
+                "edActivity": ed_value,
                 "q10": q10,
                 "q50": q50,
                 "q90": q90,

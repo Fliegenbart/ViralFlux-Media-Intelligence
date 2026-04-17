@@ -13,6 +13,11 @@ interface Props {
    * (e.g. "+14 Tage" caption under the last tick). Defaults to 7.
    */
   leadHorizonDays?: number;
+  /**
+   * Height reserved for the secondary ED-activity sparkline under the main
+   * fan-chart. Pass 0 to hide. Defaults to 86.
+   */
+  edSparklineHeight?: number;
 }
 
 /**
@@ -31,15 +36,24 @@ export const ConfidenceCloud: React.FC<Props> = ({
   height = 320,
   caption,
   leadHorizonDays = 7,
+  edSparklineHeight = 86,
 }) => {
+  const hasEd = series.some((p) => p.edActivity != null);
+  const sparkH = hasEd ? edSparklineHeight : 0;
+  const sparkGap = hasEd ? 14 : 0;
   const W = 760;
-  const H = height;
+  const H = height + sparkH + sparkGap;
   const padL = 56;
   const padR = 28;
   const padT = 28;
   const padB = 40;
   const innerW = W - padL - padR;
-  const innerH = H - padT - padB;
+  const innerH = height - padT - padB;
+  const sparkTop = height + sparkGap;
+  const sparkBottom = sparkTop + sparkH;
+  const sparkInnerTop = sparkTop + 20;
+  const sparkInnerBottom = sparkBottom - 12;
+  const sparkInnerH = sparkInnerBottom - sparkInnerTop;
 
   const cloudSeries = useMemo(
     () => series.filter((p) => p.q10 !== null && p.q50 !== null && p.q90 !== null),
@@ -315,6 +329,84 @@ export const ConfidenceCloud: React.FC<Props> = ({
         >
           Lead-Horizont {leadHorizonDays} Tage
         </text>
+
+        {/* --- Secondary sparkline: Notaufnahme ARI 7-day MA ------------- */}
+        {hasEd && (() => {
+          const edPoints = series
+            .map((p, i) => ({ i, v: p.edActivity }))
+            .filter((e) => e.v != null) as Array<{ i: number; v: number }>;
+          if (edPoints.length < 2) {
+            return (
+              <text
+                x={padL}
+                y={sparkTop + sparkH / 2}
+                className="peix-fanchart__ed-label"
+              >
+                Notaufnahme · ARI · zu wenige Werte
+              </text>
+            );
+          }
+          const edMin = Math.min(...edPoints.map((e) => e.v));
+          const edMax = Math.max(...edPoints.map((e) => e.v));
+          const edRange = Math.max(edMax - edMin, 0.01);
+          const edYFor = (v: number) =>
+            sparkInnerTop + (1 - (v - edMin) / edRange) * sparkInnerH;
+          const pathD = edPoints
+            .map(
+              (e, i) =>
+                `${i === 0 ? 'M' : 'L'}${xFor(e.i).toFixed(1)},${edYFor(e.v).toFixed(1)}`,
+            )
+            .join(' ');
+          const areaD =
+            `${pathD} ` +
+            `L${xFor(edPoints[edPoints.length - 1].i).toFixed(1)},${sparkInnerBottom} ` +
+            `L${xFor(edPoints[0].i).toFixed(1)},${sparkInnerBottom} Z`;
+          const last = edPoints[edPoints.length - 1];
+          const lastDate = series[last.i]?.date;
+          return (
+            <g className="peix-fanchart__ed">
+              {/* Divider rule between main chart and sparkline */}
+              <line
+                x1={padL}
+                x2={padL + innerW}
+                y1={sparkTop}
+                y2={sparkTop}
+                className="peix-fanchart__divider"
+              />
+              <text x={padL} y={sparkTop + 12} className="peix-fanchart__ed-kicker">
+                Notaufnahme · ARI · 7d-MA
+              </text>
+              <text
+                x={padL + innerW}
+                y={sparkTop + 12}
+                textAnchor="end"
+                className="peix-fanchart__ed-meta"
+              >
+                {lastDate ? formatDateShort(lastDate) : ''} · {last.v.toFixed(2)}
+              </text>
+
+              {/* Baseline = 1.0 (erwarteter Normalwert) */}
+              {edMin < 1.0 && edMax > 1.0 && (
+                <line
+                  x1={padL}
+                  x2={padL + innerW}
+                  y1={edYFor(1.0)}
+                  y2={edYFor(1.0)}
+                  className="peix-fanchart__ed-baseline"
+                />
+              )}
+
+              <path d={areaD} className="peix-fanchart__ed-area" />
+              <path d={pathD} className="peix-fanchart__ed-line" />
+              <circle
+                cx={xFor(last.i)}
+                cy={edYFor(last.v)}
+                r="2.8"
+                className="peix-fanchart__ed-cap"
+              />
+            </g>
+          );
+        })()}
       </svg>
       {caption && <figcaption className="peix-fanchart__caption">{caption}</figcaption>}
     </figure>

@@ -136,6 +136,14 @@ export interface TimelinePoint {
   date: string;
   observed: number | null;
   nowcast: number | null;
+  /**
+   * Secondary truth signal: Notaufnahme (AKTIN) ARI 7-day moving average,
+   * national, all age groups. Null where unavailable or not applicable to
+   * the current virus scope. Lead-time story — this series tracks the
+   * real disease burden 7–10 days ahead of the RKI-meldewesen observed
+   * line.
+   */
+  edActivity: number | null;
   q10: number | null;
   q50: number | null;
   q90: number | null;

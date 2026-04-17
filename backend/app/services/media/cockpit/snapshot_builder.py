@@ -102,6 +102,29 @@ SOURCE_HEALTH_MAP: dict[str, str] = {
     "no_data": "stale",
 }
 
+# Readiness thresholds for _synthesize_readiness.
+#
+# These decide which banner state (GO_RANKING / RANKING_OK / LEAD_ONLY / WATCH)
+# shows up in the cockpit top-bar. Both are **provisional intuitive defaults**
+# chosen while scaffolding the UI on 2026-04-17. They are NOT backed by a
+# ROC/precision-recall calibration against a business-relevant outcome yet.
+#
+# TODO (calibration Q2 2026, see ~/peix-math-deepdive.md finding #3):
+#   * Define the business-relevant success event (e.g. "true top-5 actually
+#     developed the wave in the subsequent window").
+#   * Sweep the precision threshold across observed backtest history and pick
+#     the value where precision_at_top3 crosses the business-value break-even.
+#   * Replace this constant with the calibrated value plus a provenance note.
+#
+# In the meantime, 0.65 was picked because the retained Influenza A model
+# currently reports ~0.78 precision_at_top3, and we wanted the banner to
+# lean "RANKING_OK" by default rather than lock into GO_RANKING based on an
+# uncalibrated signal. This is deliberately conservative, not validated.
+RANKING_PRECISION_GO_THRESHOLD = 0.65
+# best_lag_days >= 0 means the forecast does not lag behind the selected
+# truth target. That's a structural condition — no calibration needed.
+LEAD_LAG_GO_MIN_DAYS = 0
+
 
 def _normalize_freshness_timestamp(
     value: datetime | None,
@@ -250,8 +273,11 @@ def _synthesize_readiness(
     """
     precision = ranking.get("precisionAtTop3")
     lag = lead.get("bestLagDays")
-    ranking_ok = isinstance(precision, (int, float)) and precision >= 0.65
-    lead_ok = isinstance(lag, int) and lag >= 0
+    ranking_ok = (
+        isinstance(precision, (int, float))
+        and precision >= RANKING_PRECISION_GO_THRESHOLD
+    )
+    lead_ok = isinstance(lag, int) and lag >= LEAD_LAG_GO_MIN_DAYS
     if ranking_ok and lead_ok:
         return "GO_RANKING"
     if ranking_ok:
@@ -502,9 +528,19 @@ def _build_timeline_from_national(
         target day within ±``NEAREST_TOLERANCE_DAYS``. This tolerates the
         weekly/sparse cadence of ml_forecasts without faking daily points.
 
+    Interpolation honesty:
+        When two anchors are > ``INTERPOLATION_MAX_SPAN_DAYS`` apart, the
+        interpolated points get ``"interpolated": true`` in the payload so
+        the UI can render them as a dashed line (rather than pretending
+        two independent forecasts are a smooth trajectory). Single-anchor
+        extrapolation is capped at ``EXTRAPOLATION_MAX_DAYS`` to avoid
+        pulling a forecast forward by a full week.
+
     The returned list spans ``-14 .. +horizon_days`` inclusive.
     """
-    NEAREST_TOLERANCE_DAYS = 7
+    NEAREST_TOLERANCE_DAYS = 3
+    INTERPOLATION_MAX_SPAN_DAYS = 3  # above this: still interpolate, but flag as such
+    EXTRAPOLATION_MAX_DAYS = 2       # single-anchor fallback only this close
 
     today = utc_now().date()
     timeline_start = today.fromordinal(today.toordinal() - 14)
@@ -575,14 +611,24 @@ def _build_timeline_from_national(
         key=lambda e: e[0],
     )
 
-    def _interp_forecast(target_day: pd_date) -> tuple[float | None, float | None, float | None]:
-        """Linearly interpolate q10/q50/q90 between the two nearest forecast
-        anchors if both are within tolerance. Falls back to nearest-only if
-        there is just one anchor in range, and to (None, None, None) if no
-        anchor is close enough at all.
+    def _interp_forecast(
+        target_day: pd_date,
+    ) -> tuple[float | None, float | None, float | None, bool]:
+        """Interpolate q10/q50/q90 for ``target_day``.
+
+        Returns a 4-tuple ``(q10, q50, q90, interpolated)``. ``interpolated``
+        is True when the value comes from blending two anchors whose span
+        exceeds ``INTERPOLATION_MAX_SPAN_DAYS``; the frontend uses that flag
+        to render those segments as dashed, so users know the line is
+        bridging two independent forecasts.
+
+        - Two anchors and target between them → linear blend.
+        - One anchor only, within ``EXTRAPOLATION_MAX_DAYS`` → nearest
+          fallback (no extrapolation beyond that).
+        - Otherwise → ``(None, None, None, False)``.
         """
         if not forecast_sorted:
-            return None, None, None
+            return None, None, None, False
 
         # Find the anchors immediately left and right of target_day.
         left: tuple[pd_date, MLForecast] | None = None
@@ -618,16 +664,31 @@ def _build_timeline_from_national(
                     return a
                 return round(a + (b - a) * t, 4)
 
-            return _blend(lq10, rq10), _blend(lq50, rq50), _blend(lq90, rq90)
+            interpolated = (
+                span > INTERPOLATION_MAX_SPAN_DAYS
+                and ld != target_day
+                and rd != target_day
+            )
+            return (
+                _blend(lq10, rq10),
+                _blend(lq50, rq50),
+                _blend(lq90, rq90),
+                interpolated,
+            )
 
-        # Only one neighbour available → use it if within tolerance.
+        # Only one neighbour available → single-anchor fallback with a
+        # hard ceiling. No extrapolation beyond EXTRAPOLATION_MAX_DAYS.
         anchor = left or right
         if anchor is None:
-            return None, None, None
+            return None, None, None, False
         ad, arow = anchor
-        if abs((ad - target_day).days) > NEAREST_TOLERANCE_DAYS:
-            return None, None, None
-        return _pick(arow)
+        if abs((ad - target_day).days) > EXTRAPOLATION_MAX_DAYS:
+            return None, None, None, False
+        q10, q50, q90 = _pick(arow)
+        # A lone-anchor match at the exact target day is not interpolation;
+        # anything else within the extrapolation window is.
+        interpolated = ad != target_day
+        return q10, q50, q90, interpolated
 
     # --- Secondary truth: Notaufnahme ARI 7-day MA (daily, national) --------
     # Only meaningful for respiratory-ish viruses; skip for SARS-CoV-2 where
@@ -668,7 +729,7 @@ def _build_timeline_from_national(
         nowcast = observed if -14 <= offset <= 0 else None
         ed_value = ed_by_day.get(iso) if offset <= 0 else None
 
-        q10, q50, q90 = _interp_forecast(target_day)
+        q10, q50, q90, interpolated = _interp_forecast(target_day)
 
         timeline.append(
             {
@@ -679,6 +740,7 @@ def _build_timeline_from_national(
                 "q10": q10,
                 "q50": q50,
                 "q90": q90,
+                "interpolated": interpolated,
                 "horizonDays": offset,
             }
         )

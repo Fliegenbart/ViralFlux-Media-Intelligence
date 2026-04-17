@@ -147,6 +147,15 @@ export interface TimelinePoint {
   q10: number | null;
   q50: number | null;
   q90: number | null;
+  /**
+   * True when this point's q-values were linearly interpolated between two
+   * forecast anchors whose span exceeds the backend's honesty threshold
+   * (>3 days), OR when they come from a single-anchor nearest-fallback that
+   * is not on the exact target day. The chart renders these segments as
+   * dashed lines so users can see where the fan stops being an actual
+   * forecast and starts being a bridge between two model runs.
+   */
+  interpolated?: boolean;
   horizonDays: number;
 }
 

@@ -289,6 +289,18 @@
   stroke-dasharray: none;
 }
 
+/*
+ * Interpolated (bridged) median segments — rendered when the backend
+ * flagged these points as interpolated between two anchors more than
+ * 3 days apart, or as a single-anchor fallback. Short dashes with a
+ * slightly faded stroke so the eye registers the change in epistemic
+ * confidence without the dashes shouting.
+ */
+.peix-fanchart__median--interpolated {
+  stroke-dasharray: 4 3;
+  opacity: 0.72;
+}
+
 .peix-fanchart__today line {
   stroke: var(--tl-ink);
   stroke-width: 1;

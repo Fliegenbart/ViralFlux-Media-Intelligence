@@ -93,12 +93,15 @@ export const ConfidenceCloud: React.FC<Props> = ({
   const outerCloud = useMemo(() => buildCloudPath(cloudSeries, series, xFor, yFor, 1.0), [cloudSeries, series, xFor, yFor]);
   const innerCloud = useMemo(() => buildCloudPath(cloudSeries, series, xFor, yFor, 0.5), [cloudSeries, series, xFor, yFor]);
 
-  const median = cloudSeries
-    .map((p, i) => {
-      const realI = series.findIndex((x) => x.date === p.date);
-      return `${i === 0 ? 'M' : 'L'}${xFor(realI).toFixed(1)},${yFor(p.q50 as number).toFixed(1)}`;
-    })
-    .join(' ');
+  // Median path, split into solid and dashed segments. Interpolated points
+  // (bridging two independent forecast anchors across > 3 days) are rendered
+  // as a dashed line; actual anchor points as solid. The split preserves
+  // continuity: a dashed segment starts from the previous solid point so
+  // the user sees a clear transition.
+  const { medianSolid, medianDashed } = useMemo(
+    () => buildMedianPaths(cloudSeries, series, xFor, yFor),
+    [cloudSeries, series, xFor, yFor],
+  );
 
   const observed = series
     .filter((p) => p.observed != null)
@@ -218,8 +221,11 @@ export const ConfidenceCloud: React.FC<Props> = ({
         {/* Inner band: tighter, darker */}
         <path d={innerCloud} fill="url(#fc-inner)" stroke="none" />
 
-        {/* Median forecast — hairline */}
-        <path d={median} className="peix-fanchart__median" />
+        {/* Median forecast — hairline. Solid where anchored to a real
+            forecast run, dashed where we had to bridge two independent
+            runs via interpolation (backend flag interpolated=true). */}
+        {medianSolid && <path d={medianSolid} className="peix-fanchart__median" />}
+        {medianDashed && <path d={medianDashed} className="peix-fanchart__median peix-fanchart__median--interpolated" />}
 
         {/* Observed — dark ink line */}
         <path d={observed} className="peix-fanchart__observed" />
@@ -414,6 +420,78 @@ export const ConfidenceCloud: React.FC<Props> = ({
 };
 
 // --------------------------------------------------------------------------
+/**
+ * Split the median line into (solid, dashed) path strings based on the
+ * per-point `interpolated` flag.
+ *
+ * Rules:
+ *   - A point is "anchor" when `interpolated` is falsy.
+ *   - A point is "bridge" when `interpolated` is true.
+ *   - Solid path covers runs of anchor points.
+ *   - Dashed path covers any bridge run, extended on both sides by the
+ *     adjacent anchor point so the two paths visually meet (no gap).
+ */
+function buildMedianPaths(
+  cloudSeries: TimelinePoint[],
+  series: TimelinePoint[],
+  xFor: (i: number) => number,
+  yFor: (v: number) => number,
+): { medianSolid: string; medianDashed: string } {
+  if (cloudSeries.length === 0) return { medianSolid: '', medianDashed: '' };
+
+  type Enriched = { realI: number; p: TimelinePoint; isBridge: boolean };
+  const pts: Enriched[] = cloudSeries
+    .map((p) => ({
+      realI: series.findIndex((x) => x.date === p.date),
+      p,
+      isBridge: Boolean(p.interpolated),
+    }))
+    .filter((e) => e.realI >= 0);
+
+  const solidSegments: Enriched[][] = [];
+  const dashedSegments: Enriched[][] = [];
+
+  let i = 0;
+  while (i < pts.length) {
+    if (!pts[i].isBridge) {
+      // Solid run
+      const seg: Enriched[] = [];
+      while (i < pts.length && !pts[i].isBridge) {
+        seg.push(pts[i]);
+        i++;
+      }
+      solidSegments.push(seg);
+    } else {
+      // Dashed run — attach the trailing solid point (previous) and
+      // leading solid point (next, if any) so segments touch visually.
+      const seg: Enriched[] = [];
+      if (solidSegments.length > 0) {
+        const lastSolid = solidSegments[solidSegments.length - 1];
+        seg.push(lastSolid[lastSolid.length - 1]);
+      }
+      while (i < pts.length && pts[i].isBridge) {
+        seg.push(pts[i]);
+        i++;
+      }
+      if (i < pts.length) {
+        seg.push(pts[i]); // first solid after the bridge
+      }
+      dashedSegments.push(seg);
+    }
+  }
+
+  const toPath = (seg: Enriched[]) =>
+    seg
+      .map((e, idx) => `${idx === 0 ? 'M' : 'L'}${xFor(e.realI).toFixed(1)},${yFor(e.p.q50 as number).toFixed(1)}`)
+      .join(' ');
+
+  return {
+    medianSolid: solidSegments.map(toPath).filter(Boolean).join(' '),
+    medianDashed: dashedSegments.map(toPath).filter(Boolean).join(' '),
+  };
+}
+
+
 function buildCloudPath(
   cloudSeries: TimelinePoint[],
   series: TimelinePoint[],

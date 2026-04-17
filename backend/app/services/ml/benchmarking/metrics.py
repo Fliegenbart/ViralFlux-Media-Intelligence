@@ -54,13 +54,36 @@ def weighted_interval_score(
     y_true: Sequence[float],
     quantile_predictions: dict[float, Sequence[float]],
 ) -> float:
+    """Weighted Interval Score (Bracher et al. 2021).
+
+    For K central intervals plus the median,
+
+        WIS_{α_0:K}(F, y) = (1 / (K + 0.5)) * [
+            0.5 * |y - m|
+            + Σ_{k=1..K} (α_k / 2) * IS_{α_k}(F, y)
+        ]
+
+    where α_k = 2 * lower_quantile_k (so a 90 % central interval has
+    α = 0.2) and IS_α is the individual Interval Score.
+
+    The normalisation denominator is ``K + 0.5`` — one half for the
+    median, and a unit weight per central interval. A previous
+    implementation divided by the sum of the nominal ``α_k / 2`` weights
+    (≈ 0.875 for the canonical grid), which silently inflated every WIS
+    value by ~4× and broke comparability against published benchmarks
+    (CDC Forecast Hub, Bracher). See ~/peix-math-deepdive.md finding #1.
+    Rankings are unaffected because the bias is purely multiplicative;
+    absolute WIS values now match the literature.
+    """
     y_true_arr = np.asarray(y_true, dtype=float)
     if len(y_true_arr) == 0:
         return 0.0
 
     median = np.asarray(quantile_predictions.get(0.5, y_true_arr), dtype=float)
     total_score = 0.5 * np.abs(y_true_arr - median)
-    total_weight = 0.5
+    # K = number of symmetric central intervals that have both quantiles
+    # available in the payload. Missing pairs are skipped (sparse grids).
+    n_intervals = 0
 
     for lower_q, upper_q in ((0.025, 0.975), (0.1, 0.9), (0.25, 0.75)):
         if lower_q not in quantile_predictions or upper_q not in quantile_predictions:
@@ -73,11 +96,11 @@ def weighted_interval_score(
             + (2.0 / max(alpha, 1e-9)) * (lower_arr - y_true_arr) * (y_true_arr < lower_arr)
             + (2.0 / max(alpha, 1e-9)) * (y_true_arr - upper_arr) * (y_true_arr > upper_arr)
         )
-        weight = alpha / 2.0
-        total_score = total_score + weight * interval_score
-        total_weight += weight
+        total_score = total_score + (alpha / 2.0) * interval_score
+        n_intervals += 1
 
-    return float(np.mean(total_score / max(total_weight, 1e-9)))
+    normalisation = float(n_intervals) + 0.5
+    return float(np.mean(total_score / max(normalisation, 1e-9)))
 
 
 def quantile_crps(

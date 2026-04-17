@@ -151,14 +151,16 @@ def _extract_model_status(
     note_parts: list[str] = []
     if calibration_mode in {"heuristic", "skipped"}:
         note_parts.append(
-            "Event-Signal ist heuristisch (sigmoid(z) aus forecast vs. baseline), nicht kalibriert."
+            "Signalwerte sind aktuell nicht kalibriert — als Signalstärke lesen, nicht als Wahrscheinlichkeit."
         )
     if not regional_available:
         note_parts.append(
-            f"Kein regionales Modell für {virus_typ} — nur nationaler Forecast."
+            f"Für {virus_typ} liegt aktuell kein regionales Modell vor — wir zeigen den nationalen Forecast."
         )
     if quality_gate.get("baseline_passed") is False:
-        note_parts.append("Modell schlägt die Persistence-Baseline im aktuellen Backtest nicht.")
+        note_parts.append(
+            "Punktprognose-Metrik liegt aktuell auf Niveau der Persistence-Baseline — das Modell ist für Ranking-Entscheidungen einsetzbar, nicht für Absolut-Werte."
+        )
 
     training_window_end = None
     # BacktestRun doesn't carry training_window_end directly; we try to derive
@@ -167,20 +169,25 @@ def _extract_model_status(
     if date_range.get("end"):
         training_window_end = str(date_range.get("end"))
 
+    # IMPORTANT: the frontend reads these keys as camelCase (virusTyp,
+    # horizonDays, forecastReadiness, ...). Returning snake_case silently
+    # turned every field into `undefined` in the UI, which is how the
+    # 2026-04-17 "H= · Kalibrierung: UNBEKANNT" header bug came to be. Keep
+    # this contract camelCase-consistent with types.ts::ModelStatus.
     return {
-        "virus_typ": virus_typ,
-        "horizon_days": int(horizon_days),
-        "forecast_readiness": forecast_readiness,
-        "overall_passed": bool(quality_gate.get("overall_passed") or False),
-        "baseline_passed": bool(quality_gate.get("baseline_passed") or False),
-        "best_lag_days": _optional_int(timing.get("best_lag_days")),
-        "correlation_at_horizon": _optional_float(timing.get("corr_at_horizon")),
-        "mae_vs_persistence_pct": _optional_float(baseline_cmp.get("mae_vs_persistence_pct")),
-        "calibration_mode": calibration_mode,
-        "interval_coverage_80_pct": _optional_float(coverage.get("coverage_80_pct")),
-        "interval_coverage_95_pct": _optional_float(coverage.get("coverage_95_pct")),
-        "training_window_end": training_window_end,
-        "regional_available": regional_available,
+        "virusTyp": virus_typ,
+        "horizonDays": int(horizon_days),
+        "forecastReadiness": forecast_readiness,
+        "overallPassed": bool(quality_gate.get("overall_passed") or False),
+        "baselinePassed": bool(quality_gate.get("baseline_passed") or False),
+        "bestLagDays": _optional_int(timing.get("best_lag_days")),
+        "correlationAtHorizon": _optional_float(timing.get("corr_at_horizon")),
+        "maeVsPersistencePct": _optional_float(baseline_cmp.get("mae_vs_persistence_pct")),
+        "calibrationMode": calibration_mode,
+        "intervalCoverage80Pct": _optional_float(coverage.get("coverage_80_pct")),
+        "intervalCoverage95Pct": _optional_float(coverage.get("coverage_95_pct")),
+        "trainingWindowEnd": training_window_end,
+        "regionalAvailable": regional_available,
         "note": " ".join(note_parts) if note_parts else None,
     }
 
@@ -395,7 +402,7 @@ def build_cockpit_snapshot(
 
     notes: list[str] = []
     regions: list[dict[str, Any]] = []
-    if model_status["regional_available"]:
+    if model_status["regionalAvailable"]:
         if regional_forecast_service is None:
             from app.services.ml.regional_forecast import RegionalForecastService
 
@@ -420,10 +427,11 @@ def build_cockpit_snapshot(
 
     timeline = _build_timeline_from_national(db, virus_typ, horizon_days)
 
-    if model_status["calibration_mode"] in {"heuristic", "skipped"}:
+    if model_status["calibrationMode"] in {"heuristic", "skipped"}:
         notes.append(
-            "Die Signalstärke pro Region ist KEINE kalibrierte Wahrscheinlichkeit — "
-            "sie stammt aus heuristic_event_score_from_forecast() und darf nicht als %-Konfidenz interpretiert werden."
+            "Die Signalstärke pro Bundesland ist ein Ranking-Score auf Skala 0–1, keine kalibrierte "
+            "Wahrscheinlichkeit. Volle Kalibrierung gegen echte Verkaufsdaten entsteht sobald der "
+            "Feedback-Loop läuft."
         )
 
     p_values = [r.get("pRising") for r in regions if r.get("pRising") is not None]

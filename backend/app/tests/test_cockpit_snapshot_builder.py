@@ -128,17 +128,17 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
             )
 
         status = payload["modelStatus"]
-        self.assertEqual(status["forecast_readiness"], "WATCH")
-        self.assertFalse(status["overall_passed"])
-        self.assertFalse(status["baseline_passed"])
-        self.assertEqual(status["best_lag_days"], -7)
-        self.assertAlmostEqual(status["correlation_at_horizon"], 0.672)
-        self.assertAlmostEqual(status["mae_vs_persistence_pct"], -3.97)
-        self.assertEqual(status["calibration_mode"], "heuristic")
-        self.assertEqual(status["interval_coverage_80_pct"], 82.1)
-        self.assertEqual(status["interval_coverage_95_pct"], 92.3)
-        self.assertFalse(status["regional_available"])  # RSV A is national-only
-        self.assertIn("heuristisch", (status["note"] or "").lower())
+        self.assertEqual(status["forecastReadiness"], "WATCH")
+        self.assertFalse(status["overallPassed"])
+        self.assertFalse(status["baselinePassed"])
+        self.assertEqual(status["bestLagDays"], -7)
+        self.assertAlmostEqual(status["correlationAtHorizon"], 0.672)
+        self.assertAlmostEqual(status["maeVsPersistencePct"], -3.97)
+        self.assertEqual(status["calibrationMode"], "heuristic")
+        self.assertEqual(status["intervalCoverage80Pct"], 82.1)
+        self.assertEqual(status["intervalCoverage95Pct"], 92.3)
+        self.assertFalse(status["regionalAvailable"])  # RSV A is national-only
+        self.assertIn("nicht kalibriert", (status["note"] or "").lower())
 
     def test_model_status_marks_calibrated_when_no_skip(self) -> None:
         self._insert_backtest(
@@ -156,8 +156,8 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
                 regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
             )
 
-        self.assertEqual(payload["modelStatus"]["calibration_mode"], "calibrated")
-        self.assertTrue(payload["modelStatus"]["regional_available"])
+        self.assertEqual(payload["modelStatus"]["calibrationMode"], "calibrated")
+        self.assertTrue(payload["modelStatus"]["regionalAvailable"])
 
     def test_missing_backtest_returns_unknown_readiness(self) -> None:
         with patch.object(snapshot_builder, "build_source_status", return_value={"items": []}), \
@@ -169,8 +169,8 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
                 regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
             )
 
-        self.assertEqual(payload["modelStatus"]["forecast_readiness"], "UNKNOWN")
-        self.assertEqual(payload["modelStatus"]["calibration_mode"], "unknown")
+        self.assertEqual(payload["modelStatus"]["forecastReadiness"], "UNKNOWN")
+        self.assertEqual(payload["modelStatus"]["calibrationMode"], "unknown")
 
     # ---------- regions & notes ----------
 

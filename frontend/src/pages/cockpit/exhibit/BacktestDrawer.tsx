@@ -1,7 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Drawer } from './Drawer';
 import { useBacktest } from '../useBacktest';
 import type { BacktestPayload, BacktestWeeklyHit } from '../backtestTypes';
+
+// Virus scope switcher — the three viruses that have trained Option-B
+// backtest artefacts on the server. Order matters: strongest pitch
+// statement first.
+const VIRUS_OPTIONS: Array<{ value: string; short: string; hint: string }> = [
+  { value: 'Influenza B', short: 'Flu B', hint: 'stärkste Zahl' },
+  { value: 'Influenza A', short: 'Flu A', hint: 'GO-Gate' },
+  { value: 'RSV A', short: 'RSV A', hint: 'Watch · 13 BL' },
+];
 
 /**
  * BacktestDrawer — Drawer V: the pitch-story artifact.
@@ -241,6 +250,38 @@ const Disclaimer: React.FC = () => (
   </div>
 );
 
+// ---------- Virus scope switcher ----------------------------------------
+const VirusSwitch: React.FC<{
+  value: string;
+  onChange: (virus: string) => void;
+}> = ({ value, onChange }) => (
+  <div
+    className="ex-bt-virus-switch ex-bt-reveal-1"
+    role="tablist"
+    aria-label="Virus-Scope für Backtest"
+  >
+    <span className="ex-bt-virus-switch-label">Virus-Scope</span>
+    <div className="ex-bt-virus-switch-chips">
+      {VIRUS_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          role="tab"
+          aria-selected={value === opt.value}
+          className={
+            'ex-bt-virus-chip' +
+            (value === opt.value ? ' ex-bt-virus-chip--active' : '')
+          }
+          onClick={() => onChange(opt.value)}
+        >
+          <span className="ex-bt-virus-chip-name">{opt.short}</span>
+          <span className="ex-bt-virus-chip-hint">{opt.hint}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+);
+
 // ---------- Drawer root -------------------------------------------------
 export const BacktestDrawer: React.FC<Props> = ({
   open,
@@ -248,8 +289,19 @@ export const BacktestDrawer: React.FC<Props> = ({
   virusLabel,
   virusTyp = 'Influenza A',
 }) => {
+  // The Drawer keeps its OWN virus scope (independent from snapshot's
+  // current virus) so the pitch user can flip between the three story
+  // angles without leaving the drawer.
+  const [selectedVirus, setSelectedVirus] = useState<string>(virusTyp);
+
+  // When the drawer is re-opened after a snapshot virus change, sync once.
+  useEffect(() => {
+    if (open) setSelectedVirus(virusTyp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const { data, loading, error } = useBacktest({
-    virusTyp,
+    virusTyp: selectedVirus,
     horizonDays: 7,
     weeksToSurface: 104,
   });
@@ -263,10 +315,10 @@ export const BacktestDrawer: React.FC<Props> = ({
         <span>·</span>
         <span>Backtest</span>
         <span>·</span>
-        <span>{virusTyp}</span>
+        <span>{selectedVirus}</span>
       </>
     ),
-    [virusTyp],
+    [selectedVirus],
   );
 
   const footLeft = data?.window
@@ -290,6 +342,7 @@ export const BacktestDrawer: React.FC<Props> = ({
       footRight={footRight}
     >
       <div className="ex-bt-wrap">
+        <VirusSwitch value={selectedVirus} onChange={setSelectedVirus} />
         <header className="ex-bt-title ex-bt-reveal-1">
           <div className="ex-bt-title-mark">§ V</div>
           <div className="ex-bt-title-stack">
@@ -317,7 +370,7 @@ export const BacktestDrawer: React.FC<Props> = ({
         {data && !available && (
           <div className="ex-bt-unavailable">
             {data.reason ??
-              `Für ${virusLabel} (h=${data.horizon_days} d) liegt noch kein Backtest-Artefakt vor. Ein Retrain auf voller Historie läuft gerade im Hintergrund — bitte später erneut öffnen.`}
+              `Für ${selectedVirus} (h=${data.horizon_days} d) liegt noch kein Backtest-Artefakt vor. Ein Retrain auf voller Historie läuft gerade im Hintergrund — bitte später erneut öffnen.`}
           </div>
         )}
 

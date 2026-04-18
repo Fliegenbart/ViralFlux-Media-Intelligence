@@ -19,25 +19,34 @@ interface Props {
   snapshot: CockpitSnapshot;
 }
 
-export const BacktestSection: React.FC<Props> = ({ snapshot }) => (
-  <>
-    <SectionHeader
-      numeral="§ V"
-      kicker="Walk-forward · point-in-time · strict vintage"
-      title={
-        <>
-          In wie vielen Wochen hatten wir <em>recht</em>?
-        </>
-      }
-      stamp={snapshot.isoWeek}
-    />
-    <div className="ex-section-body">
-      <BacktestDrawerBody
-        initialVirusTyp={snapshot.virusTyp || 'Influenza B'}
-        hideTitle={true}
+export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
+  const badges: Array<{ label: string; tone: 'go' | 'watch' | 'neutral' | 'solid' | 'ochre' }> = [
+    { label: 'Walk-forward', tone: 'neutral' },
+    { label: 'Strict vintage', tone: 'neutral' },
+    { label: 'Point-in-time', tone: 'ochre' },
+  ];
+
+  return (
+    <>
+      <SectionHeader
+        numeral="§ V"
+        kicker="Ranking-Validation · die Pitch-Geschichte"
+        title={
+          <>
+            Hatten wir <em>recht</em>?
+          </>
+        }
+        stamp={snapshot.isoWeek}
+        badges={badges}
       />
-    </div>
-  </>
-);
+      <div className="ex-section-body">
+        <BacktestDrawerBody
+          initialVirusTyp={snapshot.virusTyp || 'Influenza B'}
+          hideTitle={true}
+        />
+      </div>
+    </>
+  );
+};
 
 export default BacktestSection;

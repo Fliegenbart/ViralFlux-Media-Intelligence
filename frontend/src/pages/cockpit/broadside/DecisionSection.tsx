@@ -70,8 +70,10 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
       style={{
         background: 'var(--ex-stage)',
         color: '#f6f1e7',
-        padding: '56px 48px 56px',
-        margin: '40px -48px 0',
+        padding: '64px 48px 72px',
+        // Pull up so there's no gap between the section-head strip
+        // and this hero strip — one continuous dark block.
+        margin: '-72px -48px 0',
       }}
     >
       <div style={{ maxWidth: 1344, margin: '0 auto' }}>
@@ -187,20 +189,18 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
           <div>
             <div
               className="ex-mono"
-              style={{ color: 'var(--ex-stage-45)', marginBottom: 10 }}
+              style={{
+                color: 'var(--ex-stage-45)',
+                marginBottom: 10,
+                letterSpacing: '.24em',
+                fontWeight: 600,
+              }}
             >
               Konfidenz · {calibrated ? 'kalibriert' : 'heuristisch'}
             </div>
             <div
-              style={{
-                fontFamily: 'var(--ex-serif)',
-                fontWeight: 400,
-                fontSize: 128,
-                lineHeight: 0.9,
-                letterSpacing: '-0.045em',
-                fontVariationSettings: '"opsz" 144',
-                color: '#f6f1e7',
-              }}
+              className="ex-punk-monument"
+              style={{ color: '#f6f1e7' }}
             >
               {rec && calibrated
                 ? Math.round(rec.confidence * 100)
@@ -208,21 +208,11 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
                   ? fmtSignalStrength(rec.confidence)
                   : '—'}
               {rec && calibrated && (
-                <span
-                  style={{
-                    fontSize: 28,
-                    color: 'var(--ex-stage-60)',
-                    marginLeft: 8,
-                    fontFamily: 'var(--ex-mono)',
-                    verticalAlign: 'top',
-                  }}
-                >
-                  %
-                </span>
+                <span className="ex-punk-monument__unit">%</span>
               )}
             </div>
 
-            <div style={{ marginTop: 28, maxWidth: 360 }}>
+            <div style={{ marginTop: 36, maxWidth: 380 }}>
               <Thermometer
                 value={calibValue}
                 label="Signalstärke"
@@ -476,22 +466,49 @@ const CandidatesBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) 
 };
 
 // ---------- Root --------------------------------------------------------
-export const DecisionSection: React.FC<Props> = ({ snapshot }) => (
-  <>
-    <SectionHeader
-      numeral="§ I"
-      kicker="Hauptakt · Empfehlung der Woche"
-      title={
-        <>
-          Die <em>Entscheidung</em>.
-        </>
-      }
-      stamp={snapshot.isoWeek}
-    />
-    <HeroBlock snapshot={snapshot} />
-    <RationaleBlock snapshot={snapshot} />
-    <CandidatesBlock snapshot={snapshot} />
-  </>
-);
+export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
+  const rec = snapshot.primaryRecommendation;
+  const calibrated = snapshot.modelStatus?.calibrationMode === 'calibrated';
+  const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? null;
+
+  const badges: Array<{ label: string; tone: 'go' | 'watch' | 'neutral' | 'solid' }> = [];
+  if (rec) {
+    badges.push({ label: 'Hauptakt', tone: 'solid' });
+  } else {
+    badges.push({ label: 'Kein Shift', tone: 'watch' });
+  }
+  badges.push({
+    label: calibrated ? 'Kalibriert' : 'Heuristisch',
+    tone: calibrated ? 'go' : 'neutral',
+  });
+  if (bestLag !== null) {
+    badges.push({
+      label:
+        bestLag >= 0
+          ? `Lead +${bestLag} d`
+          : `Lag ${bestLag} d`,
+      tone: bestLag >= 0 ? 'go' : 'watch',
+    });
+  }
+
+  return (
+    <>
+      <SectionHeader
+        numeral="§ I"
+        kicker="Empfehlung der Woche"
+        title={
+          <>
+            Die <em>Entscheidung</em>
+          </>
+        }
+        stamp={snapshot.isoWeek}
+        badges={badges}
+      />
+      <HeroBlock snapshot={snapshot} />
+      <RationaleBlock snapshot={snapshot} />
+      <CandidatesBlock snapshot={snapshot} />
+    </>
+  );
+};
 
 export default DecisionSection;

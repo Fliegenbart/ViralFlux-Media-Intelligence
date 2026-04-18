@@ -1210,17 +1210,18 @@
 }
 .ex-bt-monument {
   font-family: "Fraunces", Georgia, serif;
-  font-weight: 400;
+  font-weight: 500;
   font-variation-settings: "opsz" 144;
-  font-size: 160px;
-  line-height: 0.88;
-  letter-spacing: -0.045em;
+  font-size: clamp(160px, 18vw, 280px);
+  line-height: 0.86;
+  letter-spacing: -0.05em;
   color: #1a1713;
+  font-feature-settings: "tnum" 1, "lnum" 1;
 }
 .ex-bt-monument .ex-bt-unit {
   font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 28px;
-  margin-left: 8px;
+  font-size: clamp(32px, 3vw, 48px);
+  margin-left: 10px;
   vertical-align: top;
   color: rgba(26,23,19,.60);
 }
@@ -1543,6 +1544,20 @@
 }
 
 /* ==============================================================
+   Punk palette extension (2026-04-18 Wumms pass).
+   We didn't change the core tokens; we ADDED a louder colour
+   set that the Broadside leans into: oxblood (WATCH states),
+   moss (falling / stable), and a slightly hotter ochre for
+   active indicators. Dashboard-voice, not editorial-whisper.
+   ============================================================== */
+.peix-exhibit {
+  --ex-oxblood: #8a2a22;      /* WATCH badge, warning bar */
+  --ex-moss: #4a6a62;         /* falling / stable */
+  --ex-cream: #f6f1e7;        /* high-contrast text on stage */
+  --ex-punk-rule: 3px;        /* thicker rule for punk sections */
+}
+
+/* ==============================================================
    Broadside layout — scrolling one-page editorial broadsheet.
    Replaces the drawer-based navigation with a single long page
    in which every section is visible. A sticky section-index at
@@ -1579,77 +1594,169 @@
   color: var(--ex-ink);
 }
 
-/* Section header — § numeral + title + mono timestamp */
+/* Section header — full-width DARK STAGE STRIP, every section.
+   Announces the chapter like a sport-magazine cover spread. */
 .ex-broadside .ex-section-head {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items: baseline;
-  column-gap: 32px;
-  padding-bottom: 40px;
-  margin-bottom: 56px;
-  border-bottom: 1px solid var(--ex-hairline-soft);
-  max-width: 1440px;
-  margin-left: auto;
-  margin-right: auto;
+  align-items: center;
+  column-gap: 48px;
+  padding: 36px 48px 32px;
+  background: var(--ex-stage);
+  color: var(--ex-cream);
+  border-bottom: var(--ex-punk-rule) solid var(--ex-fired);
+  /* Pull the head OUT of the section padding so it spans the full
+     viewport width — the dark strip is the chapter-break. */
+  margin: -96px -48px 72px;
+  max-width: none;
 }
 .ex-broadside .ex-section--stage .ex-section-head {
-  border-bottom-color: var(--ex-stage-hair);
+  margin-bottom: 0;
+  border-bottom: var(--ex-punk-rule) solid var(--ex-fired);
 }
+
 .ex-broadside .ex-section-num {
   font-family: var(--ex-serif);
   font-weight: 500;
   font-variation-settings: "opsz" 144;
-  font-size: 48px;
-  line-height: 1;
-  letter-spacing: -0.025em;
-  color: var(--ex-fired);
-}
-.ex-broadside .ex-section--stage .ex-section-num {
+  font-size: clamp(64px, 7vw, 96px);
+  line-height: 0.9;
+  letter-spacing: -0.035em;
   color: var(--ex-ochre);
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.ex-broadside .ex-section-num::after {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: var(--ex-fired);
+  margin-left: 4px;
+  transform: translateY(-8px);
 }
 .ex-broadside .ex-section-title-stack {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 .ex-broadside .ex-section-kicker {
   font-family: var(--ex-mono);
-  font-size: 10.5px;
-  letter-spacing: .22em;
+  font-size: 11.5px;
+  letter-spacing: .28em;
   text-transform: uppercase;
-  color: var(--ex-ink-45);
-}
-.ex-broadside .ex-section--stage .ex-section-kicker {
-  color: var(--ex-stage-45);
+  color: var(--ex-stage-60);
+  font-weight: 600;
 }
 .ex-broadside .ex-section-title {
   font-family: var(--ex-serif);
-  font-weight: 400;
-  font-size: clamp(32px, 3vw, 46px);
-  line-height: 1.06;
-  letter-spacing: -0.025em;
-  color: inherit;
+  font-weight: 500;
+  font-size: clamp(42px, 4.4vw, 66px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  color: var(--ex-cream);
   margin: 0;
   font-variation-settings: "opsz" 144;
+  text-transform: uppercase;
 }
 .ex-broadside .ex-section-title em {
   font-style: italic;
-  color: var(--ex-fired);
-  font-weight: 400;
-}
-.ex-broadside .ex-section--stage .ex-section-title em {
   color: var(--ex-ochre);
+  font-weight: 500;
+  text-transform: none;
 }
 .ex-broadside .ex-section-stamp {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
   font-family: var(--ex-mono);
   font-size: 10.5px;
-  letter-spacing: .18em;
+  letter-spacing: .2em;
   text-transform: uppercase;
-  color: var(--ex-ink-45);
+  color: var(--ex-stage-45);
   text-align: right;
 }
-.ex-broadside .ex-section--stage .ex-section-stamp {
-  color: var(--ex-stage-45);
+
+/* Status badges — bold mono-caps in a 2 px border box.
+   Three tones: fired (GO), oxblood (WATCH), neutral (info). */
+.ex-broadside .ex-section-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.ex-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px 6px;
+  font-family: var(--ex-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  border: 2px solid currentColor;
+  line-height: 1;
+  background: transparent;
+  white-space: nowrap;
+}
+.ex-status-badge--go      { color: var(--ex-fired); }
+.ex-status-badge--watch   { color: var(--ex-oxblood); background: rgba(138,42,34,.12); }
+.ex-status-badge--neutral { color: var(--ex-stage-60); }
+.ex-status-badge--ochre   { color: var(--ex-ochre); }
+.ex-status-badge--solid   {
+  color: var(--ex-stage);
+  background: var(--ex-fired);
+  border-color: var(--ex-fired);
+}
+
+/* ================================================================
+   Punk monument — 240 px+ key-metric number blocks.
+   ================================================================ */
+.ex-punk-monument {
+  font-family: var(--ex-serif);
+  font-weight: 500;
+  font-variation-settings: "opsz" 144;
+  font-size: clamp(160px, 18vw, 280px);
+  line-height: 0.86;
+  letter-spacing: -0.05em;
+  color: inherit;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.ex-punk-monument__unit {
+  font-family: var(--ex-mono);
+  font-size: clamp(32px, 3vw, 48px);
+  letter-spacing: 0;
+  margin-left: 10px;
+  vertical-align: top;
+  color: currentColor;
+  opacity: 0.6;
+}
+.ex-punk-monument__caption {
+  margin-top: 14px;
+  font-family: var(--ex-mono);
+  font-size: 11.5px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: currentColor;
+  opacity: 0.72;
+  max-width: 48ch;
+}
+
+/* Thick rule — replacing hairlines in punk contexts */
+.ex-rule-thick {
+  height: var(--ex-punk-rule);
+  background: var(--ex-fired);
+  border: 0;
+  margin: 0;
+}
+.ex-rule-thick-stage {
+  height: var(--ex-punk-rule);
+  background: var(--ex-ochre);
+  border: 0;
+  margin: 0;
 }
 
 /* Section body — the actual content block, constrained to 1440 */
@@ -1850,9 +1957,17 @@
   }
   .ex-broadside .ex-section-head {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 20px;
+    margin: -64px -24px 48px;
+    padding: 28px 24px 24px;
   }
-  .ex-broadside .ex-section-stamp { text-align: left; }
+  .ex-broadside .ex-section-num { font-size: 56px; }
+  .ex-broadside .ex-section-title { font-size: 36px; }
+  .ex-broadside .ex-section-stamp {
+    align-items: flex-start;
+    text-align: left;
+  }
+  .ex-broadside .ex-section-badges { justify-content: flex-start; }
   .ex-atlas-stage { min-height: 520px; }
 }
 

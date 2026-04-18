@@ -1144,6 +1144,338 @@
   .ex-fc-panels { grid-template-columns: 1fr; gap: 28px; }
 }
 
+/* ==============================================================
+   Backtest drawer (V) — the pitch-story artifact.
+   Feels like a single-sheet research brief: title block with
+   section-§, one monument number, honest-vs-baseline block,
+   method stanza, per-BL roster, weekly hit-barcode.
+   ============================================================== */
+
+.ex-drawer .ex-bt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  max-width: 100%;
+}
+
+.ex-bt-title {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 28px;
+  align-items: baseline;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(26,23,19,.14);
+}
+.ex-bt-title-mark {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 500;
+  font-variation-settings: "opsz" 144;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #b94a2e;
+}
+.ex-bt-title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ex-bt-title-kicker {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: rgba(26,23,19,.55);
+}
+.ex-bt-title-dek {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.4;
+  color: rgba(26,23,19,.85);
+  font-variation-settings: "opsz" 36;
+  margin: 0;
+}
+.ex-bt-title-dek em {
+  color: #b94a2e;
+  font-style: italic;
+}
+
+/* Monument block */
+.ex-bt-monument-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 48px;
+  align-items: end;
+}
+.ex-bt-monument {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 400;
+  font-variation-settings: "opsz" 144;
+  font-size: 160px;
+  line-height: 0.88;
+  letter-spacing: -0.045em;
+  color: #1a1713;
+}
+.ex-bt-monument .ex-bt-unit {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 28px;
+  margin-left: 8px;
+  vertical-align: top;
+  color: rgba(26,23,19,.60);
+}
+.ex-bt-monument-caption {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 20px;
+  line-height: 1.4;
+  color: rgba(26,23,19,.75);
+  max-width: 42ch;
+  font-variation-settings: "opsz" 36;
+}
+.ex-bt-monument-caption em { color: #b94a2e; }
+
+.ex-bt-window-stamp {
+  margin-top: 14px;
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(26,23,19,.55);
+}
+.ex-bt-window-stamp strong {
+  color: rgba(26,23,19,.85);
+  font-weight: 500;
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Comparison block — model vs. persistence */
+.ex-bt-compare {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  padding: 24px 0;
+  border-top: 1px solid rgba(26,23,19,.14);
+  border-bottom: 1px solid rgba(26,23,19,.14);
+}
+.ex-bt-compare-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ex-bt-compare-kicker {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: rgba(26,23,19,.45);
+}
+.ex-bt-compare-value {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 400;
+  font-variation-settings: "opsz" 144;
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #1a1713;
+  font-variant-numeric: tabular-nums;
+}
+.ex-bt-compare-value.absent { color: rgba(26,23,19,.30); }
+.ex-bt-compare-vs {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 13px;
+  color: rgba(26,23,19,.60);
+  font-variation-settings: "opsz" 36;
+}
+.ex-bt-compare-vs em { color: #b94a2e; }
+
+/* Methodology stanza */
+.ex-bt-method {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 32px;
+}
+.ex-bt-method-rail {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #b94a2e;
+  padding-top: 6px;
+}
+.ex-bt-method-body {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 17px;
+  line-height: 1.55;
+  color: rgba(26,23,19,.78);
+  max-width: 70ch;
+  margin: 0;
+  font-variation-settings: "opsz" 36;
+}
+.ex-bt-method-body em { color: #1a1713; }
+
+/* Per-BL roster — re-uses ex-roster but with more columns */
+.ex-bt-roster {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.ex-bt-roster-head {
+  display: grid;
+  grid-template-columns: 36px 1fr 72px 72px 72px 72px;
+  column-gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(26,23,19,.14);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(26,23,19,.45);
+}
+.ex-bt-roster li {
+  display: grid;
+  grid-template-columns: 36px 1fr 72px 72px 72px 72px;
+  column-gap: 16px;
+  align-items: baseline;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(26,23,19,.08);
+  transition: background .2s;
+}
+.ex-bt-roster li:hover { background: rgba(26,23,19,.04); }
+.ex-bt-roster-idx {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: .1em;
+  color: rgba(26,23,19,.45);
+}
+.ex-bt-roster-name {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 19px;
+  font-variation-settings: "opsz" 36;
+  letter-spacing: -0.01em;
+  color: #1a1713;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ex-bt-roster-name .ex-bt-roster-code {
+  margin-left: 8px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  color: rgba(26,23,19,.45);
+}
+.ex-bt-roster-num {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: #1a1713;
+}
+.ex-bt-roster-num.muted { color: rgba(26,23,19,.45); }
+
+/* Hit-barcode — weekly hit/miss visual stripe */
+.ex-bt-barcode {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ex-bt-barcode-rail {
+  display: flex;
+  gap: 2px;
+  height: 56px;
+  align-items: stretch;
+  padding: 4px 0;
+}
+.ex-bt-barcode-tick {
+  flex: 1;
+  min-width: 3px;
+  background: rgba(26,23,19,.10);
+  transition: background .2s;
+  cursor: default;
+}
+.ex-bt-barcode-tick.hit { background: #b94a2e; }
+.ex-bt-barcode-tick.miss { background: rgba(26,23,19,.22); }
+.ex-bt-barcode-tick.partial { background: #d68a5a; }
+.ex-bt-barcode-tick:hover {
+  filter: brightness(1.1);
+}
+.ex-bt-barcode-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: .08em;
+  color: rgba(26,23,19,.45);
+  text-transform: uppercase;
+}
+
+/* Bottom disclaimer */
+.ex-bt-disclaimer {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(26,23,19,.14);
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 32px;
+}
+.ex-bt-disclaimer-rail {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(26,23,19,.45);
+  padding-top: 4px;
+}
+.ex-bt-disclaimer-body {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(26,23,19,.60);
+  max-width: 70ch;
+  margin: 0;
+  font-variation-settings: "opsz" 36;
+}
+
+/* Unavailable state */
+.ex-bt-unavailable {
+  padding: 40px 0;
+  text-align: center;
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-size: 18px;
+  color: rgba(26,23,19,.60);
+  font-variation-settings: "opsz" 36;
+  max-width: 50ch;
+  margin: 0 auto;
+}
+
+/* Reveal cascade for the backtest drawer */
+.ex-drawer.open .ex-bt-reveal-1 { animation: exFcReveal .7s ease both; animation-delay: .08s; }
+.ex-drawer.open .ex-bt-reveal-2 { animation: exFcReveal .7s ease both; animation-delay: .22s; }
+.ex-drawer.open .ex-bt-reveal-3 { animation: exFcReveal .7s ease both; animation-delay: .38s; }
+.ex-drawer.open .ex-bt-reveal-4 { animation: exFcReveal .7s ease both; animation-delay: .52s; }
+.ex-drawer.open .ex-bt-reveal-5 { animation: exFcReveal .7s ease both; animation-delay: .66s; }
+.ex-drawer.open .ex-bt-reveal-6 { animation: exFcReveal .7s ease both; animation-delay: .82s; }
+
+@media (max-width: 820px) {
+  .ex-bt-monument-row { grid-template-columns: 1fr; gap: 20px; }
+  .ex-bt-monument { font-size: 112px; }
+  .ex-bt-compare { grid-template-columns: 1fr; gap: 18px; }
+  .ex-bt-method { grid-template-columns: 1fr; gap: 10px; }
+  .ex-bt-roster li, .ex-bt-roster-head { grid-template-columns: 30px 1fr 60px 60px; }
+  .ex-bt-roster li > *:nth-child(n+5) { display: none; }
+  .ex-bt-roster-head > *:nth-child(n+5) { display: none; }
+  .ex-bt-disclaimer { grid-template-columns: 1fr; }
+}
+
 /* --------------------------------------------------------------
    Responsive — 1440 is primary; 960 keeps things readable
    -------------------------------------------------------------- */

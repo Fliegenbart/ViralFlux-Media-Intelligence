@@ -10,6 +10,7 @@ import { DrawerDock, useBodyScrollLock, useKey } from './exhibit/Drawer';
 import { AtlasDrawer } from './exhibit/AtlasDrawer';
 import { ForecastDrawer } from './exhibit/ForecastDrawer';
 import { ImpactDrawer } from './exhibit/ImpactDrawer';
+import { BacktestDrawer } from './exhibit/BacktestDrawer';
 
 /**
  * CockpitShell — the single user-facing surface.
@@ -101,7 +102,7 @@ const CockpitExhibit: React.FC<{
   snapshot: NonNullable<ReturnType<typeof useCockpitSnapshot>['snapshot']>;
 }> = ({ snapshot }) => {
   const [openDrawer, setOpenDrawer] = useState<
-    'atlas' | 'forecast' | 'impact' | null
+    'atlas' | 'forecast' | 'impact' | 'backtest' | null
   >(null);
 
   const close = useCallback(() => setOpenDrawer(null), []);
@@ -126,6 +127,12 @@ const CockpitExhibit: React.FC<{
         open={openDrawer === 'impact'}
         onClose={close}
         snapshot={snapshot}
+      />
+      <BacktestDrawer
+        open={openDrawer === 'backtest'}
+        onClose={close}
+        virusLabel={snapshot.virusLabel}
+        virusTyp={snapshot.virusTyp}
       />
     </>
   );

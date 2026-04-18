@@ -961,8 +961,15 @@ def train_regional_models_task(
     self,
     virus_typ: str | None = None,
     virus_types: list[str] | None = None,
+    lookback_days: int | None = None,
 ) -> Dict[str, Any]:
-    """Train pooled regional panel models for one, many, or all supported viruses."""
+    """Train pooled regional panel models for one, many, or all supported viruses.
+
+    The ``lookback_days`` kwarg overrides the trainer's default (900 d,
+    ~2.5 y) so a full-historical walk-forward backtest can be triggered
+    without changing the default used by scheduled retrains. Typical
+    value for the pitch-story run: 2555 (~7 y, the full SURVSTAT range).
+    """
     from app.services.ml.regional_trainer import RegionalModelTrainer
     selection = normalize_training_selection(
         virus_typ=virus_typ,
@@ -970,9 +977,11 @@ def train_regional_models_task(
     )
 
     logger.info(
-        "Celery: Starting regional model training (virus_types=%s, mode=%s)",
+        "Celery: Starting regional model training "
+        "(virus_types=%s, mode=%s, lookback_days=%s)",
         list(selection.virus_types),
         selection.mode,
+        lookback_days,
     )
 
     self.update_state(
@@ -988,15 +997,28 @@ def train_regional_models_task(
                 )
             ),
             "progress": 10,
+            "lookback_days": lookback_days,
         },
     )
+
+    # Build kwargs so we don't pass lookback_days=None to the trainer and
+    # accidentally overwrite its own default.
+    train_kwargs: dict[str, Any] = {}
+    if lookback_days is not None:
+        train_kwargs["lookback_days"] = int(lookback_days)
 
     with get_db_context() as db:
         trainer = RegionalModelTrainer(db)
         if len(selection.virus_types) == 1:
-            result = trainer.train_all_regions(virus_typ=selection.virus_types[0])
+            result = trainer.train_all_regions(
+                virus_typ=selection.virus_types[0],
+                **train_kwargs,
+            )
         else:
-            result = trainer.train_selected_viruses_all_regions(virus_types=list(selection.virus_types))
+            result = trainer.train_selected_viruses_all_regions(
+                virus_types=list(selection.virus_types),
+                **train_kwargs,
+            )
 
     if len(selection.virus_types) == 1:
         trained = result.get("trained", 0)

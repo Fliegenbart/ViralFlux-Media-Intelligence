@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,21 @@ from app.services.ml.regional_panel_utils import (
     quality_gate_from_metrics,
     time_based_panel_splits,
 )
+
+# Walk-forward split configuration is env-tunable so we can run a
+# dense weekly backtest over the full SURVSTAT history without
+# changing the defaults used by scheduled retrains. Defaults match
+# the pre-2026-04-18 behaviour (5 folds, 21-day test window).
+#
+# For the pitch-story full-historical run we typically set:
+#   REGIONAL_BACKTEST_N_SPLITS=500         (effectively unbounded,
+#                                          the generator caps at the
+#                                          number of available windows)
+#   REGIONAL_BACKTEST_MIN_TRAIN_PERIODS=104 (2 years warm-up)
+#   REGIONAL_BACKTEST_MIN_TEST_PERIODS=7   (weekly walk-forward step)
+_BACKTEST_N_SPLITS = int(os.getenv("REGIONAL_BACKTEST_N_SPLITS", "5"))
+_BACKTEST_MIN_TRAIN_PERIODS = int(os.getenv("REGIONAL_BACKTEST_MIN_TRAIN_PERIODS", "90"))
+_BACKTEST_MIN_TEST_PERIODS = int(os.getenv("REGIONAL_BACKTEST_MIN_TEST_PERIODS", "21"))
 
 EVENT_DELTA_METRICS: tuple[str, ...] = (
     "pr_auc",
@@ -103,9 +119,9 @@ def build_backtest_bundle(
 
     splits = time_based_panel_splits_fn(
         working["as_of_date"],
-        n_splits=5,
-        min_train_periods=90,
-        min_test_periods=21,
+        n_splits=_BACKTEST_N_SPLITS,
+        min_train_periods=_BACKTEST_MIN_TRAIN_PERIODS,
+        min_test_periods=_BACKTEST_MIN_TEST_PERIODS,
     )
     if not splits:
         raise ValueError("Unable to build time-based backtest splits for regional panel.")

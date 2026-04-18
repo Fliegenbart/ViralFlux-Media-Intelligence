@@ -12,7 +12,7 @@ import React, { useEffect } from 'react';
  * keep those class names global.
  */
 
-export type DrawerId = 'atlas' | 'forecast' | 'impact' | null;
+export type DrawerId = 'atlas' | 'forecast' | 'impact' | 'backtest' | null;
 
 interface DrawerProps {
   open: boolean;
@@ -81,6 +81,9 @@ export const DrawerDock: React.FC<{
     </button>
     <button type="button" className="ex-drawer-tab" onClick={() => onOpen('impact')}>
       <span className="ex-tab-idx">IV</span>Wirkung
+    </button>
+    <button type="button" className="ex-drawer-tab" onClick={() => onOpen('backtest')}>
+      <span className="ex-tab-idx">V</span>Backtest
     </button>
   </div>
 );

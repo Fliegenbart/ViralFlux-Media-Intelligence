@@ -282,31 +282,108 @@ const VirusSwitch: React.FC<{
   </div>
 );
 
-// ---------- Drawer root -------------------------------------------------
-export const BacktestDrawer: React.FC<Props> = ({
-  open,
-  onClose,
-  virusLabel,
-  virusTyp = 'Influenza A',
+// ---------- BacktestDrawerBody — the body, reusable by the broadside
+// ---------- without drawer chrome.
+export interface BacktestDrawerBodyProps {
+  /** Initial virus scope; the body keeps its own local state afterwards. */
+  initialVirusTyp?: string;
+  /** Optional controlled virus scope (overrides local state when set). */
+  virusTyp?: string;
+  /** Optional change callback if the parent wants to mirror the state. */
+  onVirusChange?: (virus: string) => void;
+  /** When true, hides the internal § V title block (the broadside
+   *  provides its own SectionHeader and doesn't need the drawer title
+   *  repeated). */
+  hideTitle?: boolean;
+}
+export const BacktestDrawerBody: React.FC<BacktestDrawerBodyProps> = ({
+  initialVirusTyp = 'Influenza A',
+  virusTyp,
+  onVirusChange,
+  hideTitle = false,
 }) => {
-  // The Drawer keeps its OWN virus scope (independent from snapshot's
-  // current virus) so the pitch user can flip between the three story
-  // angles without leaving the drawer.
-  const [selectedVirus, setSelectedVirus] = useState<string>(virusTyp);
-
-  // When the drawer is re-opened after a snapshot virus change, sync once.
-  useEffect(() => {
-    if (open) setSelectedVirus(virusTyp);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const [internalVirus, setInternalVirus] = useState<string>(initialVirusTyp);
+  const selectedVirus = virusTyp ?? internalVirus;
+  const handleChange = (v: string) => {
+    setInternalVirus(v);
+    onVirusChange?.(v);
+  };
 
   const { data, loading, error } = useBacktest({
     virusTyp: selectedVirus,
     horizonDays: 7,
     weeksToSurface: 104,
   });
-
   const available = Boolean(data?.available);
+
+  return (
+    <div className="ex-bt-wrap">
+      <VirusSwitch value={selectedVirus} onChange={handleChange} />
+      {!hideTitle && (
+        <header className="ex-bt-title">
+          <div className="ex-bt-title-mark">§ V</div>
+          <div className="ex-bt-title-stack">
+            <span className="ex-bt-title-kicker">
+              Ranking-Validation · walk-forward · point-in-time
+            </span>
+            <p className="ex-bt-title-dek">
+              Ein Backtest, keine Prognose. Für jede Woche der Vergangenheit
+              fragen wir:{' '}
+              <em>
+                hätte unser Modell damals die richtigen Bundesländer benannt?
+              </em>
+            </p>
+          </div>
+        </header>
+      )}
+
+      {loading && !data && (
+        <div className="ex-bt-unavailable">Lade Backtest-Daten…</div>
+      )}
+      {error && !data && (
+        <div className="ex-bt-unavailable">
+          Backtest-Payload nicht verfügbar. {error.message}
+        </div>
+      )}
+      {data && !available && (
+        <div className="ex-bt-unavailable">
+          {data.reason ??
+            `Für ${selectedVirus} (h=${data.horizon_days} d) liegt noch kein Backtest-Artefakt vor. Ein Retrain auf voller Historie läuft gerade im Hintergrund — bitte später erneut öffnen.`}
+        </div>
+      )}
+      {data && available && (
+        <>
+          <Monument data={data} />
+          <Compare data={data} />
+          <Method />
+          <Roster data={data} />
+          <Barcode weekly={data.weekly_hits} />
+          <Disclaimer />
+        </>
+      )}
+    </div>
+  );
+};
+
+// ---------- Drawer root (legacy chrome, kept for backwards compat) -----
+export const BacktestDrawer: React.FC<Props> = ({
+  open,
+  onClose,
+  virusLabel,
+  virusTyp = 'Influenza A',
+}) => {
+  const [selectedVirus, setSelectedVirus] = useState<string>(virusTyp);
+
+  useEffect(() => {
+    if (open) setSelectedVirus(virusTyp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const { data } = useBacktest({
+    virusTyp: selectedVirus,
+    horizonDays: 7,
+    weeksToSurface: 104,
+  });
 
   const kicker = useMemo(
     () => (
@@ -320,7 +397,6 @@ export const BacktestDrawer: React.FC<Props> = ({
     ),
     [selectedVirus],
   );
-
   const footLeft = data?.window
     ? `${data.window.folds} Folds · ${fmtDateDE(data.window.start)} → ${fmtDateDE(data.window.end)}`
     : 'Walk-forward · strict vintage';
@@ -341,50 +417,10 @@ export const BacktestDrawer: React.FC<Props> = ({
       footLeft={footLeft}
       footRight={footRight}
     >
-      <div className="ex-bt-wrap">
-        <VirusSwitch value={selectedVirus} onChange={setSelectedVirus} />
-        <header className="ex-bt-title ex-bt-reveal-1">
-          <div className="ex-bt-title-mark">§ V</div>
-          <div className="ex-bt-title-stack">
-            <span className="ex-bt-title-kicker">
-              Ranking-Validation · walk-forward · point-in-time
-            </span>
-            <p className="ex-bt-title-dek">
-              Ein Backtest, keine Prognose. Für jede Woche der Vergangenheit
-              fragen wir: <em>hätte unser Modell damals die richtigen Bundesländer
-              benannt?</em>
-            </p>
-          </div>
-        </header>
-
-        {loading && !data && (
-          <div className="ex-bt-unavailable">Lade Backtest-Daten…</div>
-        )}
-
-        {error && !data && (
-          <div className="ex-bt-unavailable">
-            Backtest-Payload nicht verfügbar. {error.message}
-          </div>
-        )}
-
-        {data && !available && (
-          <div className="ex-bt-unavailable">
-            {data.reason ??
-              `Für ${selectedVirus} (h=${data.horizon_days} d) liegt noch kein Backtest-Artefakt vor. Ein Retrain auf voller Historie läuft gerade im Hintergrund — bitte später erneut öffnen.`}
-          </div>
-        )}
-
-        {data && available && (
-          <>
-            <Monument data={data} />
-            <Compare data={data} />
-            <Method />
-            <Roster data={data} />
-            <Barcode weekly={data.weekly_hits} />
-            <Disclaimer />
-          </>
-        )}
-      </div>
+      <BacktestDrawerBody
+        virusTyp={selectedVirus}
+        onVirusChange={setSelectedVirus}
+      />
     </Drawer>
   );
 };

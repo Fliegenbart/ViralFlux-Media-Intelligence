@@ -829,6 +829,59 @@ const KalibrierungPanel: React.FC<{
 };
 
 // --------------------------------------------------------------
+// ForecastDrawerBody — the inner content, exported separately so the
+// broadside page can render it without the drawer chrome.
+// --------------------------------------------------------------
+export const ForecastDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
+  snapshot,
+}) => {
+  const cov80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
+  const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? null;
+  const leadTarget =
+    snapshot.modelStatus?.lead?.targetLabel ?? 'Notaufnahme-Syndromsurveillance';
+  const calibrationMode = snapshot.modelStatus?.calibrationMode;
+  const virusLabel = snapshot.virusLabel;
+
+  const { points, currentKw, year } = useMemo(
+    () => buildPoints(snapshot.timeline ?? []),
+    [snapshot.timeline],
+  );
+
+  return (
+    <div className="ex-fc-wrap">
+      <p className="ex-fc-margin">
+        <span className="ex-fc-margin-idx">F.01</span>
+        Links die beobachtete Vergangenheit, rechts die Prognose mit
+        Q10–Q90-Fan. Das Band wird breiter, je weiter in die Zukunft —
+        bewusst sichtbar, nicht geglättet.
+      </p>
+      <div>
+        <ForecastPlate
+          points={points}
+          currentKw={currentKw}
+          year={year}
+          virusLabel={virusLabel}
+        />
+      </div>
+      <p className="ex-fc-margin" style={{ marginTop: 20 }}>
+        <span className="ex-fc-margin-idx">F.02</span>
+        Die HEUTE-Linie trennt, was gemessen wurde, von dem, was
+        erwartet wird. Was links davon steht, ist Tinte. Was rechts
+        steht, ist Wäsche.
+      </p>
+      <div className="ex-fc-panels">
+        <LesartPanel bestLag={bestLag} />
+        <LagPanel bestLag={bestLag} leadTarget={leadTarget} />
+        <KalibrierungPanel
+          coverage={cov80}
+          calibrationMode={calibrationMode}
+        />
+      </div>
+    </div>
+  );
+};
+
+// --------------------------------------------------------------
 // ForecastDrawer root
 // --------------------------------------------------------------
 export const ForecastDrawer: React.FC<ForecastDrawerProps> = ({

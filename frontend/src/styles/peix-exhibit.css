@@ -1542,6 +1542,320 @@
   .ex-bt-disclaimer { grid-template-columns: 1fr; }
 }
 
+/* ==============================================================
+   Broadside layout — scrolling one-page editorial broadsheet.
+   Replaces the drawer-based navigation with a single long page
+   in which every section is visible. A sticky section-index at
+   the right edge (§ I–§ V) provides anchor navigation with
+   scroll-spy highlighting.
+   ============================================================== */
+
+.ex-broadside {
+  position: relative;
+}
+
+/* Section — the recurring top-level editorial unit. Alternates
+   between paper and warm-black stage for visual rhythm. */
+.ex-broadside .ex-section {
+  position: relative;
+  padding: 96px 48px 96px;
+  border-top: 1px solid var(--ex-hairline-soft);
+  scroll-margin-top: 0; /* section anchors jump exactly at top */
+}
+.ex-broadside .ex-section:first-of-type {
+  border-top: none;
+}
+.ex-broadside .ex-section--stage {
+  background: var(--ex-stage);
+  color: #f6f1e7;
+  border-top-color: var(--ex-stage-hair);
+}
+.ex-broadside .ex-section--paper {
+  background: var(--ex-paper);
+  color: var(--ex-ink);
+}
+.ex-broadside .ex-section--paper-deep {
+  background: var(--ex-paper-deep);
+  color: var(--ex-ink);
+}
+
+/* Section header — § numeral + title + mono timestamp */
+.ex-broadside .ex-section-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  column-gap: 32px;
+  padding-bottom: 40px;
+  margin-bottom: 56px;
+  border-bottom: 1px solid var(--ex-hairline-soft);
+  max-width: 1440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.ex-broadside .ex-section--stage .ex-section-head {
+  border-bottom-color: var(--ex-stage-hair);
+}
+.ex-broadside .ex-section-num {
+  font-family: var(--ex-serif);
+  font-weight: 500;
+  font-variation-settings: "opsz" 144;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--ex-fired);
+}
+.ex-broadside .ex-section--stage .ex-section-num {
+  color: var(--ex-ochre);
+}
+.ex-broadside .ex-section-title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ex-broadside .ex-section-kicker {
+  font-family: var(--ex-mono);
+  font-size: 10.5px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--ex-ink-45);
+}
+.ex-broadside .ex-section--stage .ex-section-kicker {
+  color: var(--ex-stage-45);
+}
+.ex-broadside .ex-section-title {
+  font-family: var(--ex-serif);
+  font-weight: 400;
+  font-size: clamp(32px, 3vw, 46px);
+  line-height: 1.06;
+  letter-spacing: -0.025em;
+  color: inherit;
+  margin: 0;
+  font-variation-settings: "opsz" 144;
+}
+.ex-broadside .ex-section-title em {
+  font-style: italic;
+  color: var(--ex-fired);
+  font-weight: 400;
+}
+.ex-broadside .ex-section--stage .ex-section-title em {
+  color: var(--ex-ochre);
+}
+.ex-broadside .ex-section-stamp {
+  font-family: var(--ex-mono);
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ex-ink-45);
+  text-align: right;
+}
+.ex-broadside .ex-section--stage .ex-section-stamp {
+  color: var(--ex-stage-45);
+}
+
+/* Section body — the actual content block, constrained to 1440 */
+.ex-broadside .ex-section-body {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* Full-bleed section body — for the atlas canvas to breathe */
+.ex-broadside .ex-section-body--bleed {
+  max-width: none;
+  margin-left: -48px;
+  margin-right: -48px;
+}
+
+/* --------------------------------------------------------------
+   Floating Section-Index (right rail) with scroll-spy
+   -------------------------------------------------------------- */
+.ex-broadside-toc {
+  position: fixed;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 12px;
+  background: rgba(246, 241, 231, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--ex-hairline);
+  border-radius: 2px;
+  box-shadow: 0 12px 32px rgba(26,23,19,.06);
+  font-family: var(--ex-mono);
+}
+.ex-broadside-toc__item {
+  display: grid;
+  grid-template-columns: 28px auto;
+  column-gap: 10px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--ex-ink-60);
+  font-family: inherit;
+  text-align: left;
+  transition: color .15s, background .15s;
+}
+.ex-broadside-toc__item:hover {
+  color: var(--ex-ink);
+  background: rgba(26,23,19,.04);
+}
+.ex-broadside-toc__num {
+  font-size: 11px;
+  letter-spacing: .16em;
+  font-weight: 500;
+  color: inherit;
+}
+.ex-broadside-toc__label {
+  font-family: var(--ex-serif);
+  font-style: italic;
+  font-size: 13px;
+  color: inherit;
+  font-variation-settings: "opsz" 36;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.ex-broadside-toc__item--active {
+  color: var(--ex-fired);
+}
+.ex-broadside-toc__item--active .ex-broadside-toc__num {
+  color: var(--ex-fired);
+}
+.ex-broadside-toc__item--active .ex-broadside-toc__label {
+  color: var(--ex-fired);
+}
+.ex-broadside-toc__rule {
+  height: 1px;
+  background: var(--ex-hairline);
+  margin: 2px 8px;
+}
+
+/* Section connector — a thin mono timestamp strip between sections */
+.ex-broadside-connector {
+  padding: 8px 48px;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--ex-mono);
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ex-ink-45);
+  background: var(--ex-paper);
+  border-top: 1px solid var(--ex-hairline-soft);
+  border-bottom: 1px solid var(--ex-hairline-soft);
+}
+
+/* --------------------------------------------------------------
+   Atlas section — full-bleed 3D stage inside broadside
+   -------------------------------------------------------------- */
+.ex-atlas-stage {
+  position: relative;
+  width: 100%;
+  min-height: 720px;
+  background: var(--ex-stage);
+  overflow: hidden;
+  /* Prevent parent-layout reflows from re-measuring the canvas
+     mid-frame — same trick as the old peix-sculpture.css. */
+  contain: layout size;
+}
+.ex-atlas-stage__canvas {
+  position: absolute;
+  inset: 0;
+}
+.ex-atlas-stage__canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+.ex-atlas-stage__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: 40px 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--ex-mono);
+  font-size: 10.5px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--ex-stage-60);
+}
+.ex-atlas-stage__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95  0 0 0 0 0.92  0 0 0 0 0.87  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 180px 180px;
+  transform: translateZ(0);
+}
+
+/* Atlas roster (rendered below the canvas on paper ground) */
+.ex-atlas-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1px;
+  background: var(--ex-hairline-soft);
+  margin-top: 32px;
+}
+.ex-atlas-roster-row {
+  background: var(--ex-paper);
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: baseline;
+  gap: 14px;
+  padding: 14px 16px;
+}
+.ex-atlas-roster-row .ex-idx {
+  font-family: var(--ex-mono);
+  font-size: 10.5px;
+  letter-spacing: .1em;
+  color: var(--ex-ink-45);
+}
+.ex-atlas-roster-row .ex-name {
+  font-family: var(--ex-serif);
+  font-size: 18px;
+  font-variation-settings: "opsz" 36;
+  color: var(--ex-ink);
+}
+.ex-atlas-roster-row .ex-name .ex-code {
+  margin-left: 8px;
+  font-family: var(--ex-mono);
+  font-size: 10px;
+  color: var(--ex-ink-45);
+  letter-spacing: .08em;
+}
+.ex-atlas-roster-row .ex-val {
+  font-family: var(--ex-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.ex-atlas-roster-row .ex-val.up { color: var(--ex-fired); }
+.ex-atlas-roster-row .ex-val.down { color: #4a6a62; }
+.ex-atlas-roster-row .ex-val.flat { color: var(--ex-ink-45); }
+
+/* Responsive: hide TOC on small viewports */
+@media (max-width: 1100px) {
+  .ex-broadside-toc { display: none; }
+  .ex-broadside .ex-section { padding: 64px 24px 64px; }
+  .ex-broadside .ex-section-body--bleed {
+    margin-left: -24px;
+    margin-right: -24px;
+  }
+  .ex-broadside .ex-section-head {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .ex-broadside .ex-section-stamp { text-align: left; }
+  .ex-atlas-stage { min-height: 520px; }
+}
+
 /* --------------------------------------------------------------
    Responsive — 1440 is primary; 960 keeps things readable
    -------------------------------------------------------------- */

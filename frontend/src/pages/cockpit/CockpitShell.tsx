@@ -1,34 +1,25 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import '../../styles/peix.css';
 import '../../styles/peix-gate.css';
 import '../../styles/peix-exhibit.css';
 
 import CockpitGate from './CockpitGate';
 import { useCockpitSnapshot } from './useCockpitSnapshot';
-import { Exhibit } from './exhibit/Exhibit';
-import { DrawerDock, useBodyScrollLock, useKey } from './exhibit/Drawer';
-import { AtlasDrawer } from './exhibit/AtlasDrawer';
-import { ForecastDrawer } from './exhibit/ForecastDrawer';
-import { ImpactDrawer } from './exhibit/ImpactDrawer';
-import { BacktestDrawer } from './exhibit/BacktestDrawer';
+import { Broadside } from './broadside/Broadside';
 
 /**
  * CockpitShell — the single user-facing surface.
  *
- * Gallery-refresh (2026-04-17) renamed as Museum-Exhibit edition
- * (2026-04-18) per the Claude Design handoff bundle
- * cFK0P9N815z30StKWtXAHw. The shell is now:
- *
- *   - one Exhibit screen (TopChrome, Hero, Rationale, Candidates,
- *     FootRail) as the single editorial voice
- *   - a drawer dock on the right (II Wellen-Atlas / III Forecast /
- *     IV Wirkung) with Roman catalogue numbers
- *   - three drawers that slide in over the exhibit with Esc + backdrop
- *     dismiss
- *
- * No tabs. No virus toggle. No separate masthead. The four pieces of
- * the week are hierarchised: the recommendation is the hauptakt, the
- * rest is evidence.
+ * Broadside-refresh (2026-04-18 evening):
+ *   - Replaced the Exhibit + Drawer-Dock architecture with a one-page
+ *     scrolling Broadside. All five sections (§ I Entscheidung,
+ *     § II Wellen-Atlas, § III Forecast, § IV Wirkung, § V Backtest)
+ *     are visible on scroll; a floating section-index at the right
+ *     margin provides quick jumps with scroll-spy highlighting.
+ *   - The previous Drawer components (AtlasDrawer, ForecastDrawer,
+ *     ImpactDrawer, BacktestDrawer) live on as legacy exports for
+ *     their Body components — which the Broadside reuses — but are
+ *     no longer wired into the UI.
  *
  * Auth / gate behaviour is unchanged — a 401 from the snapshot fetch
  * renders <CockpitGate /> (shared-password flow).
@@ -41,8 +32,6 @@ export const CockpitShell: React.FC = () => {
     leadTarget: 'ATEMWEGSINDEX',
   });
 
-  // 401 → render the gate. SWR doesn't expose status on the Error, but
-  // the snapshot hook prefixes "HTTP 401" into the message on unauth.
   const isAuth401 =
     error &&
     (((error as Error & { status?: number }).status === 401) ||
@@ -89,53 +78,7 @@ export const CockpitShell: React.FC = () => {
 
   if (!snapshot) return null;
 
-  return <CockpitExhibit snapshot={snapshot} />;
-};
-
-// --------------------------------------------------------------
-// Inner shell — receives the resolved snapshot and wires the drawer
-// dock + three drawers. Kept as a separate component so the useState /
-// useKey / useBodyScrollLock hooks don't fire during the loading /
-// error / gate branches above.
-// --------------------------------------------------------------
-const CockpitExhibit: React.FC<{
-  snapshot: NonNullable<ReturnType<typeof useCockpitSnapshot>['snapshot']>;
-}> = ({ snapshot }) => {
-  const [openDrawer, setOpenDrawer] = useState<
-    'atlas' | 'forecast' | 'impact' | 'backtest' | null
-  >(null);
-
-  const close = useCallback(() => setOpenDrawer(null), []);
-  useKey('Escape', close);
-  useBodyScrollLock(openDrawer !== null);
-
-  return (
-    <>
-      <Exhibit snapshot={snapshot} onOpenDrawer={setOpenDrawer} />
-      <DrawerDock onOpen={setOpenDrawer} />
-      <AtlasDrawer
-        open={openDrawer === 'atlas'}
-        onClose={close}
-        snapshot={snapshot}
-      />
-      <ForecastDrawer
-        open={openDrawer === 'forecast'}
-        onClose={close}
-        snapshot={snapshot}
-      />
-      <ImpactDrawer
-        open={openDrawer === 'impact'}
-        onClose={close}
-        snapshot={snapshot}
-      />
-      <BacktestDrawer
-        open={openDrawer === 'backtest'}
-        onClose={close}
-        virusLabel={snapshot.virusLabel}
-        virusTyp={snapshot.virusTyp}
-      />
-    </>
-  );
+  return <Broadside snapshot={snapshot} />;
 };
 
 export default CockpitShell;

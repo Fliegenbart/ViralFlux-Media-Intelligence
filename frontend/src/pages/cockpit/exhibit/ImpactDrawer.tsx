@@ -19,9 +19,10 @@ interface ImpactDrawerProps {
   snapshot: CockpitSnapshot;
 }
 
-export const ImpactDrawer: React.FC<ImpactDrawerProps> = ({
-  open,
-  onClose,
+// --------------------------------------------------------------
+// ImpactDrawerBody — inner content, exported for the broadside.
+// --------------------------------------------------------------
+export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
   snapshot,
 }) => {
   const { data, loading, error, reload } = useImpact({
@@ -46,25 +47,7 @@ export const ImpactDrawer: React.FC<ImpactDrawerProps> = ({
     : 0;
 
   return (
-    <Drawer
-      open={open}
-      onClose={onClose}
-      kicker={
-        <>
-          <span>Drawer IV</span>
-          <span>·</span>
-          <span>Wirkung &amp; Feedback-Loop</span>
-        </>
-      }
-      title={
-        <>
-          Was empfohlen wurde, <em>was geschah.</em>
-        </>
-      }
-      footLeft="Outcome nur bei verbundenem Media-Plan"
-      footRight="Honest-by-default · keine Platzhalter"
-    >
-      <div>
+    <div>
         <p
           style={{
             fontFamily: 'Fraunces, Georgia, serif',
@@ -287,9 +270,40 @@ export const ImpactDrawer: React.FC<ImpactDrawerProps> = ({
           </>
         )}
       </div>
-    </Drawer>
   );
 };
+
+// --------------------------------------------------------------
+// ImpactDrawer root — thin wrapper that reuses the Body inside the
+// legacy Drawer chrome. Retained for backwards compat; the broadside
+// page uses ImpactDrawerBody directly.
+// --------------------------------------------------------------
+export const ImpactDrawer: React.FC<ImpactDrawerProps> = ({
+  open,
+  onClose,
+  snapshot,
+}) => (
+  <Drawer
+    open={open}
+    onClose={onClose}
+    kicker={
+      <>
+        <span>Drawer IV</span>
+        <span>·</span>
+        <span>Wirkung &amp; Feedback-Loop</span>
+      </>
+    }
+    title={
+      <>
+        Was empfohlen wurde, <em>was geschah.</em>
+      </>
+    }
+    footLeft="Outcome nur bei verbundenem Media-Plan"
+    footRight="Honest-by-default · keine Platzhalter"
+  >
+    <ImpactDrawerBody snapshot={snapshot} />
+  </Drawer>
+);
 
 const Monument: React.FC<{ label: string; value: string; caption?: string }> = ({
   label,

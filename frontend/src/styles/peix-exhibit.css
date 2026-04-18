@@ -24,7 +24,7 @@
  * Inter Tight for sans-body, JetBrains Mono for labels and numerals.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
 /* --------------------------------------------------------------
    Tokens — scoped to the exhibit wrapper so we don't collide with
@@ -55,10 +55,17 @@
   --ex-fired:        #b94a2e;
   --ex-fired-dim:    #8a3820;
 
-  /* Type */
-  --ex-serif:  "Fraunces", "Iowan Old Style", Georgia, serif;
-  --ex-sans:   "Inter Tight", -apple-system, Helvetica, sans-serif;
-  --ex-mono:   "JetBrains Mono", ui-monospace, Menlo, monospace;
+  /* Type — Editorial-Clean pairing (2026-04-18 pass):
+   * Display:  Instrument Serif (single style, Regular + Italic)
+   * Body:     Instrument Sans (variable, 400/500/600/700)
+   * Mono:     Space Mono (Regular + Bold)
+   * All three share a modern-editorial voice; Instrument Serif has
+   * no optical-size axis, so font-variation-settings is no longer
+   * used anywhere (the glyphs are designed to work at large sizes
+   * without dynamic optical sizing). */
+  --ex-serif:  "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --ex-sans:   "Instrument Sans", -apple-system, Helvetica, sans-serif;
+  --ex-mono:   "Space Mono", ui-monospace, Menlo, monospace;
 
   /* Scale (editorial, big) */
   --ex-fs-mono:    11px;
@@ -104,7 +111,6 @@
   font-family: var(--ex-serif);
   font-weight: 400;
   letter-spacing: -0.025em;
-  font-variation-settings: "opsz" 144;
   line-height: 0.98;
 }
 .peix-exhibit .ex-serif-italic {
@@ -112,7 +118,6 @@
   font-style: italic;
   font-weight: 400;
   letter-spacing: -0.01em;
-  font-variation-settings: "opsz" 36;
 }
 .peix-exhibit .ex-num {
   font-family: var(--ex-mono);
@@ -218,7 +223,6 @@
   letter-spacing: -0.03em;
   margin: 0 0 32px;
   text-wrap: pretty;
-  font-variation-settings: "opsz" 144;
 }
 .peix-exhibit .ex-hero h1.ex-lede em {
   font-style: italic;
@@ -232,7 +236,6 @@
   color: var(--ex-stage-60);
   max-width: 46ch;
   margin: 0 0 40px;
-  font-variation-settings: "opsz" 36;
 }
 .peix-exhibit .ex-hero-actions {
   display: flex; gap: 16px; align-items: center;
@@ -249,7 +252,6 @@
   line-height: 0.9;
   letter-spacing: -0.045em;
   color: #f6f1e7;
-  font-variation-settings: "opsz" 144;
   text-align: right;
 }
 .peix-exhibit .ex-monument .ex-unit {
@@ -362,7 +364,6 @@
   line-height: 1.05;
   letter-spacing: -0.02em;
   margin: 0;
-  font-variation-settings: "opsz" 144;
 }
 .peix-exhibit .ex-section-head h2 em { font-style: italic; }
 .peix-exhibit .ex-section-head .ex-mono { color: var(--ex-ink-45); }
@@ -390,7 +391,6 @@
 .peix-exhibit .ex-roster li .ex-name {
   font-family: var(--ex-serif);
   font-size: 22px;
-  font-variation-settings: "opsz" 36;
   letter-spacing: -0.01em;
   min-width: 0;
   overflow: hidden;
@@ -604,11 +604,9 @@
   font-size: 36px;
   letter-spacing: -0.02em;
   line-height: 1.05;
-  font-variation-settings: "opsz" 144;
 }
 .ex-drawer-head h3 em {
   font-style: italic;
-  font-variation-settings: "opsz" 36;
 }
 .ex-drawer-head .ex-kicker {
   color: rgba(26,23,19,.45);
@@ -694,7 +692,6 @@
   font-family: "Fraunces", Georgia, serif;
   font-size: 22px;
   color: #f6f1e7;
-  font-variation-settings: "opsz" 36;
 }
 .ex-atlas-tower-caption .ex-idx {
   font-family: "JetBrains Mono", monospace;
@@ -773,7 +770,6 @@
   line-height: 1.6;
   color: rgba(26,23,19,.62);
   margin: 0;
-  font-variation-settings: "opsz" 36;
   max-width: 70ch;
 }
 .ex-drawer .ex-fc-margin .ex-fc-margin-idx {
@@ -827,14 +823,12 @@
   font-style: italic;
   font-size: 13px;
   fill: rgba(26,23,19,.55);
-  font-variation-settings: "opsz" 36;
 }
 .ex-fc-heute-label {
   font-family: "Fraunces", Georgia, serif;
   font-size: 11.5px;
   font-style: italic;
   fill: #b94a2e;
-  font-variation-settings: "opsz" 36;
   letter-spacing: .04em;
 }
 .ex-fc-peak-label {
@@ -842,7 +836,6 @@
   font-size: 12px;
   font-style: italic;
   fill: rgba(26,23,19,.70);
-  font-variation-settings: "opsz" 36;
 }
 .ex-fc-axis-kw {
   font-family: "JetBrains Mono", ui-monospace, monospace;
@@ -856,7 +849,6 @@
   font-style: italic;
   font-size: 12.5px;
   fill: rgba(26,23,19,.55);
-  font-variation-settings: "opsz" 36;
   letter-spacing: -.005em;
 }
 .ex-fc-axis-unit {
@@ -893,7 +885,6 @@
   font-size: 26px;
   line-height: 1;
   color: #b94a2e;
-  font-variation-settings: "opsz" 36;
   font-weight: 400;
 }
 .ex-fc-panel-head .ex-fc-panel-title {
@@ -910,7 +901,6 @@
   line-height: 1.6;
   color: rgba(26,23,19,.65);
   margin: 0;
-  font-variation-settings: "opsz" 36;
 }
 .ex-fc-panel-body em {
   color: rgba(26,23,19,.85);
@@ -935,7 +925,6 @@
   font-size: 13.5px;
   color: rgba(26,23,19,.75);
   line-height: 1.4;
-  font-variation-settings: "opsz" 36;
 }
 .ex-fc-legend-swatch {
   display: block;
@@ -1024,7 +1013,6 @@
   font-size: 17px;
   color: #b94a2e;
   transform: translateX(-50%);
-  font-variation-settings: "opsz" 36;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1103,7 +1091,6 @@
 }
 .ex-fc-cov-value {
   font-family: "Fraunces", Georgia, serif;
-  font-variation-settings: "opsz" 144;
   font-size: 32px;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1169,7 +1156,6 @@
 .ex-bt-title-mark {
   font-family: "Fraunces", Georgia, serif;
   font-weight: 500;
-  font-variation-settings: "opsz" 144;
   font-size: 44px;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1193,7 +1179,6 @@
   font-size: 18px;
   line-height: 1.4;
   color: rgba(26,23,19,.85);
-  font-variation-settings: "opsz" 36;
   margin: 0;
 }
 .ex-bt-title-dek em {
@@ -1211,7 +1196,6 @@
 .ex-bt-monument {
   font-family: "Fraunces", Georgia, serif;
   font-weight: 500;
-  font-variation-settings: "opsz" 144;
   font-size: clamp(160px, 18vw, 280px);
   line-height: 0.86;
   letter-spacing: -0.05em;
@@ -1232,7 +1216,6 @@
   line-height: 1.4;
   color: rgba(26,23,19,.75);
   max-width: 42ch;
-  font-variation-settings: "opsz" 36;
 }
 .ex-bt-monument-caption em { color: #b94a2e; }
 
@@ -1278,7 +1261,6 @@
 .ex-bt-compare-value {
   font-family: "Fraunces", Georgia, serif;
   font-weight: 400;
-  font-variation-settings: "opsz" 144;
   font-size: 44px;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1291,7 +1273,6 @@
   font-style: italic;
   font-size: 13px;
   color: rgba(26,23,19,.60);
-  font-variation-settings: "opsz" 36;
 }
 .ex-bt-compare-vs em { color: #b94a2e; }
 
@@ -1317,7 +1298,6 @@
   color: rgba(26,23,19,.78);
   max-width: 70ch;
   margin: 0;
-  font-variation-settings: "opsz" 36;
 }
 .ex-bt-method-body em { color: #1a1713; }
 
@@ -1358,7 +1338,6 @@
 .ex-bt-roster-name {
   font-family: "Fraunces", Georgia, serif;
   font-size: 19px;
-  font-variation-settings: "opsz" 36;
   letter-spacing: -0.01em;
   color: #1a1713;
   overflow: hidden;
@@ -1442,7 +1421,6 @@
   color: rgba(26,23,19,.60);
   max-width: 70ch;
   margin: 0;
-  font-variation-settings: "opsz" 36;
 }
 
 /* Unavailable state */
@@ -1453,7 +1431,6 @@
   font-style: italic;
   font-size: 18px;
   color: rgba(26,23,19,.60);
-  font-variation-settings: "opsz" 36;
   max-width: 50ch;
   margin: 0 auto;
 }
@@ -1517,7 +1494,6 @@
   letter-spacing: 0;
   text-transform: none;
   color: rgba(26,23,19,.55);
-  font-variation-settings: "opsz" 36;
 }
 .ex-bt-virus-chip--active .ex-bt-virus-chip-hint {
   color: rgba(185,74,46,.70);
@@ -1570,10 +1546,12 @@
 }
 
 /* Section — the recurring top-level editorial unit. Alternates
-   between paper and warm-black stage for visual rhythm. */
+   between paper and warm-black stage for visual rhythm.
+   Generous vertical padding — the user explicitly asked for more
+   room to breathe. */
 .ex-broadside .ex-section {
   position: relative;
-  padding: 96px 48px 96px;
+  padding: 160px 72px 160px;
   border-top: 1px solid var(--ex-hairline-soft);
   scroll-margin-top: 0; /* section anchors jump exactly at top */
 }
@@ -1607,7 +1585,7 @@
   border-bottom: var(--ex-punk-rule) solid var(--ex-fired);
   /* Pull the head OUT of the section padding so it spans the full
      viewport width — the dark strip is the chapter-break. */
-  margin: -96px -48px 72px;
+  margin: -160px -72px 112px;
   max-width: none;
 }
 .ex-broadside .ex-section--stage .ex-section-head {
@@ -1618,7 +1596,6 @@
 .ex-broadside .ex-section-num {
   font-family: var(--ex-serif);
   font-weight: 500;
-  font-variation-settings: "opsz" 144;
   font-size: clamp(64px, 7vw, 96px);
   line-height: 0.9;
   letter-spacing: -0.035em;
@@ -1658,7 +1635,6 @@
   letter-spacing: -0.035em;
   color: var(--ex-cream);
   margin: 0;
-  font-variation-settings: "opsz" 144;
   text-transform: uppercase;
 }
 .ex-broadside .ex-section-title em {
@@ -1718,7 +1694,6 @@
 .ex-punk-monument {
   font-family: var(--ex-serif);
   font-weight: 500;
-  font-variation-settings: "opsz" 144;
   font-size: clamp(160px, 18vw, 280px);
   line-height: 0.86;
   letter-spacing: -0.05em;
@@ -1759,17 +1734,19 @@
   margin: 0;
 }
 
-/* Section body — the actual content block, constrained to 1440 */
+/* Section body — the actual content block. Narrower than the outer
+   section padding so text columns aren't overwhelming at 1440+; the
+   extra horizontal margin doubles as breathing room. */
 .ex-broadside .ex-section-body {
-  max-width: 1440px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
 /* Full-bleed section body — for the atlas canvas to breathe */
 .ex-broadside .ex-section-body--bleed {
   max-width: none;
-  margin-left: -48px;
-  margin-right: -48px;
+  margin-left: -72px;
+  margin-right: -72px;
 }
 
 /* --------------------------------------------------------------
@@ -1822,7 +1799,6 @@
   font-style: italic;
   font-size: 13px;
   color: inherit;
-  font-variation-settings: "opsz" 36;
   white-space: nowrap;
   text-transform: none;
   letter-spacing: 0;
@@ -1928,7 +1904,6 @@
 .ex-atlas-roster-row .ex-name {
   font-family: var(--ex-serif);
   font-size: 18px;
-  font-variation-settings: "opsz" 36;
   color: var(--ex-ink);
 }
 .ex-atlas-roster-row .ex-name .ex-code {
@@ -1950,16 +1925,16 @@
 /* Responsive: hide TOC on small viewports */
 @media (max-width: 1100px) {
   .ex-broadside-toc { display: none; }
-  .ex-broadside .ex-section { padding: 64px 24px 64px; }
+  .ex-broadside .ex-section { padding: 96px 28px 96px; }
   .ex-broadside .ex-section-body--bleed {
-    margin-left: -24px;
-    margin-right: -24px;
+    margin-left: -28px;
+    margin-right: -28px;
   }
   .ex-broadside .ex-section-head {
     grid-template-columns: 1fr;
     gap: 20px;
-    margin: -64px -24px 48px;
-    padding: 28px 24px 24px;
+    margin: -96px -28px 72px;
+    padding: 28px 28px 24px;
   }
   .ex-broadside .ex-section-num { font-size: 56px; }
   .ex-broadside .ex-section-title { font-size: 36px; }

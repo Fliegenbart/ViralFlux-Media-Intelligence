@@ -483,7 +483,7 @@ const ForecastPlate: React.FC<PlateProps> = ({
               <tspan
                 x={peakFlip ? peakLabelX - 6 : peakLabelX + 6}
                 dy="15"
-                fontFamily="JetBrains Mono, monospace"
+                fontFamily="var(--ex-mono)"
                 fontStyle="normal"
                 fontSize="10"
                 letterSpacing="0.08em"

@@ -7,19 +7,20 @@
  * Use via className="peix" wrapper around any cockpit subtree.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@400;500;600&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
 .peix {
   /* ----- Colour primitives ----- */
   --peix-paper: #fafaf7;        /* warm off-white — FT paper */
   --peix-ink: #0b0d10;          /* near-black, not pure black */
   --peix-ink-soft: #4a5060;
-  --peix-ink-mute: #6b7280;
+  --peix-ink-mute: #8a90a2;
   --peix-line: #e5e2d9;         /* warm hairline */
   --peix-line-strong: #c9c5ba;
   --peix-card: #ffffff;
   --peix-card-dim: #f4f1ea;
-  --peix-accent: #b94a2e;       /* warm-peak — consolidated, replaces former marine */
+  --peix-accent: #0b4fa3;       /* peix marine */
+  --peix-accent-deep: #073377;
   --peix-warm: #d94a2c;         /* editorial red for hero */
   --peix-warm-soft: #f5d9cf;
   --peix-gold: #c08a1a;
@@ -35,9 +36,9 @@
   --peix-falling-3: #2f998b;
 
   /* ----- Typography ----- */
-  --peix-font-display: 'Fraunces', 'Times New Roman', serif;
-  --peix-font-sans: 'Inter Tight', 'Inter', system-ui, -apple-system, sans-serif;
-  --peix-font-mono: 'JetBrains Mono', 'Menlo', monospace;
+  --peix-font-display: 'Instrument Serif', 'Times New Roman', serif;
+  --peix-font-sans: 'Instrument Sans', 'Inter', system-ui, -apple-system, sans-serif;
+  --peix-font-mono: 'Space Mono', 'Menlo', monospace;
 
   /* ----- Rhythm ----- */
   --peix-radius-sm: 6px;
@@ -66,7 +67,8 @@
   --peix-line-strong: #2a3142;
   --peix-card: #131824;
   --peix-card-dim: #0f1420;
-  --peix-accent: #e3a26a;
+  --peix-accent: #7ab6ff;
+  --peix-accent-deep: #3a7fd0;
 }
 
 /* ================================================================
@@ -248,6 +250,29 @@
   background: var(--peix-warm); border-color: var(--peix-warm); color: #fff;
 }
 
+/* Hero number card on right */
+.peix-hero-card {
+  background: var(--peix-card);
+  border: 1px solid var(--peix-line);
+  border-radius: var(--peix-radius-lg);
+  padding: 24px 26px;
+  display: flex; flex-direction: column; gap: 14px;
+  box-shadow: var(--peix-shadow-soft);
+}
+.peix-hero-card .row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 10px 0;
+  border-top: 1px dashed var(--peix-line);
+}
+.peix-hero-card .row:first-of-type { border-top: none; padding-top: 0; }
+.peix-hero-card .label { color: var(--peix-ink-mute); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
+.peix-hero-card .val {
+  font-family: var(--peix-font-display);
+  font-weight: 500; font-size: 26px;
+  letter-spacing: -0.01em;
+}
+.peix-hero-card .val small { font-family: var(--peix-font-sans); font-size: 13px; color: var(--peix-ink-mute); margin-left: 6px; }
+
 /* ================================================================
    Bento grid
    ================================================================ */
@@ -299,6 +324,29 @@
   font-size: 10px; color: var(--peix-ink-mute);
   text-transform: uppercase; letter-spacing: 0.1em;
 }
+
+/* ================================================================
+   Recommendation strip — minimal editorial
+   ================================================================ */
+.peix-rec-list { display: flex; flex-direction: column; gap: 1px; background: var(--peix-line); border-radius: var(--peix-radius-md); overflow: hidden; }
+.peix-rec {
+  background: var(--peix-card);
+  display: grid; grid-template-columns: 3fr 4fr 1fr auto;
+  gap: 16px; padding: 14px 20px; align-items: center;
+  transition: background 160ms ease;
+  cursor: pointer;
+}
+.peix-rec:hover { background: var(--peix-card-dim); }
+.peix-rec .flow {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--peix-font-display); font-size: 17px; letter-spacing: -0.01em;
+}
+.peix-rec .flow .from { color: var(--peix-ink-mute); text-decoration: line-through; text-decoration-color: rgba(138,144,162,0.5); text-decoration-thickness: 1px; }
+.peix-rec .flow .to { color: var(--peix-warm); }
+.peix-rec .flow .arr { color: var(--peix-ink-mute); font-family: var(--peix-font-sans); font-size: 14px; }
+.peix-rec .why { color: var(--peix-ink-soft); font-size: 13px; }
+.peix-rec .conf { font-family: var(--peix-font-mono); font-size: 12px; color: var(--peix-ink-mute); text-align: right; }
+.peix-rec .amt { font-family: var(--peix-font-display); font-size: 18px; font-weight: 500; color: var(--peix-ink); }
 
 /* Sparkline dots */
 .peix-dot {
@@ -362,14 +410,13 @@
 }
 .peix-stage-canvas canvas { display: block; width: 100% !important; height: 100% !important; }
 .peix-stage-legend {
-  position: absolute; bottom: 20px; left: 0; right: 0;
-  padding: 0 24px 0 calc(380px + 24px);
+  position: absolute; bottom: 20px; left: 420px; right: 24px;
   display: flex; justify-content: space-between; align-items: center;
   font-family: var(--peix-font-mono); font-size: 10px;
   color: rgba(245,243,238,0.65);
   text-transform: uppercase; letter-spacing: 0.12em;
 }
-@media (max-width: 960px) { .peix-stage-legend { padding: 0 24px; } }
+@media (max-width: 960px) { .peix-stage-legend { left: 24px; } }
 .peix-stage-legend .bar {
   height: 4px; width: 160px; border-radius: 2px;
   background: linear-gradient(90deg, #2f998b, #7ab6ff, #ffb897, #d94a2c);

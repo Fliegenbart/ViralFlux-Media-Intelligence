@@ -70,13 +70,15 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
       style={{
         background: 'var(--ex-stage)',
         color: '#f6f1e7',
-        padding: '64px 48px 72px',
+        padding: '88px 72px 104px',
         // Pull up so there's no gap between the section-head strip
         // and this hero strip — one continuous dark block.
-        margin: '-72px -48px 0',
+        // The negative margin matches the section-head's bottom
+        // offset (112 px) so the seam is invisible.
+        margin: '-112px -72px 0',
       }}
     >
-      <div style={{ maxWidth: 1344, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         {/* Kicker */}
         <div
           className="ex-hero-kicker"
@@ -126,7 +128,6 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
                   lineHeight: 1.02,
                   letterSpacing: '-0.03em',
                   margin: '0 0 28px',
-                  fontVariationSettings: '"opsz" 144',
                 }}
               >
                 Verschiebe{' '}
@@ -156,7 +157,6 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
                   lineHeight: 1.02,
                   letterSpacing: '-0.03em',
                   margin: '0 0 28px',
-                  fontVariationSettings: '"opsz" 144',
                 }}
               >
                 Aktuell{' '}
@@ -176,7 +176,6 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
                 color: 'var(--ex-stage-60)',
                 maxWidth: '46ch',
                 margin: '0 0 32px',
-                fontVariationSettings: '"opsz" 36',
               }}
             >
               {rec
@@ -275,7 +274,6 @@ const RationaleBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) =
             fontStyle: 'italic',
             fontSize: 24,
             color: 'var(--ex-fired)',
-            fontVariationSettings: '"opsz" 36',
           }}
         >
           §
@@ -296,7 +294,6 @@ const RationaleBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) =
             lineHeight: 1.35,
             margin: 0,
             color: 'var(--ex-ink)',
-            fontVariationSettings: '"opsz" 36',
           }}
         >
           {rec
@@ -366,7 +363,6 @@ const StatCell: React.FC<{
       style={{
         fontFamily: 'var(--ex-serif)',
         fontSize: 40,
-        fontVariationSettings: '"opsz" 144',
         letterSpacing: '-0.02em',
         lineHeight: 1,
       }}
@@ -380,7 +376,6 @@ const StatCell: React.FC<{
         marginTop: 6,
         fontFamily: 'var(--ex-serif)',
         fontStyle: 'italic',
-        fontVariationSettings: '"opsz" 36',
       }}
     >
       {caption}
@@ -417,7 +412,6 @@ const CandidatesBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) 
               fontStyle: 'italic',
               fontSize: 24,
               color: 'var(--ex-fired)',
-              fontVariationSettings: '"opsz" 36',
             }}
           >
             §
@@ -435,7 +429,6 @@ const CandidatesBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) 
               fontSize: 14,
               color: 'var(--ex-ink-60)',
               marginLeft: 16,
-              fontVariationSettings: '"opsz" 36',
             }}
           >
             nach{' '}

@@ -85,7 +85,7 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
         console.warn('AtlasDrawer: three.js failed to load', err);
         if (mount) {
           mount.innerHTML =
-            '<div style="padding:56px 36px;color:rgba(246,241,231,.6);font-style:italic;font-family:Fraunces,Georgia,serif;text-align:center">Der 3D-Atlas konnte gerade nicht geladen werden.</div>';
+            '<div style="padding:56px 36px;color:rgba(246,241,231,.6);font-style:italic;font-family:var(--ex-serif);text-align:center">Der 3D-Atlas konnte gerade nicht geladen werden.</div>';
         }
         return;
       }
@@ -337,7 +337,7 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
             style={{
               color: 'rgba(246,241,231,.45)',
               marginBottom: 8,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--ex-mono)',
               fontSize: 11,
               letterSpacing: '.08em',
               textTransform: 'uppercase',
@@ -347,13 +347,12 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
           </div>
           <p
             style={{
-              fontFamily: 'Fraunces, Georgia, serif',
+              fontFamily: 'var(--ex-serif)',
               fontStyle: 'italic',
               fontSize: 16,
               lineHeight: 1.5,
               margin: 0,
               color: 'rgba(246,241,231,.60)',
-              fontVariationSettings: '"opsz" 36',
             }}
           >
             Turmhöhe ist nicht die aktuelle Welle — sondern der erwartete
@@ -366,7 +365,7 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
             style={{
               color: 'rgba(246,241,231,.45)',
               marginBottom: 8,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--ex-mono)',
               fontSize: 11,
               letterSpacing: '.08em',
               textTransform: 'uppercase',
@@ -382,7 +381,7 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
             style={{
               color: 'rgba(246,241,231,.45)',
               marginBottom: 8,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--ex-mono)',
               fontSize: 11,
               letterSpacing: '.08em',
               textTransform: 'uppercase',
@@ -397,7 +396,7 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
               fontSize: 13,
               marginTop: 8,
               fontStyle: 'italic',
-              fontFamily: 'Fraunces, Georgia, serif',
+              fontFamily: 'var(--ex-serif)',
             }}
           >
             Die 16 Türme sind unabhängig kalibriert, nicht normiert.
@@ -427,7 +426,7 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
                   style={{
                     marginLeft: 12,
                     color: 'rgba(246,241,231,.45)',
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'var(--ex-mono)',
                     fontSize: 11,
                     letterSpacing: '.08em',
                   }}
@@ -439,7 +438,7 @@ export const AtlasDrawer: React.FC<AtlasDrawerProps> = ({
                     style={{
                       fontSize: 12,
                       color: 'rgba(246,241,231,.45)',
-                      fontFamily: 'Fraunces, Georgia, serif',
+                      fontFamily: 'var(--ex-serif)',
                       fontStyle: 'italic',
                       marginTop: 2,
                     }}

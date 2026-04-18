@@ -50,7 +50,7 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
     <div>
         <p
           style={{
-            fontFamily: 'Fraunces, Georgia, serif',
+            fontFamily: 'var(--ex-serif)',
             fontStyle: 'italic',
             fontSize: 20,
             lineHeight: 1.4,
@@ -58,7 +58,6 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
             color: 'rgba(26,23,19,.60)',
             marginTop: 0,
             marginBottom: 24,
-            fontVariationSettings: '"opsz" 36',
           }}
         >
           Rückblick der letzten Wochen. Wo kein Sell-out-Datum verbunden
@@ -71,7 +70,7 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
             style={{
               padding: '32px 0',
               textAlign: 'center',
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--ex-mono)',
               fontSize: 11,
               letterSpacing: '.08em',
               textTransform: 'uppercase',
@@ -86,7 +85,7 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
           <div style={{ padding: 24 }}>
             <div
               style={{
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'var(--ex-mono)',
                 fontSize: 11,
                 letterSpacing: '.08em',
                 textTransform: 'uppercase',
@@ -102,7 +101,7 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
               onClick={reload}
               style={{
                 marginTop: 12,
-                fontFamily: 'JetBrains Mono, monospace',
+                fontFamily: 'var(--ex-mono)',
                 fontSize: 11,
                 letterSpacing: '.08em',
                 textTransform: 'uppercase',
@@ -212,7 +211,7 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
                   marginTop: 32,
                   paddingTop: 20,
                   borderTop: '1px solid rgba(26,23,19,.10)',
-                  fontFamily: 'JetBrains Mono, monospace',
+                  fontFamily: 'var(--ex-mono)',
                   fontSize: 10,
                   letterSpacing: '.08em',
                   textTransform: 'uppercase',
@@ -253,7 +252,7 @@ export const ImpactDrawerBody: React.FC<{ snapshot: CockpitSnapshot }> = ({
                 style={{
                   marginTop: 20,
                   paddingLeft: 18,
-                  fontFamily: 'Fraunces, Georgia, serif',
+                  fontFamily: 'var(--ex-serif)',
                   fontStyle: 'italic',
                   fontSize: 13,
                   color: 'rgba(26,23,19,.60)',
@@ -313,7 +312,7 @@ const Monument: React.FC<{ label: string; value: string; caption?: string }> = (
   <div>
     <div
       style={{
-        fontFamily: 'JetBrains Mono, monospace',
+        fontFamily: 'var(--ex-mono)',
         fontSize: 11,
         letterSpacing: '.08em',
         textTransform: 'uppercase',
@@ -325,9 +324,8 @@ const Monument: React.FC<{ label: string; value: string; caption?: string }> = (
     </div>
     <div
       style={{
-        fontFamily: 'Fraunces, Georgia, serif',
+        fontFamily: 'var(--ex-serif)',
         fontSize: 48,
-        fontVariationSettings: '"opsz" 144',
         letterSpacing: '-0.03em',
         lineHeight: 1,
       }}
@@ -337,7 +335,7 @@ const Monument: React.FC<{ label: string; value: string; caption?: string }> = (
     {caption && (
       <div
         style={{
-          fontFamily: 'Fraunces, Georgia, serif',
+          fontFamily: 'var(--ex-serif)',
           fontStyle: 'italic',
           fontSize: 13,
           color: 'rgba(26,23,19,.60)',

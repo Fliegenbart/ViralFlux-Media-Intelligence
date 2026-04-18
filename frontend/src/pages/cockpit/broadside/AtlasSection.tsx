@@ -76,7 +76,7 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({ regions, highlightCode }) => {
         console.warn('AtlasSection: three.js failed to load', err);
         if (mount) {
           mount.innerHTML =
-            '<div style="padding:56px 36px;color:rgba(246,241,231,.6);font-style:italic;font-family:Fraunces,Georgia,serif;text-align:center">Der 3D-Atlas konnte gerade nicht geladen werden.</div>';
+            '<div style="padding:56px 36px;color:rgba(246,241,231,.6);font-style:italic;font-family:var(--ex-serif);text-align:center">Der 3D-Atlas konnte gerade nicht geladen werden.</div>';
         }
         return;
       }
@@ -338,7 +338,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
 
       <div
         className="ex-section-body ex-section-body--bleed"
-        style={{ marginTop: -72 }}
+        style={{ marginTop: -112 }}
       >
         <div className="ex-atlas-stage">
           <div className="ex-atlas-stage__grain" aria-hidden />
@@ -379,7 +379,6 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
                 lineHeight: 1.5,
                 margin: 0,
                 color: 'var(--ex-ink-60)',
-                fontVariationSettings: '"opsz" 36',
               }}
             >
               Turmhöhe ist nicht die aktuelle Welle — sondern der
@@ -416,7 +415,6 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
                 fontFamily: 'var(--ex-serif)',
                 fontStyle: 'italic',
                 color: 'var(--ex-ink-60)',
-                fontVariationSettings: '"opsz" 36',
               }}
             >
               Die 16 Türme sind unabhängig kalibriert, nicht normiert.

@@ -32,7 +32,7 @@ Regionale Priorisierung + Freigabe-Logik
     ↓
 API + Snapshots
     ↓
-Virus-Radar / Regionen / Kampagnen
+/cockpit (4 Tabs)
 ```
 
 Anders gesagt:
@@ -81,6 +81,17 @@ Sie besteht aus mehreren getrennten Ebenen:
 
 Diese Trennung ist wichtig, weil ein Forecast allein noch keine gute Business-Entscheidung ist.
 
+### Modellstack (Code-Wahrheit)
+
+Das produktive Forecast-Pipeline liegt in `backend/app/services/ml/` und ist **XGBoost-zentriert**:
+
+- **Punktprognose (Regression)**: XGBRegressor, orchestriert in [`forecast_service_inference.py`](backend/app/services/ml/forecast_service_inference.py) und [`forecast_service_pipeline.py`](backend/app/services/ml/forecast_service_pipeline.py). Training in [`forecast_service_direct_training.py`](backend/app/services/ml/forecast_service_direct_training.py).
+- **Event-Wahrscheinlichkeit (Classification)**: XGBClassifier in [`forecast_service_event_probability.py`](backend/app/services/ml/forecast_service_event_probability.py), Exceedance-Ziele in [`backtester_targets.py`](backend/app/services/ml/backtester_targets.py).
+- **Kalibrierung**: Isotonic (preferred) oder Platt/Logistic im gleichen Event-Probability-Modul; fuer kleine Samples bleibt der Output explizit als heuristischer Score markiert.
+- **Regionale Pipelines**: [`regional_forecast.py`](backend/app/services/ml/regional_forecast.py), [`regional_trainer*.py`](backend/app/services/ml/) fuer Virus × Bundesland × Horizont, inkl. Artifact-Persistenz und Hierarchie-Training.
+- **Backtesting**: Walk-Forward in [`backtester_walk_forward.py`](backend/app/services/ml/backtester_walk_forward.py) mit Hold-out-Reporting in [`backtester_reporting.py`](backend/app/services/ml/backtester_reporting.py).
+- **Prophet**: nur als optionaler Fallback-Estimator in [`forecast_service_estimators.py`](backend/app/services/ml/forecast_service_estimators.py) / `fusion_engine/prophet_predictor.py`. Nicht auf dem Haupt-Pfad des Cockpits.
+
 ## 3. Oberflaechen-Schicht
 
 Die Oberflaeche zeigt nicht einfach Rohdaten, sondern eine verdichtete Sicht:
@@ -90,7 +101,7 @@ Die Oberflaeche zeigt nicht einfach Rohdaten, sondern eine verdichtete Sicht:
 - welche Bundeslaender sollten zuerst geprueft werden
 - was ist freigabereif und was noch nicht
 
-Die wichtigste aktuelle Produktseite ist `Virus-Radar`.
+Die einzige user-facing Produktseite ist `/cockpit` mit vier Tabs (Entscheidung, Wellen-Atlas, Forecast-Zeitreise, Wirkung). Legacy-Routes wie `/virus-radar`, `/jetzt`, `/regionen`, `/kampagnen`, `/evidenz` leiten client-seitig nach `/cockpit` um.
 
 ---
 
@@ -220,9 +231,9 @@ delta_7d = (forecast_7d - current_value) / current_value
 
 Das ist die Zahl, die spaeter als `+x %` oder `-x %` erscheint.
 
-## C. Hero-Graph auf `Virus-Radar`
+## C. Fan-Chart im `/cockpit`
 
-Der Hero-Graph oben ist fuer Lesbarkeit normiert:
+Der Fan-Chart (Tab 03 Forecast-Zeitreise) ist fuer Lesbarkeit normiert:
 
 ```text
 hero_index = 100 * Wert / letzter_beobachteter_Wert
@@ -296,7 +307,7 @@ Die Plattform hat viele Endpunkte. Fuer das aktuelle Produktbild sind diese beso
   - regionale Forecasts je Virus und Horizont (intern vom snapshot-builder genutzt)
 
 - `GET /api/v1/forecast/regional/hero-overview`
-  - schneller Hero-Pfad (historisch fuer `/virus-radar`)
+  - schneller Snapshot-Pfad (historisch fuer `/virus-radar`, heute nur noch intern vom Cockpit-Snapshot-Builder genutzt)
   - liest vorbereitete Snapshots / Wochenhistorie statt jedes Mal den schweren Portfolio-Pfad neu zu rechnen
 
 - `GET /api/v1/forecast/regional/media-allocation`
@@ -432,7 +443,8 @@ Deshalb sind unter anderem ignoriert:
 - FastAPI
 - Pandas / NumPy
 - scikit-learn
-- Prophet
+- **XGBoost** (primary point-forecast und event-probability model)
+- Prophet (optional fallback estimator)
 - Celery
 
 ### Infrastruktur
@@ -464,6 +476,7 @@ So wird vermieden, dass:
 - [README.md](README.md)
 - [QUICKSTART.md](QUICKSTART.md)
 - [DEPLOY.md](DEPLOY.md)
-- [docs/OPERATORS_GUIDE.md](docs/OPERATORS_GUIDE.md)
+- [docs/README.md](docs/README.md) (Index der aktiven Dokumentation)
 - [docs/forecast_probability_stack.md](docs/forecast_probability_stack.md)
-- [docs/forecast_world_class_architecture.md](docs/forecast_world_class_architecture.md)
+- [docs/forecast_h7_science_contract.md](docs/forecast_h7_science_contract.md)
+- [docs/model_release_process.md](docs/model_release_process.md)

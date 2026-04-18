@@ -161,7 +161,7 @@ Der Lauf ist reproduzierbar, weil
 
 ## Verwandte Dokumente
 
-- [h7_rsv_ranking_experiments.md](./h7_rsv_ranking_experiments.md)
+- [archive/h7_rsv_ranking_experiments.md](./archive/h7_rsv_ranking_experiments.md) (archivierte Experiment-Notes)
 - [rsv_h7_persistent_evaluation.md](./rsv_h7_persistent_evaluation.md)
 - [h7_pilot_only_training_path.md](./h7_pilot_only_training_path.md)
 - [model_release_process.md](./model_release_process.md)

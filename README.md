@@ -201,16 +201,16 @@ Wenn Benchmarks, Screenshots oder Reports lokal erzeugt werden, bleiben sie loka
 
 ## Tech-Stack
 
-- Frontend: React, TypeScript, Recharts
-- Backend: FastAPI, Pandas, scikit-learn, Prophet
+- Frontend: React, TypeScript, Recharts, three.js
+- Backend: FastAPI, Pandas, scikit-learn, **XGBoost** (primary forecast + event-probability model), Prophet (optional fallback), Celery
 - Datenbank: PostgreSQL / TimescaleDB
 - Scheduling: Celery Beat + Celery Worker
-- Deployment: Docker Compose
+- Deployment: Docker Compose (`docker-compose.prod.yml` → `fluxengine.labpulse.ai`)
 
 ## Einstieg
 
-- [QUICKSTART.md](QUICKSTART.md)
-- [ARCHITECTURE.md](ARCHITECTURE.md)
-- [CONTRIBUTING.md](CONTRIBUTING.md)
-- [docs/OPERATORS_GUIDE.md](docs/OPERATORS_GUIDE.md)
-- [DEPLOY.md](DEPLOY.md)
+- [QUICKSTART.md](QUICKSTART.md) — lokale Entwicklung
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System- und Modell-Architektur
+- [DEPLOY.md](DEPLOY.md) — Produktions-Deployment
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Pull-Request-Workflow
+- [docs/README.md](docs/README.md) — Index der aktiven Dokumentation

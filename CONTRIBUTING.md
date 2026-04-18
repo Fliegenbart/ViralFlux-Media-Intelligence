@@ -57,4 +57,4 @@ curl https://fluxengine.labpulse.ai/health/ready
 
 - [QUICKSTART.md](QUICKSTART.md)
 - [DEPLOY.md](DEPLOY.md)
-- [docs/OPERATORS_GUIDE.md](docs/OPERATORS_GUIDE.md)
+- [docs/README.md](docs/README.md)

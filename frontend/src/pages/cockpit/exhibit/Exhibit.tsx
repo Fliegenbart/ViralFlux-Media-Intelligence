@@ -26,7 +26,7 @@ import {
 
 interface ExhibitProps {
   snapshot: CockpitSnapshot;
-  onOpenDrawer: (id: 'atlas' | 'forecast' | 'impact') => void;
+  onOpenDrawer: (id: 'atlas' | 'forecast' | 'impact' | 'backtest') => void;
 }
 
 // --------------------------------------------------------------

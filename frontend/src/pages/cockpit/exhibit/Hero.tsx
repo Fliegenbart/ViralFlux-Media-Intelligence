@@ -21,7 +21,7 @@ type HeroLayout = 'fullbleed' | 'split' | 'marginalia';
 interface HeroProps {
   snapshot: CockpitSnapshot;
   layout?: HeroLayout;
-  onOpen: (id: 'atlas' | 'forecast' | 'impact') => void;
+  onOpen: (id: 'atlas' | 'forecast' | 'impact' | 'backtest') => void;
 }
 
 export const Hero: React.FC<HeroProps> = ({ snapshot, layout = 'fullbleed', onOpen }) => {
@@ -124,6 +124,13 @@ export const Hero: React.FC<HeroProps> = ({ snapshot, layout = 'fullbleed', onOp
         onClick={() => onOpen('impact')}
       >
         Wirkung &amp; Rückkopplung →
+      </button>
+      <button
+        type="button"
+        className="ex-link-act"
+        onClick={() => onOpen('backtest')}
+      >
+        Backtest zeigen →
       </button>
     </div>
   );

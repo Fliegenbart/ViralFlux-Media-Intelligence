@@ -69,43 +69,31 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
     <div
       style={{
         background: 'var(--ex-stage)',
-        color: '#f6f1e7',
-        padding: '88px 72px 104px',
+        color: 'var(--ex-cream)',
+        padding: '104px 88px 128px',
         // Pull up so there's no gap between the section-head strip
-        // and this hero strip — one continuous dark block.
-        // The negative margin matches the section-head's bottom
-        // offset (112 px) so the seam is invisible.
-        margin: '-112px -72px 0',
+        // and this hero strip — one continuous dark block. Matches
+        // the section-head's margin-bottom (120 px).
+        margin: '-120px -88px 0',
       }}
     >
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        {/* Kicker */}
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        {/* Kicker — single mono line, no dots */}
         <div
-          className="ex-hero-kicker"
-          style={{ display: 'flex', gap: 28, alignItems: 'center', marginBottom: 40, flexWrap: 'wrap' }}
+          style={{
+            display: 'flex',
+            gap: 32,
+            alignItems: 'baseline',
+            marginBottom: 72,
+            flexWrap: 'wrap',
+          }}
         >
           <span className="ex-mono" style={{ color: 'var(--ex-stage-45)' }}>
             Empfehlung der Woche
           </span>
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--ex-ochre)',
-            }}
-          />
           <span className="ex-mono" style={{ color: 'var(--ex-stage-45)' }}>
             {horizonLabel}
           </span>
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: 'var(--ex-stage-hair)',
-            }}
-          />
           <MethodBadge calibrated={calibrated} />
         </div>
 
@@ -113,8 +101,8 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1.1fr 1fr',
-            gap: 64,
+            gridTemplateColumns: '1fr 1fr',
+            gap: 96,
             alignItems: 'end',
           }}
         >
@@ -123,27 +111,43 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
               <h1
                 style={{
                   fontFamily: 'var(--ex-serif)',
-                  fontWeight: 400,
-                  fontSize: 'clamp(40px, 5vw, 72px)',
-                  lineHeight: 1.02,
-                  letterSpacing: '-0.03em',
-                  margin: '0 0 28px',
+                  fontWeight: 300,
+                  fontSize: 'clamp(44px, 5vw, 80px)',
+                  lineHeight: 1.06,
+                  letterSpacing: '-0.025em',
+                  margin: '0 0 40px',
+                  maxWidth: '14ch',
                 }}
               >
                 Verschiebe{' '}
                 <em
-                  style={{ fontStyle: 'italic', color: 'var(--ex-ochre)' }}
+                  style={{
+                    fontStyle: 'italic',
+                    color: 'var(--ex-cream)',
+                    fontWeight: 300,
+                  }}
                 >
                   {fmtEurCompactOrDash(rec.amountEur)}
                 </em>
                 <br />
                 aus{' '}
-                <em style={{ fontStyle: 'italic', color: 'var(--ex-ochre)' }}>
+                <em
+                  style={{
+                    fontStyle: 'italic',
+                    color: 'var(--ex-cream)',
+                    fontWeight: 300,
+                  }}
+                >
                   {rec.fromName}
                 </em>{' '}
-                nach
-                <br />
-                <em style={{ fontStyle: 'italic', color: 'var(--ex-ochre)' }}>
+                nach{' '}
+                <em
+                  style={{
+                    fontStyle: 'italic',
+                    color: 'var(--ex-fired)',
+                    fontWeight: 300,
+                  }}
+                >
                   {rec.toName}
                 </em>
                 .
@@ -152,15 +156,21 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
               <h1
                 style={{
                   fontFamily: 'var(--ex-serif)',
-                  fontWeight: 400,
-                  fontSize: 'clamp(40px, 5vw, 72px)',
-                  lineHeight: 1.02,
-                  letterSpacing: '-0.03em',
-                  margin: '0 0 28px',
+                  fontWeight: 300,
+                  fontSize: 'clamp(44px, 5vw, 80px)',
+                  lineHeight: 1.06,
+                  letterSpacing: '-0.025em',
+                  margin: '0 0 40px',
                 }}
               >
                 Aktuell{' '}
-                <em style={{ fontStyle: 'italic', color: 'var(--ex-ochre)' }}>
+                <em
+                  style={{
+                    fontStyle: 'italic',
+                    color: 'var(--ex-fired)',
+                    fontWeight: 300,
+                  }}
+                >
                   kein Shift-Vorschlag
                 </em>
                 .
@@ -169,13 +179,13 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
 
             <p
               style={{
-                fontFamily: 'var(--ex-serif)',
-                fontStyle: 'italic',
-                fontSize: 19,
-                lineHeight: 1.45,
+                fontFamily: 'var(--ex-sans)',
+                fontWeight: 400,
+                fontSize: 18,
+                lineHeight: 1.7,
                 color: 'var(--ex-stage-60)',
-                maxWidth: '46ch',
-                margin: '0 0 32px',
+                maxWidth: '58ch',
+                margin: 0,
               }}
             >
               {rec
@@ -190,16 +200,14 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
               className="ex-mono"
               style={{
                 color: 'var(--ex-stage-45)',
-                marginBottom: 10,
-                letterSpacing: '.24em',
-                fontWeight: 600,
+                marginBottom: 32,
               }}
             >
               Konfidenz · {calibrated ? 'kalibriert' : 'heuristisch'}
             </div>
             <div
               className="ex-punk-monument"
-              style={{ color: '#f6f1e7' }}
+              style={{ color: 'var(--ex-cream)' }}
             >
               {rec && calibrated
                 ? Math.round(rec.confidence * 100)
@@ -211,7 +219,7 @@ const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
               )}
             </div>
 
-            <div style={{ marginTop: 36, maxWidth: 380 }}>
+            <div style={{ marginTop: 64, maxWidth: 420 }}>
               <Thermometer
                 value={calibValue}
                 label="Signalstärke"
@@ -259,92 +267,73 @@ const RationaleBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) =
   const altCount = snapshot.secondaryRecommendations?.length ?? 0;
 
   return (
-    <div style={{ marginTop: 72 }}>
+    <div style={{ marginTop: 160 }}>
       <div
         style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          gap: 14,
-          marginBottom: 24,
+          marginBottom: 40,
         }}
       >
-        <span
-          style={{
-            fontFamily: 'var(--ex-serif)',
-            fontStyle: 'italic',
-            fontSize: 24,
-            color: 'var(--ex-fired)',
-          }}
-        >
-          §
-        </span>
-        <span
-          className="ex-mono"
-          style={{ color: 'var(--ex-ink-45)', letterSpacing: '.16em' }}
-        >
+        <span className="ex-mono" style={{ color: 'var(--ex-ink-45)' }}>
           Begründung
         </span>
       </div>
-      <div style={{ maxWidth: 900 }}>
+      <div className="ex-reading-column">
         <p
           style={{
             fontFamily: 'var(--ex-serif)',
-            fontStyle: 'italic',
+            fontWeight: 300,
             fontSize: 26,
-            lineHeight: 1.35,
+            lineHeight: 1.5,
             margin: 0,
             color: 'var(--ex-ink)',
+            letterSpacing: '-0.015em',
           }}
         >
           {rec
             ? rec.why
             : 'In dieser Woche ergibt die Modellarbeit keinen eindeutig gerichteten Shift-Vorschlag. Statt einer erfundenen Zahl steht hier die Leere, die das Produkt-Axiom verlangt.'}
         </p>
-
-        {rec && (
-          <>
-            <hr
-              className="ex-rule-soft"
-              style={{ margin: '32px 0', height: 1, background: 'var(--ex-hairline-soft)', border: 0 }}
-            />
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 40,
-              }}
-            >
-              <StatCell
-                label="Lead-Time"
-                value={
-                  leadDays !== null
-                    ? leadDays >= 0
-                      ? `+${leadDays} d`
-                      : `${leadDays} d`
-                    : '—'
-                }
-                caption={
-                  leadDays !== null && leadDays >= 0
-                    ? 'Notaufnahme vor Meldewesen'
-                    : leadDays !== null
-                      ? 'hinter Notaufnahme'
-                      : 'Lag-Messung liegt nicht vor'
-                }
-              />
-              <StatCell
-                label="Horizont"
-                value={`${horizonWeeks} W.`}
-                caption={`kommende ${horizonWeeks} Wochen`}
-              />
-              <StatCell
-                label="Alternativen"
-                value={String(altCount)}
-                caption="schwächer, aber gerichtet"
-              />
-            </div>
-          </>
-        )}
       </div>
+
+      {rec && (
+        <div
+          style={{
+            marginTop: 96,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 64,
+            maxWidth: 880,
+          }}
+        >
+          <StatCell
+            label="Lead-Time"
+            value={
+              leadDays !== null
+                ? leadDays >= 0
+                  ? `+${leadDays} d`
+                  : `${leadDays} d`
+                : '—'
+            }
+            caption={
+              leadDays !== null && leadDays >= 0
+                ? 'Notaufnahme vor Meldewesen'
+                : leadDays !== null
+                  ? 'hinter Notaufnahme'
+                  : 'Lag-Messung liegt nicht vor'
+            }
+          />
+          <StatCell
+            label="Horizont"
+            value={`${horizonWeeks} W.`}
+            caption={`kommende ${horizonWeeks} Wochen`}
+          />
+          <StatCell
+            label="Alternativen"
+            value={String(altCount)}
+            caption="schwächer, aber gerichtet"
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -355,15 +344,16 @@ const StatCell: React.FC<{
   caption: string;
 }> = ({ label, value, caption }) => (
   <div>
-    <div className="ex-mono" style={{ color: 'var(--ex-ink-45)', marginBottom: 8 }}>
+    <div className="ex-mono" style={{ color: 'var(--ex-ink-45)', marginBottom: 16 }}>
       {label}
     </div>
     <div
       className="ex-num"
       style={{
         fontFamily: 'var(--ex-serif)',
-        fontSize: 40,
-        letterSpacing: '-0.02em',
+        fontWeight: 200,
+        fontSize: 56,
+        letterSpacing: '-0.03em',
         lineHeight: 1,
       }}
     >
@@ -371,11 +361,11 @@ const StatCell: React.FC<{
     </div>
     <div
       style={{
-        fontSize: 13,
+        fontSize: 14,
         color: 'var(--ex-ink-60)',
-        marginTop: 6,
-        fontFamily: 'var(--ex-serif)',
-        fontStyle: 'italic',
+        marginTop: 14,
+        fontFamily: 'var(--ex-sans)',
+        lineHeight: 1.55,
       }}
     >
       {caption}
@@ -389,71 +379,46 @@ const CandidatesBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) 
   const candidates = snapshot.secondaryRecommendations ?? [];
   if (candidates.length === 0) return null;
   return (
-    <div
-      style={{
-        marginTop: 72,
-        padding: '40px 48px',
-        margin: '72px -48px 0',
-        background: 'var(--ex-paper-deep)',
-      }}
-    >
-      <div style={{ maxWidth: 1344, margin: '0 auto' }}>
-        <div
+    <div style={{ marginTop: 160 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 28,
+          marginBottom: 40,
+        }}
+      >
+        <span className="ex-mono" style={{ color: 'var(--ex-ink-45)' }}>
+          Weitere Kandidaten
+        </span>
+        <span
           style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 14,
-            marginBottom: 24,
+            fontSize: 14,
+            color: 'var(--ex-ink-60)',
+            fontFamily: 'var(--ex-sans)',
           }}
         >
-          <span
-            style={{
-              fontFamily: 'var(--ex-serif)',
-              fontStyle: 'italic',
-              fontSize: 24,
-              color: 'var(--ex-fired)',
-            }}
-          >
-            §
-          </span>
-          <span
-            className="ex-mono"
-            style={{ color: 'var(--ex-ink-45)', letterSpacing: '.16em' }}
-          >
-            Weitere Kandidaten
-          </span>
-          <span
-            style={{
-              fontFamily: 'var(--ex-serif)',
-              fontStyle: 'italic',
-              fontSize: 14,
-              color: 'var(--ex-ink-60)',
-              marginLeft: 16,
-            }}
-          >
-            nach{' '}
-            {calibrated ? 'Konfidenz' : 'Signalstärke'}, absteigend
-          </span>
-        </div>
-        <ul className="ex-roster" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {candidates.map((c: ShiftRecommendation, i: number) => {
-            const confText = calibrated
-              ? `${Math.round(c.confidence * 100)} %`
-              : fmtSignalStrength(c.confidence);
-            return (
-              <RosterRow
-                key={c.id}
-                idx={`0${i + 1}`.slice(-2)}
-                name={`${c.fromName} → ${c.toName}`}
-                sub={c.why}
-                value={<KEur eur={c.amountEur ?? ('—' as const)} />}
-                direction={confText}
-                dirClass={calibrated ? 'up' : 'flat'}
-              />
-            );
-          })}
-        </ul>
+          nach {calibrated ? 'Konfidenz' : 'Signalstärke'}, absteigend
+        </span>
       </div>
+      <ul className="ex-roster" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {candidates.map((c: ShiftRecommendation, i: number) => {
+          const confText = calibrated
+            ? `${Math.round(c.confidence * 100)} %`
+            : fmtSignalStrength(c.confidence);
+          return (
+            <RosterRow
+              key={c.id}
+              idx={`0${i + 1}`.slice(-2)}
+              name={`${c.fromName} → ${c.toName}`}
+              sub={c.why}
+              value={<KEur eur={c.amountEur ?? ('—' as const)} />}
+              direction={confText}
+              dirClass={calibrated ? 'up' : 'flat'}
+            />
+          );
+        })}
+      </ul>
     </div>
   );
 };

@@ -24,99 +24,112 @@
  * Inter Tight for sans-body, JetBrains Mono for labels and numerals.
  */
 
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=switzer@200,300,400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
 /* --------------------------------------------------------------
    Tokens — scoped to the exhibit wrapper so we don't collide with
    the legacy peix.css tokens on other pages.
    -------------------------------------------------------------- */
 .peix-exhibit {
-  /* Paper + ink */
-  --ex-paper:        #f3efe6;
-  --ex-paper-deep:   #ece7db;
+  /* ----- Swiss Pharma Annual Report palette ------------------
+   * One accent (terracotta), one warning (amber), everything
+   * else grayscale on warm paper. Near-true black on stage.
+   * ---------------------------------------------------------- */
+  --ex-paper:        #f6f3ec;
+  --ex-paper-deep:   #ede8dc;
   --ex-paper-edge:   #d9d2c2;
-  --ex-ink:          #1a1713;
-  --ex-ink-60:       rgba(26,23,19,.60);
-  --ex-ink-45:       rgba(26,23,19,.45);
-  --ex-ink-30:       rgba(26,23,19,.30);
-  --ex-ink-15:       rgba(26,23,19,.15);
-  --ex-ink-08:       rgba(26,23,19,.08);
-  --ex-hairline:     rgba(26,23,19,.18);
-  --ex-hairline-soft:rgba(26,23,19,.10);
+  --ex-ink:          #0e0e0e;
+  --ex-ink-60:       rgba(14,14,14,.58);
+  --ex-ink-45:       rgba(14,14,14,.45);
+  --ex-ink-30:       rgba(14,14,14,.30);
+  --ex-ink-15:       rgba(14,14,14,.15);
+  --ex-ink-08:       rgba(14,14,14,.08);
+  --ex-hairline:     rgba(14,14,14,.12);
+  --ex-hairline-soft:rgba(14,14,14,.06);
 
-  /* Stage (dark hero + atlas drawer) */
-  --ex-stage:        #14110d;
-  --ex-stage-60:     rgba(246,241,231,.60);
-  --ex-stage-45:     rgba(246,241,231,.45);
-  --ex-stage-hair:   rgba(246,241,231,.16);
+  --ex-stage:        #0a0a0a;
+  --ex-stage-60:     rgba(246,243,236,.62);
+  --ex-stage-45:     rgba(246,243,236,.45);
+  --ex-stage-hair:   rgba(246,243,236,.14);
+  --ex-cream:        #f6f3ec;
 
-  /* Single accent family — terracotta */
   --ex-ochre:        #d68a5a;
   --ex-fired:        #b94a2e;
   --ex-fired-dim:    #8a3820;
 
-  /* Type — Editorial-Clean pairing (2026-04-18 pass):
-   * Display:  Instrument Serif (single style, Regular + Italic)
-   * Body:     Instrument Sans (variable, 400/500/600/700)
-   * Mono:     Space Mono (Regular + Bold)
-   * All three share a modern-editorial voice; Instrument Serif has
-   * no optical-size axis, so font-variation-settings is no longer
-   * used anywhere (the glyphs are designed to work at large sizes
-   * without dynamic optical sizing). */
-  --ex-serif:  "Instrument Serif", "Iowan Old Style", Georgia, serif;
-  --ex-sans:   "Instrument Sans", -apple-system, Helvetica, sans-serif;
+  --ex-amber:        #a16b22;
+  --ex-amber-soft:   rgba(161,107,34,.10);
+
+  --ex-punk-rule:    1px;
+
+  /* ----- Type — Swiss Neo-Grotesque -------------------------
+   * Display + Body: Switzer (Fontshare, 9 weights + italics).
+   * Monuments use weight 200 (Thin) — the Swiss-Annual-Report
+   * signature. Bold is for dashboards; thin is for galleries.
+   * Labels + Mono:  Space Mono (Google Fonts).
+   * --ex-serif aliased to Switzer so legacy inline-styles that
+   * reference var(--ex-serif) don't break.
+   * ---------------------------------------------------------- */
+  --ex-serif:  "Switzer", -apple-system, Helvetica, sans-serif;
+  --ex-sans:   "Switzer", -apple-system, Helvetica, sans-serif;
   --ex-mono:   "Space Mono", ui-monospace, Menlo, monospace;
 
-  /* Scale (editorial, big) */
-  --ex-fs-mono:    11px;
-  --ex-fs-body:    15px;
-  --ex-fs-body-lg: 17px;
-  --ex-fs-dek:     22px;
-  --ex-fs-h3:      28px;
-  --ex-fs-h2:      44px;
-  --ex-fs-h1:      72px;
-  --ex-fs-monument:128px;
+  /* ----- Scale — larger steps, thin-weight monuments -------- */
+  --ex-fs-mono:     12px;
+  --ex-fs-body:     16px;
+  --ex-fs-body-lg:  21px;
+  --ex-fs-dek:      21px;
+  --ex-fs-h3:       28px;
+  --ex-fs-h2:       clamp(36px, 4vw, 56px);
+  --ex-fs-h1:       clamp(56px, 6vw, 88px);
+  --ex-fs-monument: clamp(180px, 16vw, 260px);
 
-  /* Spacing (8-based, editorial) */
+  /* ----- Spacing (8-based) + reading-column ----------------
+   * --ex-reading is the hard max-width for any paragraph-level
+   * text block. Enforces a narrow, focused reading experience
+   * regardless of container width. */
   --ex-s-1: 4px; --ex-s-2: 8px; --ex-s-3: 12px; --ex-s-4: 16px;
   --ex-s-5: 24px; --ex-s-6: 32px; --ex-s-7: 48px; --ex-s-8: 64px;
-  --ex-s-9: 96px; --ex-s-10: 128px;
+  --ex-s-9: 96px; --ex-s-10: 128px; --ex-s-11: 192px; --ex-s-12: 240px;
+  --ex-reading: 680px;
 
   background: var(--ex-paper);
   color: var(--ex-ink);
   font-family: var(--ex-sans);
   font-size: var(--ex-fs-body);
   -webkit-font-smoothing: antialiased;
-  font-feature-settings: "ss01", "kern";
-  letter-spacing: -0.005em;
+  letter-spacing: -0.003em;
+  line-height: 1.6;
   min-height: 100vh;
 }
 
 /* --------------------------------------------------------------
-   Type primitives
+   Type primitives — Swiss Neo-Grotesque
    -------------------------------------------------------------- */
 .peix-exhibit .ex-mono {
   font-family: var(--ex-mono);
   font-size: var(--ex-fs-mono);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  font-weight: 500;
+  font-weight: 400;
 }
 .peix-exhibit .ex-mono-lg {
   font-family: var(--ex-mono);
   font-size: 13px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.12em;
+  font-weight: 400;
 }
 .peix-exhibit .ex-serif-display {
   font-family: var(--ex-serif);
-  font-weight: 400;
-  letter-spacing: -0.025em;
-  line-height: 0.98;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
 }
 .peix-exhibit .ex-serif-italic {
   font-family: var(--ex-serif);
   font-style: italic;
-  font-weight: 400;
+  font-weight: 300;
   letter-spacing: -0.01em;
 }
 .peix-exhibit .ex-num {
@@ -579,7 +592,7 @@
   border-left: 1px solid rgba(26,23,19,.18);
   overflow: hidden;
   color: #1a1713;
-  font-family: "Inter Tight", -apple-system, sans-serif;
+  font-family: var(--ex-sans);
 }
 .ex-drawer.open { transform: translateX(0); }
 .ex-drawer.stage-var {
@@ -599,7 +612,7 @@
 }
 .ex-drawer-head h3 {
   margin: 8px 0 0;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-weight: 400;
   font-size: 36px;
   letter-spacing: -0.02em;
@@ -611,7 +624,7 @@
 .ex-drawer-head .ex-kicker {
   color: rgba(26,23,19,.45);
   display: flex; gap: 20px; flex-wrap: wrap;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 11px;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -629,7 +642,7 @@
   border-top: 1px solid rgba(26,23,19,.10);
   display: flex; justify-content: space-between;
   color: rgba(26,23,19,.45);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 10px;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -640,7 +653,7 @@
 }
 .ex-drawer-close {
   background: none; border: 0; cursor: pointer;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 11px;
   letter-spacing: .08em;
   color: inherit;
@@ -669,7 +682,7 @@
   pointer-events: none;
   padding: 24px 28px;
   display: flex; flex-direction: column; justify-content: space-between;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 10px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -686,21 +699,21 @@
   border-top: 1px solid rgba(246,241,231,.16);
   color: rgba(246,241,231,.60);
   align-items: baseline;
-  font-family: "Inter Tight", sans-serif;
+  font-family: var(--ex-sans);
 }
 .ex-atlas-tower-caption .ex-name {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-size: 22px;
   color: #f6f1e7;
 }
 .ex-atlas-tower-caption .ex-idx {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--ex-mono);
   font-size: 11px;
   color: rgba(246,241,231,.45);
   letter-spacing: .08em;
 }
 .ex-atlas-tower-caption .ex-v {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--ex-mono);
   font-size: 12px;
   color: #f6f1e7;
   font-variant-numeric: tabular-nums;
@@ -764,7 +777,7 @@
 /* Marginalia around the plate — slightly different from the global
    marginalia so the mono-idx can carry the terracotta accent. */
 .ex-drawer .ex-fc-margin {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 14px;
   line-height: 1.6;
@@ -773,7 +786,7 @@
   max-width: 70ch;
 }
 .ex-drawer .ex-fc-margin .ex-fc-margin-idx {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-style: normal;
   font-size: 10px;
   letter-spacing: .14em;
@@ -805,54 +818,54 @@
 
 /* Plate typography — all rendered inside SVG <text> via these classes */
 .ex-fc-plate-num {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 10px;
   letter-spacing: .18em;
   text-transform: uppercase;
   fill: rgba(26,23,19,.55);
 }
 .ex-fc-plate-date {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 10px;
   letter-spacing: .22em;
   text-transform: uppercase;
   fill: rgba(26,23,19,.45);
 }
 .ex-fc-plate-virus {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 13px;
   fill: rgba(26,23,19,.55);
 }
 .ex-fc-heute-label {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-size: 11.5px;
   font-style: italic;
   fill: #b94a2e;
   letter-spacing: .04em;
 }
 .ex-fc-peak-label {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-size: 12px;
   font-style: italic;
   fill: rgba(26,23,19,.70);
 }
 .ex-fc-axis-kw {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 9.5px;
   letter-spacing: .08em;
   fill: rgba(26,23,19,.50);
   text-transform: uppercase;
 }
 .ex-fc-axis-month {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 12.5px;
   fill: rgba(26,23,19,.55);
   letter-spacing: -.005em;
 }
 .ex-fc-axis-unit {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 9.5px;
   letter-spacing: .1em;
   fill: rgba(26,23,19,.45);
@@ -880,7 +893,7 @@
   gap: 14px;
 }
 .ex-fc-panel-head .ex-fc-alpha {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 26px;
   line-height: 1;
@@ -888,14 +901,14 @@
   font-weight: 400;
 }
 .ex-fc-panel-head .ex-fc-panel-title {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 10.5px;
   letter-spacing: .14em;
   text-transform: uppercase;
   color: rgba(26,23,19,.55);
 }
 .ex-fc-panel-body {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 14px;
   line-height: 1.6;
@@ -920,7 +933,7 @@
   grid-template-columns: 40px 1fr;
   column-gap: 14px;
   align-items: center;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 13.5px;
   color: rgba(26,23,19,.75);
@@ -968,7 +981,7 @@
 .ex-fc-rail-ref-label {
   position: absolute;
   top: 22px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 9.5px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -979,7 +992,7 @@
 .ex-fc-rail-ref-day {
   position: absolute;
   top: 72px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 9px;
   letter-spacing: .06em;
   color: rgba(26,23,19,.45);
@@ -1008,7 +1021,7 @@
 .ex-fc-rail-pin-label {
   position: absolute;
   top: 4px;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 17px;
   color: #b94a2e;
@@ -1072,7 +1085,7 @@
   top: 30px;
   left: 80%;
   transform: translateX(-50%);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 9.5px;
   letter-spacing: .1em;
   text-transform: uppercase;
@@ -1082,7 +1095,7 @@
 .ex-fc-cov-scale {
   display: flex;
   justify-content: space-between;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 9.5px;
   letter-spacing: .08em;
   color: rgba(26,23,19,.45);
@@ -1090,7 +1103,7 @@
   margin-top: 8px;
 }
 .ex-fc-cov-value {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-size: 32px;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -1148,92 +1161,98 @@
 .ex-bt-title {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 28px;
+  column-gap: 32px;
   align-items: baseline;
-  padding-bottom: 18px;
-  border-bottom: 1px solid rgba(26,23,19,.14);
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--ex-hairline);
 }
 .ex-bt-title-mark {
-  font-family: "Fraunces", Georgia, serif;
-  font-weight: 500;
+  font-family: var(--ex-serif);
+  font-weight: 200;
   font-size: 44px;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: #b94a2e;
+  letter-spacing: -0.03em;
+  color: var(--ex-ink-45);
 }
 .ex-bt-title-stack {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
 }
 .ex-bt-title-kicker {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  letter-spacing: .18em;
+  font-family: var(--ex-mono);
+  font-size: 11px;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  color: rgba(26,23,19,.55);
+  color: var(--ex-ink-45);
 }
 .ex-bt-title-dek {
-  font-family: "Fraunces", Georgia, serif;
-  font-style: italic;
-  font-size: 18px;
-  line-height: 1.4;
-  color: rgba(26,23,19,.85);
+  font-family: var(--ex-serif);
+  font-weight: 300;
+  font-size: 20px;
+  line-height: 1.55;
+  color: var(--ex-ink);
   margin: 0;
+  max-width: var(--ex-reading);
 }
 .ex-bt-title-dek em {
-  color: #b94a2e;
+  color: var(--ex-fired);
   font-style: italic;
+  font-weight: 300;
 }
 
 /* Monument block */
 .ex-bt-monument-row {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 48px;
+  column-gap: 96px;
   align-items: end;
+  margin: 56px 0;
 }
 .ex-bt-monument {
-  font-family: "Fraunces", Georgia, serif;
-  font-weight: 500;
-  font-size: clamp(160px, 18vw, 280px);
-  line-height: 0.86;
+  font-family: var(--ex-serif);
+  font-weight: 200;
+  font-size: clamp(180px, 16vw, 260px);
+  line-height: 0.92;
   letter-spacing: -0.05em;
-  color: #1a1713;
+  color: var(--ex-ink);
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
 .ex-bt-monument .ex-bt-unit {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: clamp(32px, 3vw, 48px);
-  margin-left: 10px;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: clamp(28px, 2.6vw, 44px);
+  margin-left: 14px;
   vertical-align: top;
-  color: rgba(26,23,19,.60);
+  color: var(--ex-ink-45);
 }
 .ex-bt-monument-caption {
-  font-family: "Fraunces", Georgia, serif;
-  font-style: italic;
-  font-size: 20px;
-  line-height: 1.4;
-  color: rgba(26,23,19,.75);
+  font-family: var(--ex-sans);
+  font-weight: 300;
+  font-size: 22px;
+  line-height: 1.55;
+  color: var(--ex-ink-60);
   max-width: 42ch;
+  letter-spacing: -0.01em;
 }
-.ex-bt-monument-caption em { color: #b94a2e; }
+.ex-bt-monument-caption em { color: var(--ex-fired); font-style: normal; }
 
 .ex-bt-window-stamp {
-  margin-top: 14px;
+  margin-top: 28px;
   display: flex;
-  gap: 24px;
+  gap: 32px;
   flex-wrap: wrap;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  letter-spacing: .12em;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: .18em;
   text-transform: uppercase;
-  color: rgba(26,23,19,.55);
+  color: var(--ex-ink-45);
 }
 .ex-bt-window-stamp strong {
-  color: rgba(26,23,19,.85);
-  font-weight: 500;
-  margin-left: 6px;
+  color: var(--ex-ink);
+  font-weight: 700;
+  margin-left: 10px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1241,185 +1260,207 @@
 .ex-bt-compare {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-  padding: 24px 0;
-  border-top: 1px solid rgba(26,23,19,.14);
-  border-bottom: 1px solid rgba(26,23,19,.14);
+  gap: 64px;
+  padding: 56px 0;
+  border-top: 1px solid var(--ex-hairline);
+  border-bottom: 1px solid var(--ex-hairline);
 }
 .ex-bt-compare-cell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 16px;
 }
 .ex-bt-compare-kicker {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  letter-spacing: .14em;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  color: rgba(26,23,19,.45);
+  color: var(--ex-ink-45);
 }
 .ex-bt-compare-value {
-  font-family: "Fraunces", Georgia, serif;
-  font-weight: 400;
-  font-size: 44px;
+  font-family: var(--ex-serif);
+  font-weight: 200;
+  font-size: 72px;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: #1a1713;
+  letter-spacing: -0.04em;
+  color: var(--ex-ink);
   font-variant-numeric: tabular-nums;
 }
-.ex-bt-compare-value.absent { color: rgba(26,23,19,.30); }
+.ex-bt-compare-value.absent { color: var(--ex-ink-30); }
 .ex-bt-compare-vs {
-  font-family: "Fraunces", Georgia, serif;
-  font-style: italic;
-  font-size: 13px;
-  color: rgba(26,23,19,.60);
+  font-family: var(--ex-sans);
+  font-weight: 400;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ex-ink-60);
+  margin-top: 8px;
 }
-.ex-bt-compare-vs em { color: #b94a2e; }
+.ex-bt-compare-vs em {
+  color: var(--ex-fired);
+  font-style: normal;
+  font-weight: 500;
+}
 
 /* Methodology stanza */
 .ex-bt-method {
   display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 32px;
+  grid-template-columns: 180px 1fr;
+  gap: 48px;
+  margin-top: 64px;
 }
 .ex-bt-method-rail {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  letter-spacing: .16em;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  color: #b94a2e;
-  padding-top: 6px;
+  color: var(--ex-ink-45);
+  padding-top: 8px;
 }
 .ex-bt-method-body {
-  font-family: "Fraunces", Georgia, serif;
-  font-style: italic;
-  font-size: 17px;
-  line-height: 1.55;
-  color: rgba(26,23,19,.78);
-  max-width: 70ch;
+  font-family: var(--ex-serif);
+  font-weight: 300;
+  font-size: 20px;
+  line-height: 1.65;
+  color: var(--ex-ink);
+  max-width: var(--ex-reading);
   margin: 0;
 }
-.ex-bt-method-body em { color: #1a1713; }
+.ex-bt-method-body em {
+  color: var(--ex-fired);
+  font-weight: 400;
+  font-style: normal;
+}
 
 /* Per-BL roster — re-uses ex-roster but with more columns */
 .ex-bt-roster {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 64px 0 0;
 }
 .ex-bt-roster-head {
   display: grid;
-  grid-template-columns: 36px 1fr 72px 72px 72px 72px;
-  column-gap: 16px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(26,23,19,.14);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  letter-spacing: .12em;
+  grid-template-columns: 36px 1fr 80px 80px 80px 80px;
+  column-gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--ex-hairline);
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  color: rgba(26,23,19,.45);
+  color: var(--ex-ink-45);
 }
 .ex-bt-roster li {
   display: grid;
-  grid-template-columns: 36px 1fr 72px 72px 72px 72px;
-  column-gap: 16px;
+  grid-template-columns: 36px 1fr 80px 80px 80px 80px;
+  column-gap: 24px;
   align-items: baseline;
-  padding: 14px 0;
-  border-bottom: 1px solid rgba(26,23,19,.08);
+  padding: 22px 0;
+  border-bottom: 1px solid var(--ex-hairline-soft);
   transition: background .2s;
 }
-.ex-bt-roster li:hover { background: rgba(26,23,19,.04); }
+.ex-bt-roster li:hover { background: rgba(14,14,14,.03); }
 .ex-bt-roster-idx {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  letter-spacing: .1em;
-  color: rgba(26,23,19,.45);
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: .18em;
+  color: var(--ex-ink-45);
 }
 .ex-bt-roster-name {
-  font-family: "Fraunces", Georgia, serif;
-  font-size: 19px;
-  letter-spacing: -0.01em;
-  color: #1a1713;
+  font-family: var(--ex-serif);
+  font-weight: 400;
+  font-size: 20px;
+  letter-spacing: -0.015em;
+  color: var(--ex-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .ex-bt-roster-name .ex-bt-roster-code {
-  margin-left: 8px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10.5px;
-  letter-spacing: .08em;
-  color: rgba(26,23,19,.45);
+  margin-left: 10px;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: .18em;
+  color: var(--ex-ink-45);
 }
 .ex-bt-roster-num {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 13.5px;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   text-align: right;
-  color: #1a1713;
+  color: var(--ex-ink);
 }
-.ex-bt-roster-num.muted { color: rgba(26,23,19,.45); }
+.ex-bt-roster-num.muted { color: var(--ex-ink-45); }
 
 /* Hit-barcode — weekly hit/miss visual stripe */
 .ex-bt-barcode {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
+  margin-top: 80px;
 }
 .ex-bt-barcode-rail {
   display: flex;
-  gap: 2px;
-  height: 56px;
+  gap: 3px;
+  height: 72px;
   align-items: stretch;
   padding: 4px 0;
 }
 .ex-bt-barcode-tick {
   flex: 1;
-  min-width: 3px;
-  background: rgba(26,23,19,.10);
+  min-width: 4px;
+  background: var(--ex-ink-08);
   transition: background .2s;
   cursor: default;
 }
-.ex-bt-barcode-tick.hit { background: #b94a2e; }
-.ex-bt-barcode-tick.miss { background: rgba(26,23,19,.22); }
-.ex-bt-barcode-tick.partial { background: #d68a5a; }
+.ex-bt-barcode-tick.hit { background: var(--ex-fired); }
+.ex-bt-barcode-tick.miss { background: var(--ex-ink-30); }
+.ex-bt-barcode-tick.partial { background: var(--ex-amber); }
 .ex-bt-barcode-tick:hover {
   filter: brightness(1.1);
 }
 .ex-bt-barcode-axis {
   display: flex;
   justify-content: space-between;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 9.5px;
-  letter-spacing: .08em;
-  color: rgba(26,23,19,.45);
+  gap: 24px;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  letter-spacing: .18em;
+  color: var(--ex-ink-45);
   text-transform: uppercase;
 }
 
 /* Bottom disclaimer */
 .ex-bt-disclaimer {
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(26,23,19,.14);
+  margin-top: 56px;
+  padding-top: 40px;
+  border-top: 1px solid var(--ex-hairline);
   display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 32px;
+  grid-template-columns: 180px 1fr;
+  gap: 48px;
 }
 .ex-bt-disclaimer-rail {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  letter-spacing: .16em;
+  font-family: var(--ex-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  color: rgba(26,23,19,.45);
-  padding-top: 4px;
+  color: var(--ex-ink-45);
+  padding-top: 8px;
 }
 .ex-bt-disclaimer-body {
-  font-family: "Fraunces", Georgia, serif;
-  font-style: italic;
-  font-size: 14px;
-  line-height: 1.55;
-  color: rgba(26,23,19,.60);
-  max-width: 70ch;
+  font-family: var(--ex-sans);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ex-ink-60);
+  max-width: var(--ex-reading);
   margin: 0;
 }
 
@@ -1427,7 +1468,7 @@
 .ex-bt-unavailable {
   padding: 40px 0;
   text-align: center;
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 18px;
   color: rgba(26,23,19,.60);
@@ -1445,7 +1486,7 @@
   border-bottom: 1px solid rgba(26,23,19,.08);
 }
 .ex-bt-virus-switch-label {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   font-size: 10.5px;
   letter-spacing: .18em;
   text-transform: uppercase;
@@ -1466,7 +1507,7 @@
   border: 1px solid rgba(26,23,19,.18);
   border-radius: 2px;
   cursor: pointer;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--ex-mono);
   color: rgba(26,23,19,.62);
   transition: border-color .15s, color .15s, background .15s;
   text-align: left;
@@ -1488,7 +1529,7 @@
   font-weight: 500;
 }
 .ex-bt-virus-chip-hint {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--ex-serif);
   font-style: italic;
   font-size: 10.5px;
   letter-spacing: 0;
@@ -1519,19 +1560,11 @@
   .ex-bt-disclaimer { grid-template-columns: 1fr; }
 }
 
-/* ==============================================================
-   Punk palette extension (2026-04-18 Wumms pass).
-   We didn't change the core tokens; we ADDED a louder colour
-   set that the Broadside leans into: oxblood (WATCH states),
-   moss (falling / stable), and a slightly hotter ochre for
-   active indicators. Dashboard-voice, not editorial-whisper.
-   ============================================================== */
-.peix-exhibit {
-  --ex-oxblood: #8a2a22;      /* WATCH badge, warning bar */
-  --ex-moss: #4a6a62;         /* falling / stable */
-  --ex-cream: #f6f1e7;        /* high-contrast text on stage */
-  --ex-punk-rule: 3px;        /* thicker rule for punk sections */
-}
+/* The duplicate Wumms-era palette-block that used to live here
+   has been merged into the canonical .peix-exhibit token block
+   at the top of this file (Swiss Pharma Annual Report redesign).
+   Kept as a placeholder to preserve line numbers in version
+   control diff; safe to delete in a later cleanup. */
 
 /* ==============================================================
    Broadside layout — scrolling one-page editorial broadsheet.
@@ -1545,15 +1578,14 @@
   position: relative;
 }
 
-/* Section — the recurring top-level editorial unit. Alternates
-   between paper and warm-black stage for visual rhythm.
-   Generous vertical padding — the user explicitly asked for more
-   room to breathe. */
+/* Section — the recurring top-level editorial unit.
+   Swiss Annual Report padding — very generous, so every chapter
+   breathes with its own empty room around it. */
 .ex-broadside .ex-section {
   position: relative;
-  padding: 160px 72px 160px;
+  padding: 200px 88px 200px;
   border-top: 1px solid var(--ex-hairline-soft);
-  scroll-margin-top: 0; /* section anchors jump exactly at top */
+  scroll-margin-top: 0;
 }
 .ex-broadside .ex-section:first-of-type {
   border-top: none;
@@ -1572,20 +1604,20 @@
   color: var(--ex-ink);
 }
 
-/* Section header — full-width DARK STAGE STRIP, every section.
-   Announces the chapter like a sport-magazine cover spread. */
+/* Section header — full-width dark stage strip, every section.
+   Swiss redesign: thinner bottom rule (1 px, not 3 px), more
+   generous inner padding, title + numeral in thin-weight for
+   stillness. */
 .ex-broadside .ex-section-head {
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  column-gap: 48px;
-  padding: 36px 48px 32px;
+  column-gap: 64px;
+  padding: 56px 88px 52px;
   background: var(--ex-stage);
   color: var(--ex-cream);
-  border-bottom: var(--ex-punk-rule) solid var(--ex-fired);
-  /* Pull the head OUT of the section padding so it spans the full
-     viewport width — the dark strip is the chapter-break. */
-  margin: -160px -72px 112px;
+  border-bottom: 1px solid var(--ex-stage-hair);
+  margin: -200px -88px 120px;
   max-width: none;
 }
 .ex-broadside .ex-section--stage .ex-section-head {
@@ -1595,128 +1627,132 @@
 
 .ex-broadside .ex-section-num {
   font-family: var(--ex-serif);
-  font-weight: 500;
-  font-size: clamp(64px, 7vw, 96px);
-  line-height: 0.9;
-  letter-spacing: -0.035em;
-  color: var(--ex-ochre);
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
+  font-weight: 200;
+  font-size: clamp(56px, 6vw, 84px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--ex-stage-45);
 }
-.ex-broadside .ex-section-num::after {
-  content: "";
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  background: var(--ex-fired);
-  margin-left: 4px;
-  transform: translateY(-8px);
-}
+/* Decorative terracotta square after the numeral — deliberately
+   removed in the Swiss pass. Cleaner silhouette, no ornament. */
+.ex-broadside .ex-section-num::after { content: none; }
+
 .ex-broadside .ex-section-title-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
   min-width: 0;
 }
 .ex-broadside .ex-section-kicker {
   font-family: var(--ex-mono);
-  font-size: 11.5px;
-  letter-spacing: .28em;
+  font-size: 11px;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  color: var(--ex-stage-60);
-  font-weight: 600;
+  color: var(--ex-stage-45);
+  font-weight: 400;
 }
 .ex-broadside .ex-section-title {
   font-family: var(--ex-serif);
-  font-weight: 500;
-  font-size: clamp(42px, 4.4vw, 66px);
-  line-height: 1.02;
-  letter-spacing: -0.035em;
+  font-weight: 300;
+  font-size: clamp(36px, 4vw, 56px);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
   color: var(--ex-cream);
   margin: 0;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .ex-broadside .ex-section-title em {
   font-style: italic;
-  color: var(--ex-ochre);
-  font-weight: 500;
-  text-transform: none;
+  color: var(--ex-cream);
+  font-weight: 300;
 }
 .ex-broadside .ex-section-stamp {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 14px;
   align-items: flex-end;
   font-family: var(--ex-mono);
   font-size: 10.5px;
-  letter-spacing: .2em;
+  letter-spacing: .22em;
   text-transform: uppercase;
   color: var(--ex-stage-45);
   text-align: right;
 }
 
-/* Status badges — bold mono-caps in a 2 px border box.
-   Three tones: fired (GO), oxblood (WATCH), neutral (info). */
+/* Status badges — Swiss redesign.
+   Boxes are out. Badges are now inline type-marks with a leading
+   en-dash that carries the tone colour. Signal without shouting. */
 .ex-broadside .ex-section-badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 20px;
   justify-content: flex-end;
+  align-items: baseline;
 }
 .ex-status-badge {
   display: inline-flex;
-  align-items: center;
-  padding: 5px 10px 6px;
+  align-items: baseline;
+  gap: 8px;
   font-family: var(--ex-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: .2em;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: .22em;
   text-transform: uppercase;
-  border: 2px solid currentColor;
   line-height: 1;
   background: transparent;
+  border: 0;
+  padding: 0;
   white-space: nowrap;
+  color: var(--ex-stage-60);
+}
+.ex-status-badge::before {
+  content: "—";
+  letter-spacing: 0;
+  /* The leading dash inherits the semantic colour below */
+  color: currentColor;
 }
 .ex-status-badge--go      { color: var(--ex-fired); }
-.ex-status-badge--watch   { color: var(--ex-oxblood); background: rgba(138,42,34,.12); }
+.ex-status-badge--go::before { color: var(--ex-fired); }
+.ex-status-badge--watch   { color: var(--ex-amber); }
+.ex-status-badge--watch::before { color: var(--ex-amber); }
 .ex-status-badge--neutral { color: var(--ex-stage-60); }
 .ex-status-badge--ochre   { color: var(--ex-ochre); }
-.ex-status-badge--solid   {
-  color: var(--ex-stage);
-  background: var(--ex-fired);
-  border-color: var(--ex-fired);
-}
+.ex-status-badge--solid   { color: var(--ex-cream); }
+.ex-status-badge--solid::before { color: var(--ex-fired); }
 
 /* ================================================================
-   Punk monument — 240 px+ key-metric number blocks.
+   Swiss monument — 180–260 px THIN weight key-metric blocks.
+   The signature move: we use wght 200 instead of bold. At this
+   scale, thin reads as elegant authority, bold reads as dashboard.
    ================================================================ */
 .ex-punk-monument {
   font-family: var(--ex-serif);
-  font-weight: 500;
-  font-size: clamp(160px, 18vw, 280px);
-  line-height: 0.86;
+  font-weight: 200;
+  font-size: clamp(180px, 16vw, 260px);
+  line-height: 0.92;
   letter-spacing: -0.05em;
   color: inherit;
   font-feature-settings: "tnum" 1, "lnum" 1;
 }
 .ex-punk-monument__unit {
   font-family: var(--ex-mono);
-  font-size: clamp(32px, 3vw, 48px);
+  font-weight: 400;
+  font-size: clamp(28px, 2.6vw, 44px);
   letter-spacing: 0;
-  margin-left: 10px;
+  margin-left: 14px;
   vertical-align: top;
   color: currentColor;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 .ex-punk-monument__caption {
-  margin-top: 14px;
+  margin-top: 24px;
   font-family: var(--ex-mono);
-  font-size: 11.5px;
+  font-size: 11px;
+  font-weight: 400;
   letter-spacing: .22em;
   text-transform: uppercase;
   color: currentColor;
-  opacity: 0.72;
+  opacity: 0.62;
   max-width: 48ch;
 }
 
@@ -1734,19 +1770,27 @@
   margin: 0;
 }
 
-/* Section body — the actual content block. Narrower than the outer
-   section padding so text columns aren't overwhelming at 1440+; the
-   extra horizontal margin doubles as breathing room. */
+/* Section body — the actual content block. Much narrower than the
+   outer section padding so we accumulate generous empty margins on
+   both sides, especially on wide viewports. */
 .ex-broadside .ex-section-body {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+/* Reading column — enforced narrow measure for paragraph-level text.
+   Regardless of container width, prose never exceeds this measure.
+   Swiss-annual-report trick: the empty room beside a paragraph is
+   the design, not an accident. */
+.ex-broadside .ex-reading-column {
+  max-width: var(--ex-reading);
 }
 
 /* Full-bleed section body — for the atlas canvas to breathe */
 .ex-broadside .ex-section-body--bleed {
   max-width: none;
-  margin-left: -72px;
-  margin-right: -72px;
+  margin-left: -88px;
+  margin-right: -88px;
 }
 
 /* --------------------------------------------------------------
@@ -1922,22 +1966,22 @@
 .ex-atlas-roster-row .ex-val.down { color: #4a6a62; }
 .ex-atlas-roster-row .ex-val.flat { color: var(--ex-ink-45); }
 
-/* Responsive: hide TOC on small viewports */
+/* Responsive — keep reading rhythm intact below 1100 px */
 @media (max-width: 1100px) {
   .ex-broadside-toc { display: none; }
-  .ex-broadside .ex-section { padding: 96px 28px 96px; }
+  .ex-broadside .ex-section { padding: 120px 32px 120px; }
   .ex-broadside .ex-section-body--bleed {
-    margin-left: -28px;
-    margin-right: -28px;
+    margin-left: -32px;
+    margin-right: -32px;
   }
   .ex-broadside .ex-section-head {
     grid-template-columns: 1fr;
-    gap: 20px;
-    margin: -96px -28px 72px;
-    padding: 28px 28px 24px;
+    gap: 24px;
+    margin: -120px -32px 80px;
+    padding: 40px 32px 36px;
   }
-  .ex-broadside .ex-section-num { font-size: 56px; }
-  .ex-broadside .ex-section-title { font-size: 36px; }
+  .ex-broadside .ex-section-num { font-size: 52px; }
+  .ex-broadside .ex-section-title { font-size: 34px; }
   .ex-broadside .ex-section-stamp {
     align-items: flex-start;
     text-align: left;

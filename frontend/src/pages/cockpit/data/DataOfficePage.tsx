@@ -12,6 +12,7 @@ import {
   useOutcomeBatchDetail,
   useTruthCoverage,
   uploadOutcomeCsv,
+  deleteOutcomeBatch,
   type OutcomeImportBatch,
   type OutcomeImportResult,
 } from './useOutcomeData';
@@ -361,8 +362,10 @@ const UploadPanel: React.FC<{ onImported: () => void }> = ({ onImported }) => {
 const BatchRow: React.FC<{
   batch: OutcomeImportBatch;
   expanded: boolean;
+  deleting: boolean;
   onToggle: () => void;
-}> = ({ batch, expanded, onToggle }) => {
+  onDelete: () => void;
+}> = ({ batch, expanded, deleting, onToggle, onDelete }) => {
   const statusClass =
     batch.status === 'imported'
       ? 'imported'
@@ -370,9 +373,15 @@ const BatchRow: React.FC<{
         ? 'validated'
         : batch.status === 'failed' || batch.status === 'rejected'
           ? 'failed'
-          : '';
+          : batch.status === 'deleted'
+            ? 'deleted'
+            : '';
+  const isDeleted = batch.status === 'deleted';
   return (
-    <tr className={expanded ? 'open' : ''} onClick={onToggle}>
+    <tr
+      className={`${expanded ? 'open' : ''}${isDeleted ? ' row-deleted' : ''}`}
+      onClick={onToggle}
+    >
       <td className="batch-id">{batch.batch_id.slice(0, 12)}</td>
       <td className="batch-source">
         {batch.source_label ?? batch.source_system ?? '—'}
@@ -398,6 +407,22 @@ const BatchRow: React.FC<{
         {fmtDateDE(batch.week_min)} → {fmtDateDE(batch.week_max)}
       </td>
       <td className="batch-date">{fmtDateTimeDE(batch.imported_at ?? batch.created_at)}</td>
+      <td className="batch-actions" onClick={(e) => e.stopPropagation()}>
+        {isDeleted ? (
+          <span className="batch-deleted-flag" title="Bereits gelöscht">—</span>
+        ) : (
+          <button
+            type="button"
+            className="batch-delete-btn"
+            disabled={deleting}
+            onClick={onDelete}
+            title="Batch + importierte Records löschen"
+            aria-label="Batch löschen"
+          >
+            {deleting ? '…' : '⌫'}
+          </button>
+        )}
+      </td>
     </tr>
   );
 };
@@ -408,7 +433,7 @@ const BatchDetail: React.FC<{ batchId: string }> = ({ batchId }) => {
   if (loading) {
     return (
       <tr>
-        <td colSpan={6} className="batch-detail">
+        <td colSpan={7} className="batch-detail">
           <div style={{ color: 'var(--ink-60)', fontStyle: 'italic' }}>lädt Detail …</div>
         </td>
       </tr>
@@ -417,7 +442,7 @@ const BatchDetail: React.FC<{ batchId: string }> = ({ batchId }) => {
   if (error) {
     return (
       <tr>
-        <td colSpan={6} className="batch-detail">
+        <td colSpan={7} className="batch-detail">
           <div style={{ color: 'var(--signal)' }}>
             Fehler beim Laden: {error.message}
           </div>
@@ -430,7 +455,7 @@ const BatchDetail: React.FC<{ batchId: string }> = ({ batchId }) => {
   const issues = data.issues ?? [];
   return (
     <tr>
-      <td colSpan={6} className="batch-detail">
+      <td colSpan={7} className="batch-detail">
         <h4>
           Batch {data.batch_id.slice(0, 12)} · {data.rows_imported ?? 0} importiert,{' '}
           {data.rows_rejected ?? 0} abgelehnt
@@ -472,15 +497,43 @@ const BatchDetail: React.FC<{ batchId: string }> = ({ batchId }) => {
   );
 };
 
-const BatchHistory: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
+const BatchHistory: React.FC<{
+  refreshKey: number;
+  onDeleted?: () => void;
+}> = ({ refreshKey, onDeleted }) => {
   const { data, loading, error, reload } = useOutcomeImportBatches('GELO', 20);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Trigger reload when parent bumps refreshKey.
   React.useEffect(() => {
     if (refreshKey > 0) reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshKey]);
+
+  const handleDelete = async (batchId: string) => {
+    const confirmed = window.confirm(
+      'Batch + alle importierten Records unwiderruflich löschen?\n\n' +
+        'Truth-Coverage und § IV Feedback-Loop werden ohne diese Zeilen\n' +
+        'neu berechnet. Rückgängig machen ist nicht möglich.',
+    );
+    if (!confirmed) return;
+    setDeletingId(batchId);
+    setDeleteError(null);
+    const res = await deleteOutcomeBatch(batchId);
+    setDeletingId(null);
+    if (!res.ok) {
+      setDeleteError(
+        res.status === 403
+          ? 'Admin-Login erforderlich (das Gate-Cookie reicht nur für Read-only-Aktionen).'
+          : `Fehler (HTTP ${res.status}): ${res.message}`,
+      );
+      return;
+    }
+    reload();
+    onDeleted?.();
+  };
 
   const batches = data?.batches ?? [];
 
@@ -500,30 +553,40 @@ const BatchHistory: React.FC<{ refreshKey: number }> = ({ refreshKey }) => {
   }
 
   return (
-    <table className="batch-table">
-      <thead>
-        <tr>
-          <th>Batch-ID</th>
-          <th>Quelle</th>
-          <th>Status</th>
-          <th>Zeilen</th>
-          <th>Wochen-Range</th>
-          <th>Importiert</th>
-        </tr>
-      </thead>
-      <tbody>
-        {batches.map((b) => (
-          <React.Fragment key={b.batch_id}>
-            <BatchRow
-              batch={b}
-              expanded={openId === b.batch_id}
-              onToggle={() => setOpenId(openId === b.batch_id ? null : b.batch_id)}
-            />
-            {openId === b.batch_id && <BatchDetail batchId={b.batch_id} />}
-          </React.Fragment>
-        ))}
-      </tbody>
-    </table>
+    <>
+      {deleteError ? (
+        <div className="error-banner" style={{ marginBottom: 12 }}>
+          {deleteError}
+        </div>
+      ) : null}
+      <table className="batch-table">
+        <thead>
+          <tr>
+            <th>Batch-ID</th>
+            <th>Quelle</th>
+            <th>Status</th>
+            <th>Zeilen</th>
+            <th>Wochen-Range</th>
+            <th>Importiert</th>
+            <th className="batch-actions-head">Aktion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {batches.map((b) => (
+            <React.Fragment key={b.batch_id}>
+              <BatchRow
+                batch={b}
+                expanded={openId === b.batch_id}
+                deleting={deletingId === b.batch_id}
+                onToggle={() => setOpenId(openId === b.batch_id ? null : b.batch_id)}
+                onDelete={() => handleDelete(b.batch_id)}
+              />
+              {openId === b.batch_id && <BatchDetail batchId={b.batch_id} />}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 };
 
@@ -780,6 +843,17 @@ export const DataOfficePage: React.FC = () => {
 
         <StatusStripe batches={batches} coverage={coverageSummary} />
 
+        <p className="data-primer">
+          Im <b>Data Office</b> lebt die Wirklichkeit, die das Cockpit zu
+          seinen Prognosen in Beziehung setzt — Woche für Woche, pro
+          Bundesland, pro Produkt. Ohne diese Daten sind alle EUR-Werte im
+          Cockpit Dashes und der Feedback-Loop in § IV bleibt leer.
+          Eingegeben wird wahlweise <b>manuell per CSV</b> (siehe unten) oder
+          automatisiert über die <b>M2M-API</b> (unterster Block). Jede
+          Zeile ist ein Tupel <i>(Woche, Region, Produkt) → Media-Spend +
+          Outcome</i>.
+        </p>
+
         <div className="block">
           <div className="block-head">
             <h2 className="block-title">Truth-Coverage · 16 Bundesländer</h2>
@@ -787,6 +861,13 @@ export const DataOfficePage: React.FC = () => {
               Wie viele Wochen Outcome-Daten je Bundesland vorhanden sind
             </span>
           </div>
+          <p className="data-section-primer">
+            Jede Zelle zeigt, für wie viele Kalenderwochen ein Bundesland
+            bereits Outcome-Werte hat. Dunkle Zellen = dünne Datenlage,
+            dort sind Aussagen im Backtest und Feedback-Loop statistisch
+            schwach. Ein Bundesland mit 0 Wochen erscheint nicht im
+            Reconciliation-Panel von § IV — ehrlich statt geschätzt.
+          </p>
           <CoverageHeatmap perRegion={perRegion} />
         </div>
 
@@ -796,6 +877,105 @@ export const DataOfficePage: React.FC = () => {
             <span className="block-kicker">
               Manuelle Einspielung · Validate-First empfohlen
             </span>
+          </div>
+          <p className="data-section-primer">
+            <b>Was kommt hier rein?</b> Eine Zeile pro Woche × Bundesland ×
+            Produkt. Jede Zeile bündelt <b>Media-Spend</b> (was GELO
+            ausgegeben hat) <i>und</i> <b>Outcome</b> (was dabei
+            herausgekommen ist — Sales, Bestellungen, Revenue, Reichweite).
+            Das System lernt daraus: welche Empfehlung der letzten Woche
+            hat tatsächlich Reach/Umsatz gebracht, wo lag die Prognose
+            daneben. Die erste Zeile ist der CSV-Header, danach Daten-
+            Zeilen in exakt der Reihenfolge:
+          </p>
+          <div className="csv-schema">
+            <table>
+              <thead>
+                <tr>
+                  <th>Spalte</th>
+                  <th>Bedeutung</th>
+                  <th>Pflicht?</th>
+                  <th>Beispiel</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>week_start</code></td>
+                  <td>Wochenstart, Montag, ISO-Format</td>
+                  <td>✓</td>
+                  <td><code>2026-02-02</code></td>
+                </tr>
+                <tr>
+                  <td><code>product</code></td>
+                  <td>GELO-Produktname</td>
+                  <td>✓</td>
+                  <td><code>GeloProsed</code></td>
+                </tr>
+                <tr>
+                  <td><code>region_code</code></td>
+                  <td>Bundesland-Code (SH, BW…) oder voller Name</td>
+                  <td>✓</td>
+                  <td><code>SH</code> oder <code>Hamburg</code></td>
+                </tr>
+                <tr>
+                  <td><code>media_spend_eur</code></td>
+                  <td>ausgegebenes Media-Budget in dieser Woche</td>
+                  <td>empfohlen</td>
+                  <td><code>12000</code></td>
+                </tr>
+                <tr>
+                  <td><code>sales_units</code></td>
+                  <td>verkaufte Einheiten (Packungen)</td>
+                  <td colSpan={1} rowSpan={3} className="span-required">
+                    mindestens eines
+                  </td>
+                  <td><code>140</code></td>
+                </tr>
+                <tr>
+                  <td><code>order_count</code></td>
+                  <td>Anzahl Bestellungen</td>
+                  <td><code>44</code></td>
+                </tr>
+                <tr>
+                  <td><code>revenue_eur</code></td>
+                  <td>Umsatz in Euro</td>
+                  <td><code>18500</code></td>
+                </tr>
+                <tr>
+                  <td><code>qualified_visits</code></td>
+                  <td>qualifizierte Website-/Landingpage-Besuche</td>
+                  <td>optional</td>
+                  <td><code>320</code></td>
+                </tr>
+                <tr>
+                  <td><code>search_lift_index</code></td>
+                  <td>Google-Trends-Lift gegenüber Vorwoche</td>
+                  <td>optional</td>
+                  <td><code>18.5</code></td>
+                </tr>
+                <tr>
+                  <td><code>impressions</code></td>
+                  <td>Ad-Impressions</td>
+                  <td>optional</td>
+                  <td><code>240000</code></td>
+                </tr>
+                <tr>
+                  <td><code>clicks</code></td>
+                  <td>Ad-Clicks</td>
+                  <td>optional</td>
+                  <td><code>5800</code></td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="schema-note">
+              Leere Zellen sind erlaubt — einfach leer lassen, das System
+              zählt sie als „nicht berichtet". Die Pflicht-Regel lautet:
+              eine Zeile muss mindestens <b>eines</b> von <code>sales_units</code>,
+              <code>order_count</code> oder <code>revenue_eur</code>
+              enthalten, sonst wird sie abgelehnt. Starte immer mit
+              „Nur validieren" — der Import meldet dir jede problematische
+              Zeile mit Zeilennummer und Grund.
+            </p>
           </div>
           <UploadPanel onImported={() => setImportTick((t) => t + 1)} />
         </div>
@@ -807,7 +987,15 @@ export const DataOfficePage: React.FC = () => {
               Letzte 20 Batches · Klick für Issue-Detail
             </span>
           </div>
-          <BatchHistory refreshKey={importTick} />
+          <p className="data-section-primer">
+            Jeder CSV-Import wird als <b>Batch</b> archiviert — mit
+            Zeitstempel, Zeilenzahl, Status und den Issues (falls welche
+            aufgetreten sind). Klick auf eine Zeile öffnet die Issue-Liste
+            des Batches. Willst du einen Batch rückgängig machen oder die
+            Historie aufräumen, nutze das <b>⌫</b>-Symbol pro Zeile (löscht
+            die importierten Records <i>und</i> den Batch-Eintrag).
+          </p>
+          <BatchHistory refreshKey={importTick} onDeleted={() => setImportTick((t) => t + 1)} />
         </div>
 
         <div className="block">
@@ -817,6 +1005,14 @@ export const DataOfficePage: React.FC = () => {
               M2M-API für produktiven Betrieb
             </span>
           </div>
+          <p className="data-section-primer">
+            Statt jeden Montag ein CSV manuell zu schieben kann GELOs
+            Media-System die Outcome-Zeilen direkt per HTTP-POST an die
+            M2M-API pushen. Derselbe Datensatz-Standard wie oben, aber
+            als JSON-Array statt CSV. Nutzt einen pro-Kunden-API-Key;
+            Kontakt für Key und Integration-Support steht unten im
+            Footer.
+          </p>
           <M2MCard />
         </div>
 

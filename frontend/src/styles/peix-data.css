@@ -625,3 +625,146 @@
   .peix-data .page-head { grid-template-columns: 48px 1fr; }
   .peix-data .page-head .stamp { grid-column: 1 / -1; text-align: left; margin-top: 12px; }
 }
+
+/* ================================================================
+   Reader's Primer + CSV Schema — lead-in copy for Data Office
+   ================================================================ */
+.peix-data .data-primer {
+  font-family: 'Instrument Serif', 'Charter', Georgia, serif;
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ink-60);
+  margin: 8px 0 40px;
+  max-width: 76ch;
+  font-style: italic;
+}
+.peix-data .data-primer b,
+.peix-data .data-primer strong {
+  color: var(--ink);
+  font-weight: 500;
+  font-style: normal;
+}
+
+.peix-data .data-section-primer {
+  font-family: 'Instrument Serif', 'Charter', Georgia, serif;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-60);
+  margin: 4px 0 20px;
+  max-width: 72ch;
+  font-style: italic;
+}
+.peix-data .data-section-primer b,
+.peix-data .data-section-primer strong {
+  color: var(--ink);
+  font-weight: 500;
+  font-style: normal;
+}
+
+/* CSV-Schema-Tabelle: kompakt, monospace für Spaltennamen/Beispielen. */
+.peix-data .csv-schema {
+  margin: 20px 0 32px;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.02);
+  border: 0.5px solid var(--ink-20);
+}
+.peix-data .csv-schema table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.peix-data .csv-schema th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ink-20);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+  font-weight: 500;
+}
+.peix-data .csv-schema td {
+  padding: 8px 12px;
+  border-bottom: 0.5px solid var(--ink-10, rgba(0, 0, 0, 0.06));
+  vertical-align: top;
+}
+.peix-data .csv-schema td code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: rgba(194, 84, 42, 0.06);
+  color: var(--signal, #c2542a);
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+.peix-data .csv-schema td.span-required {
+  font-style: italic;
+  color: var(--ink);
+  background: rgba(194, 84, 42, 0.04);
+  text-align: center;
+  vertical-align: middle;
+  font-weight: 500;
+}
+.peix-data .csv-schema .schema-note {
+  margin: 20px 0 0;
+  font-family: 'Instrument Serif', 'Charter', Georgia, serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-60);
+  font-style: italic;
+}
+.peix-data .csv-schema .schema-note code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-style: normal;
+  background: transparent;
+  color: var(--ink);
+  padding: 0 2px;
+}
+
+/* Batch-Table delete column */
+.peix-data .batch-table th.batch-actions-head {
+  text-align: right;
+  padding-right: 16px;
+}
+.peix-data .batch-table td.batch-actions {
+  text-align: right;
+  padding: 0 8px 0 0;
+  vertical-align: middle;
+}
+.peix-data .batch-delete-btn {
+  background: transparent;
+  border: 0.5px solid var(--ink-20);
+  color: var(--ink-60);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 2px;
+  transition: all 80ms ease-out;
+}
+.peix-data .batch-delete-btn:hover {
+  color: var(--signal, #c2542a);
+  border-color: var(--signal, #c2542a);
+  background: rgba(194, 84, 42, 0.04);
+}
+.peix-data .batch-delete-btn:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+.peix-data .batch-deleted-flag {
+  color: var(--ink-40);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+.peix-data .batch-table tr.row-deleted {
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-40);
+}
+.peix-data .batch-status.deleted {
+  color: var(--ink-40);
+  border-color: var(--ink-20);
+  font-style: italic;
+}

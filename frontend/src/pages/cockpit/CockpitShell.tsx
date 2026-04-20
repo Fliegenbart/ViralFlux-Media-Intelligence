@@ -16,12 +16,19 @@ import { Broadside } from './broadside/Broadside';
  * monthly; a backend /virus-readiness endpoint that picks the
  * default dynamically is on the backlog.
  */
-const DEFAULT_VIRUS = 'Influenza B';
+/**
+ * 2026-04-20 Pitch-Revision: Default = Influenza A (Hero-Virus mit
+ * höchster Korrelation 0.76 und dem kommerziell dominanten Produkt-
+ * Portfolio bei GELO). SARS-CoV-2 aus dem Switcher entfernt — MAPE
+ * 168 % + drift macht es für den Pitch eine Angriffsfläche ohne
+ * Gegenwert. Flu B bleibt als zweite Flu-Linie (Breit-Portfolio),
+ * RSV A als Pilot-Beispiel.
+ */
+const DEFAULT_VIRUS = 'Influenza A';
 export const SUPPORTED_VIRUSES: readonly string[] = [
   'Influenza A',
   'Influenza B',
   'RSV A',
-  'SARS-CoV-2',
 ];
 
 /**

@@ -142,6 +142,103 @@
 .peix-instr .chrono-meta { display: flex; gap: 24px; font-size: 10px; color: rgba(244, 241, 234, 0.65); }
 .peix-instr .chrono-meta b { color: var(--paper); font-weight: 500; }
 
+/* Executive Hero — 30-Sekunden-Summary oben. 3 Kacheln: Saison-Phase,
+   Atlas-Signal, EUR-Shift-Schätzung. Speaks GELO-language, not ML. */
+.peix-instr .exec-hero {
+  margin: 0 0 48px;
+  padding: 0;
+}
+.peix-instr .exec-hero-inner {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: 0.5px solid var(--ink-20);
+}
+.peix-instr .exec-cell {
+  padding: 24px 24px 26px;
+  border-right: 0.5px solid var(--ink-20);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.peix-instr .exec-cell:last-child { border-right: none; }
+.peix-instr .exec-cell-kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+}
+.peix-instr .exec-cell-value {
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 2px 0 8px;
+}
+.peix-instr .exec-cell-value b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.peix-instr .exec-cell-note {
+  font-family: 'General Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-60);
+  margin: auto 0 0;
+}
+
+.peix-instr .exec-delta {
+  color: var(--signal, #c2542a);
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  letter-spacing: 0.01em;
+}
+.peix-instr .exec-eur {
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-weight: 500;
+  font-size: 30px;
+  color: var(--signal, #c2542a);
+}
+.peix-instr .exec-eur-off {
+  color: var(--ink-40);
+}
+.peix-instr .exec-direction {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: var(--ink-60);
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.peix-instr .exec-cell.phase-peak {
+  background: color-mix(in srgb, var(--signal, #c2542a) 5%, transparent);
+  border-left: 3px solid var(--signal, #c2542a);
+}
+.peix-instr .exec-cell.phase-shoulder {
+  border-left: 3px solid var(--ink-40);
+}
+.peix-instr .exec-cell.phase-off {
+  border-left: 3px solid var(--oxide, #8b9788);
+  background: color-mix(in srgb, var(--oxide, #8b9788) 4%, transparent);
+}
+.peix-instr .exec-cell.signal-strong {
+  border-left: 3px solid var(--signal, #c2542a);
+}
+.peix-instr .exec-cell.signal-quiet {
+  border-left: 3px solid var(--oxide, #8b9788);
+}
+.peix-instr .exec-cell.budget-demo {
+  border-left: 3px solid var(--signal, #c2542a);
+  border-left-style: dashed;
+}
+.peix-instr .exec-cell.budget-connected {
+  border-left: 3px solid var(--signal, #c2542a);
+}
+
 /* Mobile / Tablet: StatusStrip → 2 Spalten, Atlas niedriger, TOC (falls
    aktiviert) versteckt. */
 @media (max-width: 900px) {
@@ -174,6 +271,21 @@
   .peix-instr .sec-primer { font-size: 14px; max-width: 100%; }
   .peix-instr .decision-grid { grid-template-columns: 1fr; gap: 32px; }
   .peix-instr .atlas-wrap { height: 340px; }
+  .peix-instr .exec-hero-inner { grid-template-columns: 1fr; }
+  .peix-instr .exec-cell {
+    border-right: none;
+    border-bottom: 0.5px solid var(--ink-20);
+  }
+  .peix-instr .exec-cell:last-child { border-bottom: none; }
+}
+@media (max-width: 900px) and (min-width: 601px) {
+  .peix-instr .exec-hero-inner { grid-template-columns: 1fr 1fr; }
+  .peix-instr .exec-cell:nth-child(3) {
+    grid-column: 1 / -1;
+    border-top: 0.5px solid var(--ink-20);
+    border-right: none;
+  }
+  .peix-instr .exec-cell:nth-child(2) { border-right: none; }
 }
 
 /* Loading-Screen */

@@ -8,6 +8,7 @@ import ForecastSection from './ForecastSection';
 import ImpactSection from './ImpactSection';
 import BacktestSection from './BacktestSection';
 import NextStepsSection from './NextStepsSection';
+import ExecutiveHero from './ExecutiveHero';
 
 /**
  * StatusStrip — a compact "ja, das läuft"-Zeile unter der ChronoBar.
@@ -156,6 +157,7 @@ export const Broadside: React.FC<Props> = ({
       />
       <StatusStrip snapshot={snapshot} supportedViruses={supportedViruses} />
       <main className="page">
+        <ExecutiveHero snapshot={snapshot} />
         {/* 2026-04-20: Atlas promoted to § I — the 3D wave map is the
             consistent aha-moment for first-time readers (confirmed during
             persona walkthrough). Decision follows as § II because the

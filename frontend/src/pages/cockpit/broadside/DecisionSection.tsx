@@ -307,12 +307,14 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         primer={
           <>
             Die <b>eine Empfehlung</b> der Woche: „Verschiebe X € aus A
-            nach B." Rechts die Konfidenz als Vernier-Skala mit Nadel
-            — kein Prozent-Pill, das Genauigkeit vortäuscht. Wenn kein
-            Media-Plan verbunden ist, zeigt das Panel ehrlich „Signal
-            klar, EUR-Shift wartet" statt eine Fantasie-Zahl. Probier
-            die <b>Demo-Szene</b>, wenn du sehen willst, wie die
-            Empfehlung aussieht, sobald GELO-Budget angebunden ist.
+            nach B." Rechts die Konfidenz als Skala mit Nadel — kein
+            Prozent-Pill, das Genauigkeit vortäuscht. In Wellen-Peaks
+            (z. B. KW 05-10) steht hier ein konkreter Shift-Vorschlag
+            mit Begründung; in Post-Saison-Wochen wie heute schweigt
+            das Tool bewusst — keine Empfehlung ist die ehrliche
+            Empfehlung, wenn kein Signal da ist. Probier die
+            <b> Demo-Szene</b>, um zu sehen, wie die Empfehlung
+            aussieht, sobald der Media-Plan angebunden ist.
           </>
         }
       />

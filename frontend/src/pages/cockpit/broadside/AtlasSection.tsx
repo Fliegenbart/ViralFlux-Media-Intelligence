@@ -813,13 +813,13 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Deutschland in 16 Türmen. <b>Höhe</b> = erwartete
-            Atemwegs-Welle in 7 Tagen gegenüber heute. <b>Farbe</b> =
-            Richtung. Die Top-3 bekommen ein schwebendes Label mit der
-            konkreten Zahl. <b>Hover über einen Turm</b> → sofort eine
-            Klartext-Erklärung, was das Modell erwartet und was das
-            für Media-Aktivierung bedeutet. Das ist der Kern: sehen
-            wohin die Welle läuft, bevor RKI es meldet.
+            Deutschland in 16 Türmen. <b>Höhe</b> = erwartete Welle in
+            7 Tagen. <b>Farbe</b>: rot = Welle kommt (Region aktivieren),
+            grün = flach oder rückläufig (<b>Sparmodus</b> — Budget
+            nicht verbrennen, wo keine Welle ist). <b>Hover</b> über
+            einen Turm → Klartext-Erklärung pro Bundesland. Kern-Move:
+            das Tool aktiviert nur, wenn das Signal wirklich da ist
+            — Disziplin statt Dauerfeuer.
           </>
         }
       />

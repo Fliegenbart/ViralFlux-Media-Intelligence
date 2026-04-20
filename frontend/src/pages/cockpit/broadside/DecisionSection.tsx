@@ -29,7 +29,7 @@ interface Props {
 // VernierScale — mechanische Skala
 // -----------------------------------------------------------------
 const VernierScale: React.FC<{
-  pct: number;              // 0..1
+  pct: number | null;       // 0..1 — null when no recommendation exists
   calibrated: boolean;
   leadDays: number | null;
   horizonWeeks: number;
@@ -49,7 +49,8 @@ const VernierScale: React.FC<{
   maturityTier,
   maturityLabel,
 }) => {
-  const clamped = Math.max(0, Math.min(1, pct));
+  const hasValue = pct !== null;
+  const clamped = hasValue ? Math.max(0, Math.min(1, pct as number)) : 0;
   const display = Math.round(clamped * 100);
 
   // Ticks: major at 0/25/50/75/100, minor at 10/20/30/40/60/70/80/90
@@ -57,7 +58,7 @@ const VernierScale: React.FC<{
   const minorTicks = [10, 20, 30, 40, 60, 70, 80, 90];
 
   return (
-    <aside className="vernier">
+    <aside className={`vernier${hasValue ? '' : ' empty'}`}>
       <span className="corner-mark tl" />
       <span className="corner-mark tr" />
       <span className="corner-mark bl" />
@@ -65,19 +66,29 @@ const VernierScale: React.FC<{
 
       <div className="vernier-head">
         <span>Konfidenz</span>
-        {calibrated ? (
-          <span className="badge-cal">Kalibriert</span>
+        {hasValue ? (
+          calibrated ? (
+            <span className="badge-cal">Kalibriert</span>
+          ) : (
+            <span className="badge-heur">Heuristisch</span>
+          )
         ) : (
-          <span className="badge-heur">Heuristisch</span>
+          <span className="badge-empty">Kein Signal</span>
         )}
       </div>
 
-      <div className="vernier-readout">
-        {display}
-        <span className="pct">%</span>
-      </div>
+      {hasValue ? (
+        <div className="vernier-readout">
+          {display}
+          <span className="pct">%</span>
+        </div>
+      ) : (
+        <div className="vernier-readout empty">
+          <span className="dash">—</span>
+        </div>
+      )}
 
-      <div className="vernier-scale">
+      <div className={`vernier-scale${hasValue ? '' : ' empty'}`}>
         <div className="axis" />
         {majorTicks.map((t) => (
           <React.Fragment key={`maj-${t}`}>
@@ -88,11 +99,13 @@ const VernierScale: React.FC<{
         {minorTicks.map((t) => (
           <div key={`min-${t}`} className="tick" style={{ left: `${t}%` }} />
         ))}
-        <div
-          className="needle"
-          style={{ left: `${clamped * 100}%` }}
-          data-value={`▼ ${clamped.toFixed(2)}`}
-        />
+        {hasValue ? (
+          <div
+            className="needle"
+            style={{ left: `${clamped * 100}%` }}
+            data-value={`▼ ${clamped.toFixed(2)}`}
+          />
+        ) : null}
       </div>
 
       <dl className="vernier-meta">
@@ -198,7 +211,10 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         title="Entscheidung der Woche"
         subtitle={
           <>
-            {snapshot.isoWeek} · {virusLabel} · Ein Signal, eine Empfehlung.
+            {snapshot.isoWeek} · {virusLabel} ·{' '}
+            {rec
+              ? 'Ein Signal, eine Empfehlung.'
+              : 'Signallage zu eng für einen Shift.'}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
@@ -279,7 +295,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         </div>
 
         <VernierScale
-          pct={rec ? rec.confidence : 0}
+          pct={rec ? rec.confidence : null}
           calibrated={calibrated}
           leadDays={bestLag}
           horizonWeeks={horizonWeeks}

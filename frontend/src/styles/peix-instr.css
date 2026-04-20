@@ -330,6 +330,33 @@
 }
 .peix-instr .vernier-head .badge-heur::before { content: ''; width: 6px; height: 6px; background: var(--signal); border-radius: 50%; }
 
+/* Empty-state badge — rendered when there is no recommendation, so the
+   Vernier must not advertise a fake zero Konfidenz. Muted dashed outline
+   mirrors the 'Kein Signal' message without competing with the
+   Kalibriert / Heuristisch accents. */
+.peix-instr .vernier-head .badge-empty {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--ink-40);
+  font-weight: 500;
+  border: 1px dashed var(--ink-20);
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+
+.peix-instr .vernier.empty .vernier-readout,
+.peix-instr .vernier.empty .vernier-scale {
+  opacity: .55;
+}
+.peix-instr .vernier.empty .vernier-readout .dash {
+  font-weight: 200;
+  color: var(--ink-40);
+}
+.peix-instr .vernier-scale.empty .axis,
+.peix-instr .vernier-scale.empty .tick,
+.peix-instr .vernier-scale.empty .tick-label {
+  opacity: .5;
+}
+
 .peix-instr .vernier-readout {
   font-family: 'Supreme', sans-serif;
   font-weight: 300;

@@ -394,7 +394,7 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
         const coord = LAENDER_COORDS[r.code];
         if (!coord) return;
         const delta = typeof r.delta7d === 'number'
-          ? (r.delta7d > 0 ? '+' : '') + (r.delta7d * 100).toFixed(0) + '%'
+          ? (r.delta7d > 0 ? '+' : '') + (r.delta7d * 100).toFixed(0) + '% · 7d'
           : '—';
         const tex = makeLabelTexture(THREE, r.name.toUpperCase(), delta);
         const spriteMat = new THREE.SpriteMaterial({
@@ -631,6 +631,13 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
       ? `${shiftFromCode} → ${shiftToCode}`
       : null;
 
+  // Regional ranking always runs at RANKING_HORIZON_DAYS (h=7) — the
+  // snapshot-builder enforces this regardless of the header lead horizon.
+  // We label tiles and HUD explicitly with "7 d" so readers stop asking
+  // whether +45 % means today, T+7 or T+21.
+  const RANKING_HORIZON_LABEL = '7 Tage';
+  const RANKING_HORIZON_SHORT = '7d';
+
   return (
     <section className="instr-section" id="sec-atlas">
       <SectionHeader
@@ -640,7 +647,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           <>
             {activeRegionCount} / 16 Bundesländer
             {pendingRegionCount > 0 ? ` (${pendingRegionCount} Training pending)` : ''}{' '}
-            · Höhe = {horizonDays}-Tage-Forecast · Farbe = Richtung
+            · Höhe = {RANKING_HORIZON_LABEL}-Welle · Farbe = Richtung
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
@@ -667,7 +674,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         <div className="atlas-hud">
           <div className="atlas-hud-corner tl">
             <div>Projektion · Perspektive 30°</div>
-            <div>Horizont · <b>+{horizonDays} TAGE</b></div>
+            <div>Ranking · <b>+7 TAGE</b></div>
             <div>Skalierung · <b>LINEAR</b></div>
           </div>
           <div className="atlas-hud-corner tr">
@@ -704,12 +711,14 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           </div>
 
           <div className="atlas-riser-list">
-            <div className="head">Top-Riser · {horizonDays} Tage</div>
+            <div className="head">Top-Riser · {RANKING_HORIZON_LABEL}</div>
             {topRisers.map((r, i) => (
               <div className="riser-row" key={r.code}>
                 <span className="rank">{String(i + 1).padStart(2, '0')}</span>
                 <span className="name">{r.name}</span>
-                <span className="delta">{fmtSignedPct(r.delta7d)}</span>
+                <span className="delta">
+                  {fmtSignedPct(r.delta7d)} · {RANKING_HORIZON_SHORT}
+                </span>
               </div>
             ))}
             {bottomFallers.map((r, i) => (
@@ -722,7 +731,9 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
                   {String(ranked.length - bottomFallers.length + i + 1).padStart(2, '0')}
                 </span>
                 <span className="name">{r.name}</span>
-                <span className="delta">{fmtSignedPct(r.delta7d)}</span>
+                <span className="delta">
+                  {fmtSignedPct(r.delta7d)} · {RANKING_HORIZON_SHORT}
+                </span>
               </div>
             ))}
           </div>

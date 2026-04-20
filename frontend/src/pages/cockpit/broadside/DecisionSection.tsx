@@ -1,8 +1,14 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { CockpitSnapshot } from '../types';
 import { fmtEurCompactOrDash, fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
+
+// A region qualifies as a 'strong riser' when its 7-day delta crosses this
+// absolute threshold. The value is deliberately conservative: we only want
+// the "signal is there, EUR is missing" empty-state to fire when the wave
+// is unmistakable in the atlas, not on marginal ranking noise.
+const STRONG_RISER_THRESHOLD = 0.15;
 
 /**
  * § I — Entscheidung der Woche.
@@ -204,6 +210,28 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
 
   const virusLabel = snapshot.virusLabel || snapshot.virusTyp;
 
+  // Strong-signal regions for the "Signal da, EUR fehlt" empty state.
+  // Rendered only when there is no primaryRecommendation — i.e. when the
+  // atlas shows a clear wave but the cockpit cannot translate it into a
+  // EUR shift because the Media-Plan is not connected yet (honest-by-
+  // default). Sorted by delta descending, capped at top-2 so the § I
+  // copy stays tight.
+  const strongRisers = useMemo(
+    () =>
+      [...snapshot.regions]
+        .filter(
+          (r) =>
+            typeof r.delta7d === 'number' &&
+            r.delta7d > STRONG_RISER_THRESHOLD &&
+            r.decisionLabel !== 'TrainingPending',
+        )
+        .sort((a, b) => (b.delta7d ?? 0) - (a.delta7d ?? 0))
+        .slice(0, 2),
+    [snapshot.regions],
+  );
+  const hasStrongSignal = strongRisers.length > 0;
+  const mediaPlanConnected = snapshot.mediaPlan?.connected === true;
+
   return (
     <section className="instr-section" id="sec-decision">
       <SectionHeader
@@ -214,7 +242,9 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
             {snapshot.isoWeek} · {virusLabel} ·{' '}
             {rec
               ? 'Ein Signal, eine Empfehlung.'
-              : 'Signallage zu eng für einen Shift.'}
+              : hasStrongSignal
+                ? 'Signal klar — Euro-Shift wartet auf Media-Plan.'
+                : 'Signallage zu eng für einen Shift.'}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
@@ -275,6 +305,38 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
                 </p>
               </div>
             </>
+          ) : hasStrongSignal ? (
+            <>
+              <p className="decision-statement">
+                Signallage deutlich in{' '}
+                <span className="to">{strongRisers[0].name}</span>{' '}
+                <span className="amt">
+                  ({fmtSignedPct(strongRisers[0].delta7d)} in 7 d)
+                </span>
+                {strongRisers.length > 1 && (
+                  <>
+                    {' '}und{' '}
+                    <span className="to">{strongRisers[1].name}</span>{' '}
+                    ({fmtSignedPct(strongRisers[1].delta7d)}).
+                  </>
+                )}
+                {strongRisers.length === 1 && '.'}
+              </p>
+
+              <div className="rationale">
+                <span className="instr-kicker">Warum kein EUR-Vorschlag</span>
+                <p>
+                  Das Modell sieht{' '}
+                  {strongRisers.length > 1 ? 'Wellen' : 'eine Welle'} — der
+                  Shift-Betrag in EUR wartet auf die Anbindung des
+                  {mediaPlanConnected ? ' ' : ' '}Media-Plans
+                  {mediaPlanConnected
+                    ? '.'
+                    : ' (mediaPlan.connected = false).'}{' '}
+                  Honest-by-default: keine Platzhalter-Beträge.
+                </p>
+              </div>
+            </>
           ) : (
             <>
               <p className="decision-statement">
@@ -285,9 +347,10 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
               <div className="rationale">
                 <span className="instr-kicker">Begründung</span>
                 <p>
-                  Entweder meldet das Modell kein starkes Signal, oder es
-                  fehlt ein verbundener Media-Plan. Diese Wochenausgabe
-                  nimmt bewusst keine Platzhalter-Zahlen — Honest-by-default.
+                  Weder ein starkes regionales Signal noch ein verbundener
+                  Media-Plan — keine Woche für einen Shift. Diese
+                  Wochenausgabe nimmt bewusst keine Platzhalter-Zahlen —
+                  Honest-by-default.
                 </p>
               </div>
             </>

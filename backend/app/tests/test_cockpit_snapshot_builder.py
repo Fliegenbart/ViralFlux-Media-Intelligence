@@ -324,6 +324,18 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self.assertEqual(panel["trainingSamples"], 103)
         self.assertEqual(panel["modelVersion"], "xgb_stack_v1_20260309T0823")
 
+    def test_trajectory_source_exposes_interpolation_honesty(self) -> None:
+        """Every snapshot must carry the interpolated-from-h7 flag so the
+        cockpit-copy can honestly label the 7-point line instead of implying
+        per-day native forecasts."""
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+        payload = self._build()
+        traj = payload["modelStatus"]["trajectorySource"]
+        self.assertEqual(traj["mode"], "interpolated_from_h7_endpoint")
+        self.assertFalse(traj["nativeHorizonsAvailable"])
+        self.assertIn("7-Punkt-Trajektorie", traj["label"])
+        self.assertIn("T+7", traj["detail"])
+
     def test_classify_maturity_thresholds(self) -> None:
         """Coarse guard around the boundary values."""
         from app.services.media.cockpit.snapshot_builder import _classify_maturity

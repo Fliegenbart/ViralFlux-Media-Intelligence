@@ -1343,6 +1343,8 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
     },
   ];
 
+  const trajectory = snapshot.modelStatus?.trajectorySource;
+
   return (
     <section className="instr-section" id="sec-forecast">
       <SectionHeader
@@ -1352,6 +1354,14 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
           <>
             Streifenschreiber · {virusTyp} · Horizont {horizonDays} Tage
             {localLoading && virusTyp !== primarySnapshot.virusTyp ? ' · lädt' : ''}
+            {trajectory ? (
+              <>
+                {' · '}
+                <span className="trajectory-kicker" title={trajectory.detail}>
+                  {trajectory.label}
+                </span>
+              </>
+            ) : null}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}

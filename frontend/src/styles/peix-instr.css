@@ -491,6 +491,15 @@
   opacity: .85;
 }
 
+/* Forecast-trajectory honesty kicker — rendered inside the § III subtitle.
+   Distinct from the primary label so readers notice it without it
+   dominating the header. */
+.peix-instr .trajectory-kicker {
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+  opacity: .85;
+}
+
 .peix-instr .atlas-bracket {
   position: absolute;
   width: 24px; height: 24px;

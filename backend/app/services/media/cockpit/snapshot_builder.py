@@ -181,6 +181,28 @@ MATURITY_TIER_PILOT_MAX = 100
 MATURITY_TIER_BETA_MAX = 200
 
 
+# Forecast-trajectory honesty block. Today (2026-04-20) the direct-stacking
+# model delivers a single T+7 endpoint; the seven daily points between
+# current_y and T+7 are linearly interpolated with a sqrt-expanding
+# uncertainty cone (see forecast_service_pipeline._expand_forecast_trajectory).
+# The orchestrator already trains h=1..6 artefacts, but they are not wired
+# into the cockpit path yet — hence `nativeHorizonsAvailable=False`.
+# The snapshot exposes this explicitly so the cockpit-copy can say what it
+# actually does instead of implying per-day native forecasts.
+FORECAST_TRAJECTORY_SOURCE: dict[str, Any] = {
+    "mode": "interpolated_from_h7_endpoint",
+    "label": "7-Punkt-Trajektorie aus T+7-Modell",
+    "detail": (
+        "Das aktive Direct-Stacking-Modell liefert einen Endpunkt bei T+7. "
+        "Die sechs Zwischenpunkte sind linear zwischen heute und T+7 "
+        "interpoliert, der Unsicherheitskegel wächst mit √t proportional — "
+        "keine neue Modell-Inferenz, sondern die ehrliche Rekonstruktion der "
+        "Trajektorie aus dem Endpunkt-Forecast."
+    ),
+    "nativeHorizonsAvailable": False,
+}
+
+
 def _virus_metadata_slug(virus_typ: str) -> str:
     """Mirror forecast_service._virus_slug — keep them in sync."""
     return virus_typ.lower().replace(" ", "_").replace("-", "_")
@@ -461,6 +483,10 @@ def _extract_model_status(
         # Read directly from ml_models/<slug>/metadata.json so the UI can
         # flag Phase-1 pilots honestly without waiting for outcome data.
         "trainingPanel": training_panel,
+        # Forecast-trajectory honesty block — see FORECAST_TRAJECTORY_SOURCE
+        # docstring. UI uses this to label the forecast chart so the 7-point
+        # line is not read as seven native model inferences.
+        "trajectorySource": dict(FORECAST_TRAJECTORY_SOURCE),
         "note": " ".join(note_parts) if note_parts else None,
     }
 

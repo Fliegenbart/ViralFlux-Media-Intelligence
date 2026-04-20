@@ -31,6 +31,19 @@ export interface ReconciliationPair {
   actual: number | null;
 }
 
+export interface ReconciliationScope {
+  /** Region of the underlying metric — always "DE" today. */
+  region: string;
+  /** Horizon of the underlying metric in days — always 7 today. */
+  horizonDays: number;
+  /** Human-readable scope label, e.g. "Nationale Accuracy (DE / h=7)". */
+  label: string;
+  /** True while regional per-Bundesland accuracy is not yet wired up. */
+  regionalRolloutPending: boolean;
+  /** Short note explaining the scope; rendered under the reconciliation block. */
+  note: string;
+}
+
 export interface Reconciliation {
   computed_at: string | null;
   window_days: number;
@@ -41,6 +54,8 @@ export interface Reconciliation {
   correlation: number | null;
   drift_detected: boolean;
   pairs: ReconciliationPair[];
+  /** Scope metadata so the UI can honestly label national-only metrics. */
+  scope?: ReconciliationScope | null;
 }
 
 export interface ForecastVintagePayload {

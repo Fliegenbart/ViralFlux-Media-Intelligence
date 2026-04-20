@@ -210,8 +210,34 @@ export interface ModelStatus {
    * so we can label Phase-1 pilots honestly. Always populated; `unknown` tier
    * when metadata is missing. */
   trainingPanel: ModelTrainingPanel;
+  /** Honest label for the forecast trajectory method so the UI does not imply
+   * native per-day inferences while the direct-stacking model only delivers
+   * a T+7 endpoint. */
+  trajectorySource: ForecastTrajectorySource;
 
   note?: string | null;
+}
+
+/**
+ * Forecast-trajectory provenance. Today the backend interpolates six daily
+ * points between today and T+7 (linear) with a sqrt-expanding uncertainty
+ * cone. Once the native h=1..6 artefacts are wired into the cockpit path,
+ * `nativeHorizonsAvailable` flips to true and `mode` moves to
+ * `"native_per_horizon"`.
+ */
+export type TrajectoryMode =
+  | 'interpolated_from_h7_endpoint'
+  | 'native_per_horizon'
+  | 'unknown';
+
+export interface ForecastTrajectorySource {
+  mode: TrajectoryMode;
+  /** Short label for inline UI kickers, e.g. "7-Punkt-Trajektorie aus T+7-Modell". */
+  label: string;
+  /** One-sentence detail for tooltips or captions. */
+  detail: string;
+  /** True only when the backend pulled native h=1..6 predictions. */
+  nativeHorizonsAvailable: boolean;
 }
 
 /**

@@ -227,6 +227,22 @@ async def get_cockpit_forecast_vintage(
             "correlation": float(acc_row["correlation"]) if acc_row.get("correlation") is not None else None,
             "drift_detected": bool(acc_row.get("drift_detected") or False),
             "pairs": pairs,
+            # Scope of the underlying metric. The accuracy task hardcodes
+            # region='DE' / horizon_days=7 (see services/ml/tasks.py), so
+            # the reconciliation we render is strictly national. Surface
+            # that explicitly so the cockpit-copy can say 'Nationale
+            # Accuracy (DE/h=7)' instead of implying regional coverage.
+            "scope": {
+                "region": "DE",
+                "horizonDays": 7,
+                "label": "Nationale Accuracy (DE / h=7)",
+                "regionalRolloutPending": True,
+                "note": (
+                    "Regional-Accuracy pro Bundesland ist Teil des Q2-Backlogs. "
+                    "Solange die Panel-Metriken regional sind, bleibt dieser "
+                    "Reconciliation-Block eine nationale Gegenprobe."
+                ),
+            },
         }
 
     return {

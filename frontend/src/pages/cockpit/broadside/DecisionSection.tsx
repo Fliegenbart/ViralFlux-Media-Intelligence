@@ -35,7 +35,20 @@ const VernierScale: React.FC<{
   horizonWeeks: number;
   cov80: number | null;
   cov95: number | null;
-}> = ({ pct, calibrated, leadDays, horizonWeeks, cov80, cov95 }) => {
+  trainingSamples: number | null;
+  maturityTier: 'pilot' | 'beta' | 'production' | 'unknown';
+  maturityLabel: string | null;
+}> = ({
+  pct,
+  calibrated,
+  leadDays,
+  horizonWeeks,
+  cov80,
+  cov95,
+  trainingSamples,
+  maturityTier,
+  maturityLabel,
+}) => {
   const clamped = Math.max(0, Math.min(1, pct));
   const display = Math.round(clamped * 100);
 
@@ -112,6 +125,15 @@ const VernierScale: React.FC<{
           <dd>
             {cov80 !== null ? cov80.toFixed(1) : '—'}{' '}
             <span className="unit">% Q80</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Training-Panel</dt>
+          <dd className={`maturity maturity-${maturityTier}`}>
+            {trainingSamples !== null ? `N=${trainingSamples}` : '—'}{' '}
+            <span className="unit">
+              {maturityLabel ?? 'unbekannt'}
+            </span>
           </dd>
         </div>
       </dl>
@@ -263,6 +285,11 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
           horizonWeeks={horizonWeeks}
           cov80={cov80}
           cov95={cov95}
+          trainingSamples={snapshot.modelStatus?.trainingPanel?.trainingSamples ?? null}
+          maturityTier={snapshot.modelStatus?.trainingPanel?.maturityTier ?? 'unknown'}
+          maturityLabel={
+            snapshot.modelStatus?.trainingPanel?.maturityLabel ?? null
+          }
         />
       </div>
     </section>

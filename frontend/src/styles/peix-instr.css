@@ -428,6 +428,12 @@
   color: var(--ink-40);
   font-weight: 400;
 }
+.peix-instr .vernier-meta dd.maturity { display: inline-flex; align-items: baseline; gap: 6px; }
+.peix-instr .vernier-meta dd.maturity-pilot { color: var(--signal); }
+.peix-instr .vernier-meta dd.maturity-pilot .unit { color: var(--signal); opacity: .85; }
+.peix-instr .vernier-meta dd.maturity-beta { color: var(--ink); }
+.peix-instr .vernier-meta dd.maturity-production { color: var(--oxide); }
+.peix-instr .vernier-meta dd.maturity-unknown { color: var(--ink-40); font-style: italic; }
 
 /* -----------------------------------------------------
    KAPITEL II — ATLAS 3D

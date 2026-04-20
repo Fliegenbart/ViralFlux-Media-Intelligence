@@ -159,6 +159,82 @@ def _iso_week_label(at: datetime) -> str:
     return f"KW {iso.week:02d} / {iso.year}"
 
 
+TRAINING_METADATA_ROOT = Path("/app/app/ml_models")
+
+# Maturity thresholds for the "Phase-1 pilot / Beta / Production" badge.
+# N = training_samples of the national XGBoost stack (per ml_models/<slug>/
+# metadata.json). Set conservatively on 2026-04-20: RSV A is N=57 today and
+# needs to land in "pilot"; Influenza A/B and SARS-CoV-2 sit at N≈103-113
+# which is still "beta". A virus crosses into "production" at N≥200 — none
+# today. Threshold review belongs into a calibration discussion once the
+# outcome loop (T2.2) delivers real sell-through signals.
+MATURITY_TIER_PILOT_MAX = 100
+MATURITY_TIER_BETA_MAX = 200
+
+
+def _virus_metadata_slug(virus_typ: str) -> str:
+    """Mirror forecast_service._virus_slug — keep them in sync."""
+    return virus_typ.lower().replace(" ", "_").replace("-", "_")
+
+
+def _classify_maturity(samples: int | None) -> tuple[str, str]:
+    """Return (tier, label) for the training-panel badge.
+
+    The label is rendered verbatim by the frontend; keep it compact so it
+    fits into a card badge.
+    """
+    if samples is None:
+        return ("unknown", "Kein Modell-Panel gefunden")
+    if samples < MATURITY_TIER_PILOT_MAX:
+        return ("pilot", f"Phase-1-Pilot · N={samples}")
+    if samples < MATURITY_TIER_BETA_MAX:
+        return ("beta", f"Beta-Pilot · N={samples}")
+    return ("production", f"Produktiv · N={samples}")
+
+
+def _read_training_panel(virus_typ: str) -> dict[str, Any]:
+    """Expose the national training-panel metadata as an honest badge payload.
+
+    Reads ``ml_models/<slug>/metadata.json`` — the artefact every live virus
+    has — and maps ``training_samples`` into a coarse maturity tier. Never
+    raises; missing or unreadable metadata returns an ``unknown`` block so
+    the UI can still render, and operators get a visible flag.
+    """
+    slug = _virus_metadata_slug(virus_typ)
+    meta_path = TRAINING_METADATA_ROOT / slug / "metadata.json"
+    if not meta_path.exists():
+        logger.info("training metadata not found for %s at %s", virus_typ, meta_path)
+        tier, label = _classify_maturity(None)
+        return {
+            "trainingSamples": None,
+            "maturityTier": tier,
+            "maturityLabel": label,
+            "trainedAt": None,
+            "modelVersion": None,
+        }
+    try:
+        data = json.loads(meta_path.read_text())
+    except (OSError, ValueError):
+        logger.exception("failed to parse training metadata for %s at %s", virus_typ, meta_path)
+        tier, label = _classify_maturity(None)
+        return {
+            "trainingSamples": None,
+            "maturityTier": tier,
+            "maturityLabel": label,
+            "trainedAt": None,
+            "modelVersion": None,
+        }
+    samples = _optional_int(data.get("training_samples"))
+    tier, label = _classify_maturity(samples)
+    return {
+        "trainingSamples": samples,
+        "maturityTier": tier,
+        "maturityLabel": label,
+        "trainedAt": str(data.get("trained_at") or "") or None,
+        "modelVersion": str(data.get("version") or "") or None,
+    }
+
+
 def _read_ranking_metrics(virus_typ: str) -> dict[str, Any]:
     """Load the per-virus ranking metrics from the pilot training summary.
 
@@ -317,6 +393,7 @@ def _extract_model_status(
         if virus_typ in _REGIONAL_VIRUSES
         else "Nur nationaler Forecast — kein regionales Modell"
     )
+    training_panel = _read_training_panel(virus_typ)
 
     lead = _lead_block_from_backtest(
         db,
@@ -371,6 +448,10 @@ def _extract_model_status(
         # Structured blocks for the UI to render two panels.
         "ranking": ranking_metrics,
         "lead": lead,
+        # Training-panel transparency badge (N samples + maturity tier).
+        # Read directly from ml_models/<slug>/metadata.json so the UI can
+        # flag Phase-1 pilots honestly without waiting for outcome data.
+        "trainingPanel": training_panel,
         "note": " ".join(note_parts) if note_parts else None,
     }
 

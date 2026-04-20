@@ -117,7 +117,7 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         )
         self.db.commit()
 
-    def _patch_external(self, *, ranking_metrics: dict | None = None):
+    def _patch_external(self, *, ranking_metrics: dict | None = None, training_panel: dict | None = None):
         """Patch sources/freshness + _read_ranking_metrics with stable returns."""
         if ranking_metrics is None:
             ranking_metrics = {
@@ -127,11 +127,20 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
                 "dataPoints": 39,
                 "trainedAt": "2026-04-16T22:51:00",
             }
+        if training_panel is None:
+            training_panel = {
+                "trainingSamples": 103,
+                "maturityTier": "beta",
+                "maturityLabel": "Beta-Pilot · N=103",
+                "trainedAt": "2026-03-09T08:23:48.108240",
+                "modelVersion": "xgb_stack_v1_20260309T0823",
+            }
 
         return [
             patch.object(snapshot_builder, "build_source_status", return_value={"items": []}),
             patch.object(snapshot_builder, "build_data_freshness", return_value={}),
             patch.object(snapshot_builder, "_read_ranking_metrics", return_value=dict(ranking_metrics)),
+            patch.object(snapshot_builder, "_read_training_panel", return_value=dict(training_panel)),
         ]
 
     def _build(self, **overrides) -> dict:
@@ -272,6 +281,57 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         )
         payload = self._build()
         self.assertEqual(payload["modelStatus"]["calibrationMode"], "calibrated")
+
+    # ---------- training panel (transparency badge) ----------
+
+    def test_training_panel_pilot_tier_for_low_sample_model(self) -> None:
+        """N<100 samples must surface as a 'pilot' tier badge."""
+        self._insert_backtest(virus_typ="RSV A", target_source="ATEMWEGSINDEX")
+        training_panel = {
+            "trainingSamples": 57,
+            "maturityTier": "pilot",
+            "maturityLabel": "Phase-1-Pilot · N=57",
+            "trainedAt": "2026-03-09T08:24:00",
+            "modelVersion": "xgb_stack_v1_20260309T0824",
+        }
+        patches = self._patch_external(training_panel=training_panel)
+        for p in patches:
+            p.start()
+        try:
+            payload = snapshot_builder.build_cockpit_snapshot(
+                self.db,
+                virus_typ="RSV A",
+                horizon_days=14,
+                regional_forecast_service=_FakeRegionalForecastService({"predictions": []}),
+            )
+        finally:
+            for p in patches:
+                p.stop()
+        panel = payload["modelStatus"]["trainingPanel"]
+        self.assertEqual(panel["maturityTier"], "pilot")
+        self.assertEqual(panel["trainingSamples"], 57)
+        self.assertIn("N=57", panel["maturityLabel"])
+
+    def test_training_panel_beta_tier_passed_through(self) -> None:
+        """The structured block must reach the payload verbatim from _read_training_panel."""
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+        payload = self._build()
+        panel = payload["modelStatus"]["trainingPanel"]
+        self.assertEqual(panel["maturityTier"], "beta")
+        self.assertEqual(panel["trainingSamples"], 103)
+        self.assertEqual(panel["modelVersion"], "xgb_stack_v1_20260309T0823")
+
+    def test_classify_maturity_thresholds(self) -> None:
+        """Coarse guard around the boundary values."""
+        from app.services.media.cockpit.snapshot_builder import _classify_maturity
+
+        self.assertEqual(_classify_maturity(None)[0], "unknown")
+        self.assertEqual(_classify_maturity(0)[0], "pilot")
+        self.assertEqual(_classify_maturity(99)[0], "pilot")
+        self.assertEqual(_classify_maturity(100)[0], "beta")
+        self.assertEqual(_classify_maturity(199)[0], "beta")
+        self.assertEqual(_classify_maturity(200)[0], "production")
+        self.assertEqual(_classify_maturity(500)[0], "production")
 
     # ---------- regions ----------
 

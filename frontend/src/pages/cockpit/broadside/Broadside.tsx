@@ -55,6 +55,11 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
     snapshot.modelStatus?.lead?.horizonDays ??
     '—';
 
+  const trainingPanel = snapshot.modelStatus?.trainingPanel;
+  const trainingLabel = trainingPanel && trainingPanel.maturityTier !== 'unknown'
+    ? `Training-Panel: ${trainingPanel.maturityLabel}`
+    : null;
+
   return (
     <footer className="page-foot">
       <div>
@@ -70,6 +75,7 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
         <div>
           Kalibrierung: {calibMode}, {folds} Walk-forward Folds
         </div>
+        {trainingLabel ? <div>{trainingLabel}</div> : null}
       </div>
       <div className="col-right">
         <div>Präsentiert für</div>

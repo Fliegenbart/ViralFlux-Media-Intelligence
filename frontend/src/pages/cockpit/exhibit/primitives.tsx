@@ -1,4 +1,5 @@
 import React from 'react';
+import type { MaturityTier } from '../types';
 
 /**
  * Exhibit primitives — the editorial atoms used across the Museum-Exhibit
@@ -66,6 +67,35 @@ export const MethodBadge: React.FC<{ calibrated: boolean; onPaper?: boolean }> =
     }
   >
     {calibrated ? 'kalibriert' : 'heuristisch'}
+  </span>
+);
+
+// --------------------------------------------------------------
+// Maturity badge — Phase-1 Pilot / Beta / Produktiv. Surfaces the
+// national training-set size so decision-makers see N up front and
+// small panels are never mistaken for production-grade models.
+// --------------------------------------------------------------
+
+export const MaturityBadge: React.FC<{
+  tier: MaturityTier;
+  label: string;
+  onPaper?: boolean;
+}> = ({ tier, label, onPaper = false }) => (
+  <span
+    className={
+      'ex-maturity-badge' +
+      ` tier-${tier}` +
+      (onPaper ? ' paper' : '')
+    }
+    title={tier === 'pilot'
+      ? 'Kleine Trainingsbasis — Punkt-Forecast belastbar, Unsicherheitsintervalle vorsichtig lesen.'
+      : tier === 'beta'
+        ? 'Mittelgroße Trainingsbasis — Modell läuft produktiv, aber nicht produktionsreif zertifiziert.'
+        : tier === 'production'
+          ? 'Produktionsreif trainiert.'
+          : 'Kein Training-Panel auffindbar.'}
+  >
+    {label}
   </span>
 );
 

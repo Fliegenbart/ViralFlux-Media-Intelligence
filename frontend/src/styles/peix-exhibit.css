@@ -530,6 +530,41 @@
 }
 
 /* --------------------------------------------------------------
+   Maturity badge — Phase-1 pilot / Beta / Produktiv
+   Mirrors method-badge geometry; colour signals trainings-set size.
+   -------------------------------------------------------------- */
+.peix-exhibit .ex-maturity-badge {
+  display: inline-block;
+  font-family: var(--ex-mono); font-size: 10px;
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  color: var(--ex-stage-45);
+  cursor: help;
+}
+.peix-exhibit .ex-maturity-badge.tier-pilot {
+  color: var(--ex-ochre);
+  border-color: var(--ex-ochre);
+  background: color-mix(in srgb, var(--ex-ochre) 8%, transparent);
+}
+.peix-exhibit .ex-maturity-badge.tier-beta {
+  color: var(--ex-stage-45);
+  border-color: var(--ex-stage-45);
+}
+.peix-exhibit .ex-maturity-badge.tier-production {
+  color: var(--ex-fired, var(--ex-stage-45));
+  border-color: var(--ex-fired, var(--ex-stage-45));
+}
+.peix-exhibit .ex-maturity-badge.tier-unknown {
+  color: var(--ex-stage-45);
+  border-style: dashed;
+  opacity: .6;
+}
+.peix-exhibit .ex-maturity-badge.paper {
+  color: var(--ex-ink-60);
+}
+
+/* --------------------------------------------------------------
    Drawer dock — signature move #3 from Design-Notizen
    -------------------------------------------------------------- */
 .peix-exhibit .ex-drawer-dock {

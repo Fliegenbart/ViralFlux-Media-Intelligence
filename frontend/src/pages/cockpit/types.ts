@@ -199,8 +199,30 @@ export interface ModelStatus {
   /** New: structured blocks for the two-source banner. */
   ranking: ModelRankingStatus;
   lead: ModelLeadStatus;
+  /** Training-panel maturity badge. Surfaces how big the national training set is
+   * so we can label Phase-1 pilots honestly. Always populated; `unknown` tier
+   * when metadata is missing. */
+  trainingPanel: ModelTrainingPanel;
 
   note?: string | null;
+}
+
+/**
+ * Training-panel transparency badge — derived from the national XGBoost
+ * metadata.json. Classifies the virus into `pilot` (N<100), `beta` (100-199),
+ * or `production` (≥200) so the UI can render "Phase-1-Pilot · N=57" style
+ * labels without back-end UX copy changes.
+ */
+export type MaturityTier = 'pilot' | 'beta' | 'production' | 'unknown';
+
+export interface ModelTrainingPanel {
+  trainingSamples: number | null;
+  maturityTier: MaturityTier;
+  /** Ready-to-render short label, e.g. "Phase-1-Pilot · N=57". */
+  maturityLabel: string;
+  /** ISO-8601 timestamp of the last training run, or null if unknown. */
+  trainedAt: string | null;
+  modelVersion: string | null;
 }
 
 export interface MediaPlanStatus {

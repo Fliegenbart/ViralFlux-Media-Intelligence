@@ -3,6 +3,7 @@ import type { CockpitSnapshot } from '../types';
 import { fmtEurCompactOrDash, fmtSignalStrength } from '../format';
 import {
   CaptionStrip,
+  MaturityBadge,
   MethodBadge,
   Thermometer,
 } from './primitives';
@@ -60,7 +61,9 @@ export const Hero: React.FC<HeroProps> = ({ snapshot, layout = 'fullbleed', onOp
         ? `Lag ${bestLag} d`
         : 'Lead-Time';
 
-  // Kicker — mono labels + method badge
+  const trainingPanel = snapshot.modelStatus?.trainingPanel;
+
+  // Kicker — mono labels + method badge + maturity badge
   const kicker = (
     <div className="ex-hero-kicker">
       <span className="ex-mono">Empfehlung der Woche</span>
@@ -71,6 +74,18 @@ export const Hero: React.FC<HeroProps> = ({ snapshot, layout = 'fullbleed', onOp
         style={{ background: 'var(--ex-stage-hair)' }}
       />
       <MethodBadge calibrated={calibrated} />
+      {trainingPanel && trainingPanel.maturityTier !== 'unknown' ? (
+        <>
+          <span
+            className="ex-dot"
+            style={{ background: 'var(--ex-stage-hair)' }}
+          />
+          <MaturityBadge
+            tier={trainingPanel.maturityTier}
+            label={trainingPanel.maturityLabel}
+          />
+        </>
+      ) : null}
     </div>
   );
 

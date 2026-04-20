@@ -1,0 +1,2332 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=1440" />
+<title>VIRALFLUX · COCKPIT/01 · KW 16</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* ---------------------------------------------------------------
+   VIRALFLUX COCKPIT — v2 / Instrument
+   Spatial-forward. The Wellen-Atlas is the surface; everything
+   else is HUD laid over it. Mono-dominant type, hairline grids,
+   one signal color (cyan), coordinate readouts, no chrome-for-
+   chrome's-sake. Reads as telemetry.
+--------------------------------------------------------------- */
+
+:root {
+  /* Paper (only daylight sections) */
+  --paper:        #f5f2ea;
+  --paper-alt:    #eee9dc;
+  --paper-edge:   #dcd5c3;
+
+  /* Stage (hero, atlas, HUD over 3D) */
+  --stage:        #0b0c0f;
+  --stage-grid:   rgba(220,230,240,0.045);
+  --stage-grid-2: rgba(220,230,240,0.09);
+  --stage-hair:   rgba(220,230,240,0.18);
+
+  /* Ink */
+  --ink:          #111214;
+  --ink-80:       rgba(17,18,20,.80);
+  --ink-60:       rgba(17,18,20,.60);
+  --ink-45:       rgba(17,18,20,.45);
+  --ink-30:       rgba(17,18,20,.30);
+  --ink-15:       rgba(17,18,20,.15);
+
+  /* Text on stage */
+  --chalk:        #eef2f6;
+  --chalk-80:     rgba(238,242,246,.80);
+  --chalk-60:     rgba(238,242,246,.60);
+  --chalk-45:     rgba(238,242,246,.45);
+  --chalk-30:     rgba(238,242,246,.30);
+
+  --hairline:     rgba(17,18,20,.16);
+  --hairline-strong: rgba(17,18,20,.32);
+
+  /* Signal — one accent. Electric cyan. */
+  --signal:       #00d4ff;
+  --signal-dim:   #0ea5c4;
+  --signal-glow:  rgba(0,212,255,0.16);
+  --warn:         #ff6a3d;
+  --warn-dim:     #b84725;
+
+  /* Type */
+  --mono:   "JetBrains Mono", "Geist Mono", ui-monospace, Menlo, monospace;
+  --sans:   "Geist", -apple-system, "Helvetica Neue", sans-serif;
+
+  /* Scale */
+  --t-micro: 10px;
+  --t-xs:    11px;
+  --t-sm:    12px;
+  --t-md:    14px;
+  --t-lg:    16px;
+  --t-xl:    20px;
+  --t-2xl:   28px;
+  --t-3xl:   40px;
+  --t-4xl:   64px;
+  --t-5xl:   96px;
+  --t-6xl:   144px;
+
+  /* Space */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+  --s5: 24px; --s6: 32px; --s7: 48px; --s8: 64px;
+  --s9: 96px; --s10: 128px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--paper); }
+body {
+  font-family: var(--mono);
+  font-size: var(--t-md);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: 0;
+}
+
+/* TYPE PRIMITIVES */
+.mono    { font-family: var(--mono); }
+.sans    { font-family: var(--sans); }
+.mono-micro { font-family: var(--mono); font-size: var(--t-micro); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 500; }
+.mono-xs    { font-family: var(--mono); font-size: var(--t-xs);    letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; }
+.mono-sm    { font-family: var(--mono); font-size: var(--t-sm); }
+.num        { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.sans-md    { font-family: var(--sans); font-size: var(--t-md); letter-spacing: -0.005em; }
+.sans-lg    { font-family: var(--sans); font-size: var(--t-lg); letter-spacing: -0.01em; }
+.sans-xl    { font-family: var(--sans); font-size: var(--t-xl); letter-spacing: -0.015em; }
+
+.display-num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: var(--t-6xl);
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.section-nr {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+/* LAYOUT */
+.screen {
+  width: 100%;
+  min-width: 1280px;
+  max-width: 1920px;
+  margin: 0 auto;
+}
+
+/* SPATIAL HERO */
+.spatial {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 780px;
+  background: var(--stage);
+  color: var(--chalk);
+  overflow: hidden;
+}
+.spatial-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 0;
+}
+
+/* Plotter grid backdrop */
+.grid-bg {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, var(--stage-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--stage-grid) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 1;
+}
+.grid-bg::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(to right, var(--stage-grid-2) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--stage-grid-2) 1px, transparent 1px);
+  background-size: 240px 240px;
+}
+
+.stage-frame {
+  position: absolute; inset: 16px;
+  border: 1px solid var(--stage-hair);
+  pointer-events: none;
+  z-index: 2;
+}
+.corner { position: absolute; width: 20px; height: 20px; pointer-events: none; z-index: 3; color: var(--chalk-60); }
+.corner::before, .corner::after {
+  content: ""; position: absolute; background: currentColor;
+}
+.corner::before { width: 12px; height: 1px; }
+.corner::after  { width: 1px;  height: 12px; }
+.corner.tl { top: 16px;    left: 16px; }
+.corner.tl::before { top: 0; left: 0; } .corner.tl::after { top: 0; left: 0; }
+.corner.tr { top: 16px;    right: 16px; }
+.corner.tr::before { top: 0; right: 0; } .corner.tr::after { top: 0; right: 0; }
+.corner.bl { bottom: 16px; left: 16px; }
+.corner.bl::before { bottom: 0; left: 0; } .corner.bl::after { bottom: 0; left: 0; }
+.corner.br { bottom: 16px; right: 16px; }
+.corner.br::before { bottom: 0; right: 0; } .corner.br::after { bottom: 0; right: 0; }
+
+/* STATUS STRIP */
+.status-strip {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 36px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--stage-hair);
+  background: rgba(11,12,15,0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--chalk-80);
+  letter-spacing: 0.08em;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.status-strip > * {
+  padding: 0 12px;
+  height: 100%;
+  display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0;
+}
+.status-strip > * + *:not(.status-spacer) {
+  border-left: 1px solid var(--stage-hair);
+}
+.status-spacer { flex: 1; padding: 0; border: 0; min-width: 12px; }
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
+  display: inline-block;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+.status-label { color: var(--chalk-45); }
+.status-value { color: var(--chalk); font-weight: 500; }
+
+/* COORD READOUT */
+.coord-readout {
+  position: absolute; top: 64px; left: 40px;
+  z-index: 5;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.08em;
+  color: var(--chalk-45);
+  text-transform: uppercase;
+  line-height: 1.8;
+}
+.coord-readout .k { color: var(--chalk-30); }
+.coord-readout .v { color: var(--chalk-80); }
+
+/* HUD */
+.hud {
+  position: absolute;
+  top: 160px;
+  left: 40px;
+  z-index: 6;
+  width: 560px;
+  color: var(--chalk);
+}
+.hud-nr {
+  color: var(--signal);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 28px;
+}
+.hud-nr::before {
+  content: ""; display: inline-block; width: 28px; height: 1px;
+  background: var(--signal);
+}
+.hud-kicker {
+  display: flex; gap: 18px; flex-wrap: wrap;
+  font-family: var(--mono); font-size: var(--t-xs);
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--chalk-60);
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--stage-hair);
+  align-items: center;
+}
+.hud-kicker .sep { color: var(--chalk-30); }
+
+.hud-lede {
+  font-family: var(--sans);
+  font-size: 56px;
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  color: var(--chalk);
+  margin: 0 0 28px 0;
+}
+.hud-lede .money {
+  font-family: var(--mono);
+  font-weight: 500;
+  color: var(--signal);
+  letter-spacing: -0.03em;
+}
+.hud-lede .from, .hud-lede .to {
+  font-family: var(--mono);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.hud-lede .from { color: var(--chalk-60); text-decoration: line-through; text-decoration-color: var(--chalk-30); }
+.hud-lede .to   { color: var(--chalk); }
+.hud-lede .arrow { color: var(--chalk-45); padding: 0 6px; font-family: var(--mono); }
+
+.hud-dek {
+  font-family: var(--sans);
+  font-size: var(--t-lg);
+  line-height: 1.45;
+  color: var(--chalk-80);
+  margin: 0 0 32px 0;
+  max-width: 520px;
+  letter-spacing: -0.005em;
+}
+
+.hud-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--stage-hair);
+  background: rgba(255,255,255,0.015);
+}
+.hud-metric {
+  padding: 16px 20px;
+  border-right: 1px solid var(--stage-hair);
+}
+.hud-metric:last-child { border-right: 0; }
+.hud-metric .label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--chalk-45);
+  margin-bottom: 10px;
+  display: flex; justify-content: space-between; gap: 8px;
+  white-space: nowrap;
+}
+.hud-metric .label .k { flex-shrink: 0; }
+.hud-metric .label .v {
+  color: var(--chalk-60);
+  font-variant-numeric: tabular-nums;
+}
+.hud-metric .val {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--chalk);
+}
+.hud-metric .val.signal { color: var(--signal); }
+.hud-metric .sub {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  color: var(--chalk-45);
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+
+.scale-bar {
+  position: relative;
+  height: 8px;
+  background: rgba(238,242,246,0.08);
+  margin-top: 10px;
+}
+.scale-bar .fill {
+  position: absolute; top: 0; left: 0; bottom: 0;
+  background: var(--signal);
+  box-shadow: 0 0 12px var(--signal-glow);
+}
+.scale-bar .ticks {
+  position: absolute; inset: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0, transparent calc(10% - 1px),
+    rgba(238,242,246,0.22) calc(10% - 1px), rgba(238,242,246,0.22) 10%
+  );
+}
+
+.hud-actions {
+  display: flex; gap: 12px;
+  margin-top: 28px;
+}
+.btn {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 12px 18px;
+  border: 1px solid var(--stage-hair);
+  background: transparent;
+  color: var(--chalk);
+  cursor: pointer;
+  transition: all 120ms ease;
+  display: inline-flex; align-items: center; gap: 10px;
+}
+.btn:hover { border-color: var(--chalk-45); background: rgba(255,255,255,0.03); }
+.btn.primary {
+  background: var(--signal);
+  color: #06171e;
+  border-color: var(--signal);
+}
+.btn.primary:hover { background: #2ee0ff; border-color: #2ee0ff; }
+.btn .kbd {
+  font-size: 10px; color: inherit; opacity: 0.6; letter-spacing: 0.04em;
+}
+
+/* RIGHT-HAND RAIL */
+.hud-rail {
+  position: absolute;
+  top: 160px;
+  right: 40px;
+  z-index: 6;
+  width: 340px;
+  color: var(--chalk);
+}
+.rail-head {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--chalk-45);
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--stage-hair);
+  margin-bottom: 12px;
+  display: flex; justify-content: space-between;
+}
+.rail-row {
+  display: grid;
+  grid-template-columns: 28px 44px 1fr 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(238,242,246,0.06);
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--chalk-80);
+}
+.rail-row:last-child { border-bottom: 0; }
+.rail-row .idx { color: var(--chalk-30); font-size: 10px; letter-spacing: 0.04em; }
+.rail-row .code { color: var(--chalk); font-weight: 500; letter-spacing: 0.04em; }
+.rail-row .spark {
+  display: flex; align-items: center; gap: 2px; height: 20px;
+}
+.rail-row .bar {
+  width: 3px; background: currentColor;
+  opacity: 0.7;
+}
+.rail-row .val {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.rail-row.rise .val { color: var(--signal); }
+.rail-row.fall .val { color: var(--chalk-45); }
+.rail-row.flat .val { color: var(--chalk-60); }
+.rail-row.focus { background: rgba(0,212,255,0.06); }
+.rail-row.focus .code { color: var(--signal); }
+
+/* BOTTOM HUD */
+.bottom-hud {
+  position: absolute;
+  bottom: 40px;
+  left: 40px; right: 40px;
+  z-index: 6;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  color: var(--chalk-60);
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.06em;
+}
+.bottom-hud .cluster {
+  display: flex; gap: 28px; align-items: center;
+}
+.legend-dot {
+  width: 10px; height: 10px;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+/* DAYLIGHT */
+.daylight {
+  background: var(--paper);
+  color: var(--ink);
+  position: relative;
+}
+.daylight-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 80px 40px;
+}
+.section-head {
+  display: grid;
+  grid-template-columns: 200px 1fr 320px;
+  gap: 40px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--hairline);
+  margin-bottom: 48px;
+  align-items: baseline;
+}
+.section-head .nr {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+}
+.section-head .title {
+  font-family: var(--sans);
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+}
+.section-head .desc {
+  font-family: var(--sans);
+  font-size: var(--t-md);
+  color: var(--ink-60);
+  line-height: 1.55;
+  padding-top: 10px;
+  letter-spacing: -0.005em;
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  margin-bottom: 48px;
+}
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 16px 28px;
+  font-family: var(--mono);
+  font-size: var(--t-md);
+}
+.kv-grid dt {
+  color: var(--ink-45);
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 4px;
+}
+.kv-grid dd {
+  margin: 0;
+  padding: 0 0 16px 0;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+  line-height: 1.5;
+}
+.kv-grid dd:last-of-type { border-bottom: 0; }
+.kv-grid .note {
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+  color: var(--ink-60);
+  display: block;
+  margin-top: 6px;
+  letter-spacing: -0.005em;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: var(--t-md);
+}
+.data-table th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+  padding: 0 0 12px 0;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.data-table th.r, .data-table td.r { text-align: right; }
+.data-table td {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hairline);
+  font-variant-numeric: tabular-nums;
+  vertical-align: top;
+}
+.data-table tr.blocked td { color: var(--ink-45); }
+.data-table .arrow { color: var(--ink-30); padding: 0 8px; }
+.data-table .note {
+  display: block;
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+  color: var(--ink-60);
+  margin-top: 4px;
+  letter-spacing: -0.005em;
+}
+.data-table td.dim { color: var(--ink-45); }
+
+.conf-bar { display: inline-flex; align-items: center; gap: 8px; }
+.conf-bar .track {
+  width: 56px; height: 3px;
+  background: var(--ink-15);
+  position: relative;
+}
+.conf-bar .track .fill {
+  position: absolute; inset: 0 auto 0 0;
+  background: var(--ink);
+}
+.conf-bar.sig .track .fill { background: var(--signal-dim); }
+
+.dash  { color: var(--warn); font-family: var(--mono); letter-spacing: 0.08em; }
+.dash-note {
+  font-family: var(--sans); font-size: var(--t-sm); color: var(--warn);
+  margin-left: 8px; letter-spacing: -0.005em;
+}
+
+.method-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  color: var(--signal-dim);
+  white-space: nowrap;
+}
+.method-badge.heuristic { color: var(--warn-dim); }
+.method-badge.on-stage  { color: var(--signal); border-color: var(--signal); }
+.method-badge.on-stage.heuristic { color: var(--warn); border-color: var(--warn); }
+
+/* DRAWER */
+.drawer-dock {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 30;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column;
+  gap: 2px;
+}
+.drawer-tab {
+  position: relative;
+  padding: 20px 14px;
+  background: rgba(11,12,15,0.82);
+  backdrop-filter: blur(8px);
+  color: var(--chalk-80);
+  border: 1px solid var(--stage-hair);
+  border-right: 0;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transition: all 120ms ease;
+  display: flex; align-items: center; gap: 10px;
+}
+.drawer-tab:hover { color: var(--chalk); border-color: var(--chalk-45); background: rgba(11,12,15,0.95); }
+.drawer-tab .tab-idx { color: var(--signal); font-size: 10px; }
+
+.drawer-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(11,12,15,0.72);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+  z-index: 40;
+}
+.drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 82%;
+  max-width: 1280px;
+  background: var(--stage);
+  color: var(--chalk);
+  transform: translateX(100%);
+  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 50;
+  display: flex; flex-direction: column;
+  border-left: 1px solid var(--stage-hair);
+}
+.drawer.paper {
+  background: var(--paper);
+  color: var(--ink);
+  border-left-color: var(--hairline);
+}
+.drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 24px;
+  align-items: center;
+  padding: 18px 32px;
+  border-bottom: 1px solid var(--stage-hair);
+  flex-shrink: 0;
+}
+.drawer.paper .drawer-header { border-bottom-color: var(--hairline); }
+
+.drawer-nr {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--signal);
+}
+.drawer.paper .drawer-nr { color: var(--signal-dim); }
+.drawer-title {
+  font-family: var(--sans);
+  font-size: var(--t-xl);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+.drawer-close {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: inherit; opacity: 0.6;
+  background: none; border: 1px solid currentColor; padding: 8px 14px;
+  cursor: pointer;
+}
+.drawer-close:hover { opacity: 1; }
+.drawer-close .kbd { opacity: 0.55; margin-left: 8px; font-size: 9px; }
+
+.drawer-body {
+  flex: 1; overflow-y: auto;
+  padding: 40px;
+}
+
+.atlas-wrap {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  background: #0b0c0f;
+  border: 1px solid var(--stage-hair);
+  overflow: hidden;
+}
+.atlas-wrap canvas { position: absolute; inset: 0; }
+.atlas-wrap .grid-bg { z-index: 1; }
+
+.fanchart-wrap {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  padding: 32px;
+  position: relative;
+}
+.fanchart-wrap svg { display: block; width: 100%; height: auto; }
+.fan-band     { fill: var(--ink); fill-opacity: 0.08; }
+.fan-median   { fill: none; stroke: var(--ink); stroke-width: 1.25; stroke-dasharray: 3 3; }
+.fan-obs      { fill: none; stroke: var(--ink); stroke-width: 2; }
+.fan-er       { fill: none; stroke: var(--signal-dim); stroke-width: 2; stroke-dasharray: 5 3; }
+.fan-now      { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 2 3; }
+.fan-axis     { stroke: var(--hairline-strong); stroke-width: 1; }
+.fan-tick     { stroke: var(--hairline); stroke-width: 1; }
+.fan-label    { font-family: var(--mono); font-size: 10px; fill: var(--ink-60); letter-spacing: 0.06em; }
+
+.roster {
+  list-style: none; padding: 0; margin: 0;
+  border-top: 1px solid var(--stage-hair);
+}
+.drawer.paper .roster { border-top-color: var(--hairline); }
+.roster li {
+  display: grid;
+  grid-template-columns: 80px 1fr 1fr 1fr;
+  gap: 24px;
+  align-items: baseline;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--stage-hair);
+  font-family: var(--mono);
+  font-size: var(--t-md);
+}
+.drawer.paper .roster li { border-bottom-color: var(--hairline); }
+.roster .rk {
+  color: var(--chalk-45);
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+}
+.drawer.paper .roster .rk { color: var(--ink-45); }
+.roster .cell-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--chalk-45);
+  padding-bottom: 8px;
+}
+.drawer.paper .roster .cell-head { color: var(--ink-45); }
+.roster .sub {
+  display: block;
+  font-family: var(--sans);
+  font-size: var(--t-sm);
+  color: var(--chalk-60);
+  margin-top: 4px;
+  letter-spacing: -0.005em;
+}
+.drawer.paper .roster .sub { color: var(--ink-60); }
+
+.monument-trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  padding: 48px 0;
+  border-top: 1px solid var(--hairline);
+  margin-top: 48px;
+}
+.monument {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.monument .big {
+  font-family: var(--mono);
+  font-size: 96px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--ink);
+  font-weight: 500;
+}
+.monument .lab {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+}
+.monument .note {
+  font-family: var(--sans);
+  font-size: var(--t-md);
+  color: var(--ink-60);
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+
+/* TWEAKS */
+.tweaks-panel {
+  position: fixed;
+  bottom: 24px; left: 24px;
+  z-index: 60;
+  width: 320px;
+  background: var(--stage);
+  color: var(--chalk);
+  border: 1px solid var(--stage-hair);
+  padding: 20px;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+}
+.tweaks-panel h4 {
+  margin: 0 0 16px 0;
+  font-size: var(--t-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--signal);
+  display: flex; justify-content: space-between;
+}
+.tweaks-panel h4 .kw { color: var(--chalk-45); }
+.tw-group { margin-bottom: 18px; }
+.tw-group > .lab {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--chalk-45);
+  margin-bottom: 8px;
+}
+.tw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tw-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+  border: 1px solid var(--stage-hair);
+  background: transparent;
+  color: var(--chalk-60);
+  cursor: pointer;
+}
+.tw-chip.on { color: var(--signal); border-color: var(--signal); background: var(--signal-glow); }
+.tw-chip:hover:not(.on) { color: var(--chalk); border-color: var(--chalk-45); }
+
+.atlas-labels {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 24px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--stage-hair);
+}
+.atlas-lab {
+  display: flex; gap: 10px;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+  color: var(--chalk-80);
+}
+.atlas-lab .dot {
+  width: 8px; height: 8px; flex-shrink: 0;
+  margin-top: 4px;
+}
+.atlas-lab .code { color: var(--chalk); letter-spacing: 0.08em; }
+.atlas-lab .name { color: var(--chalk-60); margin-left: 4px; }
+.atlas-lab .val { margin-left: auto; color: var(--chalk-80); font-variant-numeric: tabular-nums; }
+
+.annot {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
+  color: var(--chalk-45);
+  line-height: 1.55;
+}
+.annot::before { content: "// "; color: var(--signal); margin-right: 2px; }
+.annot.paper { color: var(--ink-45); }
+.annot.paper::before { color: var(--signal-dim); }
+
+.calib-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  padding: 24px 0;
+  border-top: 1px solid var(--hairline);
+  margin-top: 32px;
+}
+.calib-pair .lab {
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+  margin-bottom: 10px;
+}
+.calib-pair .val {
+  font-family: var(--mono);
+  font-size: 48px;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  font-weight: 500;
+}
+.calib-pair .val.sig { color: var(--signal-dim); }
+.calib-pair .sub {
+  font-family: var(--sans); font-size: var(--t-sm);
+  color: var(--ink-60); margin-top: 6px;
+  letter-spacing: -0.005em;
+}
+
+/* FOOTER */
+.page-foot {
+  border-top: 1px solid var(--hairline);
+  padding: 32px 40px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-45);
+}
+.page-foot .mid { color: var(--ink-60); }
+.page-foot .right { text-align: right; }
+.page-foot a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--ink-30); }
+
+.hr-hairline { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+.text-signal { color: var(--signal); }
+.text-warn   { color: var(--warn); }
+
+@media (max-width: 1200px) {
+  .hud { width: 440px; }
+  .hud-rail { display: none; }
+  .hud-lede { font-size: 40px; }
+}
+
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" data-presets="react">
+
+/* ===== cockpit/data.jsx ===== */
+/* ---------------- DATA ---------------- */
+
+const WEEK = {
+  kw: 16, year: 2026,
+  editionDate: "17.04.2026",
+  editionTime: "06:00 MEZ",
+  nextEdition: "KW 17 · Fr 09:00",
+  driver: "RSV + Influenza A (H3N2)",
+  modelVersion: "v4.2.1",
+};
+
+// Bundesländer — codes, official names, rise (expected rise over next 3 weeks), wave (current)
+const LAENDER = [
+  { code: "BB", name: "Brandenburg",          rise: +0.42, wave: 0.82, pop: 2.5, media: 180, cal: true,  note: "Plan aktiv — Shift-Empfehlung" },
+  { code: "BE", name: "Berlin",               rise: +0.31, wave: 0.88, pop: 3.7, media: "—", cal: true,  note: "Notaufnahme führt Meldewesen" },
+  { code: "MV", name: "Mecklenb.-Vorp.",      rise: +0.28, wave: 0.55, pop: 1.6, media: 90,  cal: true,  note: "" },
+  { code: "SN", name: "Sachsen",              rise: +0.22, wave: 0.74, pop: 4.0, media: 140, cal: true,  note: "" },
+  { code: "ST", name: "Sachsen-Anhalt",       rise: +0.18, wave: 0.61, pop: 2.2, media: "—", cal: false, note: "heuristisch · kein Plan" },
+  { code: "TH", name: "Thüringen",            rise: +0.14, wave: 0.58, pop: 2.1, media: 70,  cal: true,  note: "" },
+  { code: "HB", name: "Bremen",               rise: +0.09, wave: 0.44, pop: 0.7, media: 25,  cal: true,  note: "" },
+  { code: "HH", name: "Hamburg",              rise: +0.05, wave: 0.52, pop: 1.9, media: 120, cal: true,  note: "" },
+  { code: "SH", name: "Schlesw.-Holst.",      rise: +0.02, wave: 0.48, pop: 2.9, media: 80,  cal: true,  note: "" },
+  { code: "NI", name: "Niedersachsen",        rise: -0.04, wave: 0.71, pop: 8.0, media: 240, cal: true,  note: "" },
+  { code: "NW", name: "Nordrh.-Westf.",       rise: -0.08, wave: 0.79, pop: 18.0, media: 520, cal: true, note: "" },
+  { code: "HE", name: "Hessen",               rise: -0.12, wave: 0.66, pop: 6.3, media: 190, cal: true,  note: "" },
+  { code: "RP", name: "Rheinl.-Pfalz",        rise: -0.16, wave: 0.59, pop: 4.1, media: 130, cal: true,  note: "" },
+  { code: "SL", name: "Saarland",             rise: -0.19, wave: 0.51, pop: 1.0, media: 35,  cal: true,  note: "" },
+  { code: "BW", name: "Baden-Württemb.",      rise: -0.24, wave: 0.64, pop: 11.1, media: 320, cal: true, note: "abklingend" },
+  { code: "BY", name: "Bayern",               rise: -0.28, wave: 0.57, pop: 13.1, media: 410, cal: true, note: "Quelle — Shift" },
+];
+
+// Die Empfehlung der Woche
+const SHIFT = {
+  from: "Bayern", fromCode: "BY",
+  to:   "Brandenburg", toCode: "BB",
+  eur:  82000,
+  conf: 0.78, calib: true,
+  planAvail: 0.62,
+  leadDays: 8,
+  horizon: 3,
+};
+
+// Weitere Shift-Kandidaten (roster)
+const CANDIDATES = [
+  { from: "Baden-Württemberg", fc: "BW", to: "Berlin",       tc: "BE", eur: 54000, conf: 0.62, calib: true,  note: "Berlin ohne verbundenen Plan — blockiert", blocked: true },
+  { from: "Niedersachsen",     fc: "NI", to: "Sachsen",      tc: "SN", eur: 38000, conf: 0.58, calib: true,  note: "" },
+  { from: "Bayern",            fc: "BY", to: "Thüringen",    tc: "TH", eur: 24000, conf: 0.51, calib: true,  note: "schwach, aber gerichtet" },
+  { from: "—",                 fc: "—",  to: "Sachsen-Anh.", tc: "ST", eur: "—",   conf: 0.44, calib: false, note: "heuristisch · kein Plan" },
+];
+
+// Forecast — Q10/Q50/Q90 + obs + er für Brandenburg
+const FORECAST_BB = [
+  { kw: 10, q10: 0.18, q50: 0.24, q90: 0.31, obs: 0.22, er: null },
+  { kw: 11, q10: 0.22, q50: 0.29, q90: 0.38, obs: 0.27, er: null },
+  { kw: 12, q10: 0.28, q50: 0.36, q90: 0.46, obs: 0.33, er: 0.38 },
+  { kw: 13, q10: 0.35, q50: 0.44, q90: 0.55, obs: 0.42, er: 0.48 },
+  { kw: 14, q10: 0.42, q50: 0.52, q90: 0.64, obs: 0.51, er: 0.58 },
+  { kw: 15, q10: 0.48, q50: 0.60, q90: 0.73, obs: 0.58, er: 0.66 },
+  { kw: 16, q10: 0.55, q50: 0.68, q90: 0.82, obs: 0.65, er: 0.74 },
+  { kw: 17, q10: 0.60, q50: 0.74, q90: 0.90, obs: null, er: null },
+  { kw: 18, q10: 0.63, q50: 0.78, q90: 0.95, obs: null, er: null },
+  { kw: 19, q10: 0.62, q50: 0.77, q90: 0.94, obs: null, er: null },
+  { kw: 20, q10: 0.58, q50: 0.71, q90: 0.89, obs: null, er: null },
+];
+
+// Wirkung
+const IMPACT = [
+  { kw: 13, rec: "HE → NW",        eur: 46000, realized: true,  outcomeEur: 34000, outcomeNote: "Sell-out +6.2 %" },
+  { kw: 14, rec: "BW → BE",        eur: 58000, realized: true,  outcomeEur: "—",   outcomeNote: "kein Plan in BE verbunden" },
+  { kw: 15, rec: "BY → BB",        eur: 71000, realized: false, outcomeEur: "—",   outcomeNote: "Agentur-Review ausstehend" },
+  { kw: 16, rec: "BY → BB",        eur: 82000, realized: null,  outcomeEur: "—",   outcomeNote: "laufend · KW 16 aktuell" },
+];
+
+// Annotations (telemetry sidenotes, not editorial voice)
+const ANNOTATIONS = {
+  hero: [
+    "Erwarteter Anstieg BB über 3 Wochen: +0.42 rel.",
+    "BY klingt ab (-0.28). Shift senkt Erwartungswert der Fehlausspielung.",
+    "Konfidenz ist kalibriert (78 %), nicht Ranking-Score.",
+  ],
+  atlas: [
+    "Turmhöhe = erwarteter Anstieg über 3 Wochen.",
+    "Farbe = Richtung (cyan: steigt, dim: fällt).",
+    "Orthographie, keine Perspektive — relative Höhen bleiben lesbar.",
+  ],
+  forecast: [
+    "Band: 80 %-CI (Q10/Q90). Gestrichelt: Median-Forecast.",
+    "ER-Spur (cyan): Notaufnahme. Führt Meldewesen strukturell 7–10 d.",
+    "Coverage Q10–Q90 über letzte 12 KW: 0.91 (Ziel 0.80).",
+  ],
+  impact: [
+    "4 Empfehlungen · 2 realisiert · 1 mit Outcome verbunden.",
+    "Wo kein Plan verbunden, bleibt Outcome leer — Vorsatz, kein Bug.",
+  ],
+};
+
+Object.assign(window, { WEEK, LAENDER, SHIFT, CANDIDATES, FORECAST_BB, IMPACT, ANNOTATIONS });
+
+
+/* ===== cockpit/primitives.jsx ===== */
+/* ---------------- PRIMITIVES ---------------- */
+
+const fmtEur = (n) => {
+  if (n === "—" || n == null) return "—";
+  return "€" + n.toLocaleString("de-DE");
+};
+
+const fmtPct = (x) => `${Math.round(x * 100)} %`;
+const fmtRank = (x) => x.toFixed(2);
+
+const MethodBadge = ({ calibrated, onStage = false }) => (
+  <span className={`method-badge ${calibrated ? "calibrated" : "heuristic"} ${onStage ? "on-stage" : ""}`}>
+    {calibrated ? "kalibriert" : "heuristisch"}
+  </span>
+);
+
+const Dash = ({ note }) => (
+  <span>
+    <span className="dash">—</span>
+    {note ? <span className="dash-note">{note}</span> : null}
+  </span>
+);
+
+const ConfBar = ({ value, signal = false }) => (
+  <span className={`conf-bar ${signal ? "sig" : ""}`}>
+    <span className="num" style={{fontSize: 12, color: "var(--ink-60)"}}>{value.toFixed(2)}</span>
+    <span className="track">
+      <span className="fill" style={{width: `${value * 100}%`}} />
+    </span>
+  </span>
+);
+
+const Annot = ({ children, onPaper = false }) => (
+  <div className={`annot ${onPaper ? "paper" : ""}`}>{children}</div>
+);
+
+// Used by three.js — color by rise, cyan for rising, dim chalk for falling
+function riseColor(rise) {
+  // rise in [-0.4 .. +0.5]
+  if (rise > 0.05) {
+    // cyan family, brighter with higher rise
+    const t = Math.min(1, rise / 0.5);
+    // #00d4ff -> #0ea5c4 ; bright-to-dim
+    const r = Math.round(0   + (14  - 0)   * (1 - t));
+    const g = Math.round(212 + (165 - 212) * (1 - t));
+    const b = Math.round(255 + (196 - 255) * (1 - t));
+    // return bright when t=1
+    return `rgb(${Math.round(0*t + 14*(1-t))},${Math.round(212*t + 165*(1-t))},${Math.round(255*t + 196*(1-t))})`;
+  }
+  if (rise < -0.05) {
+    // dim neutral chalk, darker with stronger fall
+    const t = Math.min(1, -rise / 0.4);
+    // #9aa4ae -> #4a5058
+    const r = Math.round(154 + (74  - 154) * t);
+    const g = Math.round(164 + (80  - 164) * t);
+    const b = Math.round(174 + (88  - 174) * t);
+    return `rgb(${r},${g},${b})`;
+  }
+  // plateau — mid chalk
+  return "rgb(148, 156, 164)";
+}
+
+// CSS color for DOM (matches three.js)
+function riseSwatchStyle(rise) {
+  return { background: riseColor(rise) };
+}
+
+Object.assign(window, {
+  fmtEur, fmtPct, fmtRank,
+  MethodBadge, Dash, ConfBar, Annot,
+  riseColor, riseSwatchStyle,
+});
+
+
+/* ===== cockpit/atlas-scene.jsx ===== */
+/* ---------------- ATLAS — Digital museum exhibit ----------------
+   Ethereal sculpture-in-a-vitrine. Hair-thin glass rods, floating
+   measurement armature, starfield dust, anchor brackets. No floor,
+   no chrome — the void does the framing. SVG only, breathing focus.
+------------------------------------------------------------------ */
+
+const AtlasScene = ({ focusCode = "BB", onSelect }) => {
+  const POS = {
+    SH: { x:  0.5, y: -9.5 },
+    HH: { x:  1.0, y: -7.8 },
+    MV: { x:  4.2, y: -8.8 },
+    NI: { x: -2.2, y: -5.8 },
+    HB: { x: -2.4, y: -6.8 },
+    BE: { x:  4.8, y: -4.5 },
+    BB: { x:  5.2, y: -5.4 },
+    ST: { x:  2.7, y: -3.7 },
+    NW: { x: -5.2, y: -2.9 },
+    SN: { x:  5.5, y: -1.8 },
+    TH: { x:  2.3, y: -1.8 },
+    HE: { x: -2.1, y: -1.0 },
+    RP: { x: -5.2, y:  0.7 },
+    SL: { x: -6.0, y:  2.3 },
+    BY: { x:  3.0, y:  3.1 },
+    BW: { x: -1.8, y:  3.5 },
+  };
+
+  const [t, setT] = React.useState(0);
+  React.useEffect(() => {
+    let raf;
+    const start = performance.now();
+    const tick = () => {
+      setT((performance.now() - start) / 1000);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // 6s breathing cycle — slower, more meditative
+  const breath = (Math.sin(t * 2 * Math.PI / 6) + 1) / 2;
+
+  // Flatter dimetric projection — more architectural-model, less game-engine
+  const ANG = Math.PI / 7.2; // ~25°
+  const iso = (x, y, z) => ({
+    x: (x - y) * Math.cos(ANG),
+    y: (x + y) * Math.sin(ANG) * 0.62 - z,
+  });
+
+  const towerHeight = (rise) => {
+    const norm = Math.max(-0.3, Math.min(0.5, rise));
+    return 0.3 + ((norm + 0.3) / 0.8) * 4.6;
+  };
+
+  const tileW = 0.32;   // very thin: glass rods, not blocks
+  const scale = 42;
+  const cx = 490, cy = 380;
+  const project = (x, y, z) => {
+    const p = iso(x, y, z);
+    return { x: cx + p.x * scale, y: cy + p.y * scale };
+  };
+
+  const towers = window.LAENDER.map((l) => {
+    const p = POS[l.code]; if (!p) return null;
+    const h = towerHeight(l.rise);
+    const isFocus = l.code === focusCode;
+    const isRise  = l.rise > 0.05;
+    const isFall  = l.rise < -0.05;
+    return { l, p, h, isFocus, isRise, isFall };
+  }).filter(Boolean);
+
+  const sorted = towers.slice().sort((a, b) => (a.p.x + a.p.y) - (b.p.x + b.p.y));
+
+  const focus = towers.find((t) => t.isFocus);
+  const focusHeight = focus ? focus.h + 0.1 + breath * 0.16 : 0;
+  const focusTop  = focus ? project(focus.p.x, focus.p.y, focusHeight) : null;
+  const focusBase = focus ? project(focus.p.x, focus.p.y, 0) : null;
+
+  // Deterministic starfield — 48 motes seeded once
+  const STARS = React.useMemo(() => {
+    const rnd = (seed) => {
+      let s = seed;
+      return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+    };
+    const r = rnd(7);
+    return Array.from({ length: 48 }, () => ({
+      x: 60 + r() * 900,
+      y: 60 + r() * 580,
+      r: 0.4 + r() * 1.2,
+      o: 0.12 + r() * 0.38,
+    }));
+  }, []);
+
+  return (
+    <svg
+      viewBox="0 0 1000 700"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }}
+    >
+      <defs>
+        <linearGradient id="rod-rise" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0"   stopColor="rgba(0,212,255,0.04)" />
+          <stop offset="0.5" stopColor="rgba(0,212,255,0.38)" />
+          <stop offset="1"   stopColor="rgba(74,230,255,0.95)" />
+        </linearGradient>
+        <linearGradient id="rod-fall" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="rgba(180,195,210,0.38)" />
+          <stop offset="1" stopColor="rgba(60,70,80,0.06)" />
+        </linearGradient>
+        <linearGradient id="rod-flat" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="rgba(200,212,224,0.14)" />
+          <stop offset="1" stopColor="rgba(200,212,224,0.45)" />
+        </linearGradient>
+        <radialGradient id="atmosphere" cx="49%" cy="68%" r="62%">
+          <stop offset="0"   stopColor="rgba(0,212,255,0.13)" />
+          <stop offset="0.55" stopColor="rgba(0,212,255,0.02)" />
+          <stop offset="1"   stopColor="rgba(0,0,0,0)" />
+        </radialGradient>
+        <radialGradient id="pedestal" cx="50%" cy="50%" r="50%">
+          <stop offset="0"   stopColor="rgba(0,212,255,0.18)" />
+          <stop offset="1"   stopColor="rgba(0,0,0,0)" />
+        </radialGradient>
+        <filter id="soft-glow" x="-200%" y="-200%" width="500%" height="500%">
+          <feGaussianBlur stdDeviation="3" />
+        </filter>
+      </defs>
+
+      {/* Ambient atmosphere */}
+      <rect x="0" y="0" width="1000" height="700" fill="url(#atmosphere)" />
+
+      {/* Starfield / dust */}
+      {STARS.map((s, i) => (
+        <circle key={i} cx={s.x} cy={s.y} r={s.r} fill={`rgba(238,242,246,${s.o})`} />
+      ))}
+
+      {/* Pedestal halo — the light the sculpture sits on */}
+      <ellipse cx={cx} cy={cy + 52} rx="320" ry="40" fill="url(#pedestal)" />
+
+      {/* Single hairline horizon — the plinth edge */}
+      <line x1="108" y1={cy + 46} x2="870" y2={cy + 46}
+            stroke="rgba(0,212,255,0.32)" strokeWidth="0.6" strokeDasharray="1 4" />
+
+      {/* Altitude ruler — left edge, floating */}
+      <g transform={`translate(88, ${cy - 212})`} fontFamily="JetBrains Mono, monospace">
+        <line x1="0" y1="0" x2="0" y2="258" stroke="rgba(238,242,246,0.14)" strokeWidth="0.8" />
+        {[0, 0.1, 0.2, 0.3, 0.4, 0.5].map((v) => {
+          const y = 258 - (v / 0.5) * 258;
+          return (
+            <g key={v}>
+              <line x1="-5" y1={y} x2="2" y2={y} stroke="rgba(238,242,246,0.32)" strokeWidth="0.8" />
+              <text x="-9" y={y + 3} fontSize="8.5" textAnchor="end"
+                    letterSpacing="0.16em" fill="rgba(238,242,246,0.46)" fontWeight="500">
+                {v === 0 ? "0.0" : `+${v.toFixed(1)}`}
+              </text>
+            </g>
+          );
+        })}
+        <text x="-9" y="278" fontSize="7.5" letterSpacing="0.26em"
+              textAnchor="end" fill="rgba(238,242,246,0.38)">
+          RISE · +3W
+        </text>
+      </g>
+
+      {/* Compass — top right, quiet */}
+      <g transform="translate(892, 118)" fontFamily="JetBrains Mono, monospace"
+         fontSize="8.5" letterSpacing="0.18em" fill="rgba(238,242,246,0.45)">
+        <circle cx="0" cy="0" r="32" fill="none" stroke="rgba(238,242,246,0.12)" strokeWidth="0.8" />
+        <circle cx="0" cy="0" r="19" fill="none" stroke="rgba(238,242,246,0.06)" strokeWidth="0.5" />
+        <circle cx="0" cy="0" r="1.6" fill="rgba(238,242,246,0.55)" />
+        <text x="0" y="-38" textAnchor="middle">N</text>
+        <text x="0" y="46"  textAnchor="middle">S</text>
+        <text x="42" y="3"  textAnchor="start">E</text>
+        <text x="-42" y="3" textAnchor="end">W</text>
+        <line x1="0" y1="-32" x2="0" y2="-22" stroke="rgba(0,212,255,0.85)" strokeWidth="1.4" />
+      </g>
+
+      {/* Corner brackets — gallery plaque framing */}
+      <g stroke="rgba(238,242,246,0.2)" strokeWidth="0.8" fill="none">
+        <path d="M 48,56 L 48,88  M 48,56 L 80,56"  />
+        <path d="M 952,56 L 952,88 M 952,56 L 920,56" />
+        <path d="M 48,644 L 48,612 M 48,644 L 80,644" />
+        <path d="M 952,644 L 952,612 M 952,644 L 920,644" />
+      </g>
+
+      {/* Towers — thin glass rods, back-to-front */}
+      {sorted.map(({ l, p, h, isFocus, isRise, isFall }) => {
+        const H = h + (isFocus ? 0.1 + breath * 0.18 : 0);
+        const s = tileW;
+
+        const a = project(p.x - s, p.y - s, 0);
+        const b = project(p.x + s, p.y - s, 0);
+        const c = project(p.x + s, p.y + s, 0);
+        const d = project(p.x - s, p.y + s, 0);
+        const A = project(p.x - s, p.y - s, H);
+        const B = project(p.x + s, p.y - s, H);
+        const C = project(p.x + s, p.y + s, H);
+        const D = project(p.x - s, p.y + s, H);
+
+        const grad    = isRise ? "url(#rod-rise)" : isFall ? "url(#rod-fall)" : "url(#rod-flat)";
+        const stroke  = isRise ? "rgba(0,212,255,0.55)" :
+                        isFall ? "rgba(140,150,160,0.26)" :
+                                 "rgba(200,212,224,0.32)";
+        const fStroke = isFocus ? "rgba(74,230,255,0.98)" : stroke;
+        const sw      = isFocus ? 0.95 : 0.5;
+        const topCol  = isRise ? "rgba(74,230,255,0.95)" :
+                        isFall ? "rgba(130,140,150,0.2)" :
+                                 "rgba(210,220,228,0.48)";
+        const opac    = isRise ? 1 : isFall ? 0.55 : 0.72;
+
+        // Base ellipse — a faint "pool" under each rod
+        const bcx = (a.x + b.x + c.x + d.x) / 4;
+        const bcy = (a.y + b.y + c.y + d.y) / 4;
+
+        return (
+          <g key={"tower-" + l.code}
+             style={{ cursor: onSelect ? "pointer" : "default" }}
+             onClick={() => onSelect && onSelect(l.code)}>
+            <ellipse cx={bcx} cy={bcy + 1.4} rx="7" ry="1.6"
+                     fill="rgba(0,0,0,0.32)" />
+            <path d={`M${d.x},${d.y}L${c.x},${c.y}L${C.x},${C.y}L${D.x},${D.y}Z`}
+                  fill={grad} stroke={fStroke} strokeWidth={sw}
+                  strokeLinejoin="miter" opacity={opac} />
+            <path d={`M${b.x},${b.y}L${c.x},${c.y}L${C.x},${C.y}L${B.x},${B.y}Z`}
+                  fill={grad} stroke={fStroke} strokeWidth={sw * 0.8}
+                  strokeLinejoin="miter" opacity={opac * 0.72} />
+            <path d={`M${A.x},${A.y}L${B.x},${B.y}L${C.x},${C.y}L${D.x},${D.y}Z`}
+                  fill={topCol} stroke={fStroke} strokeWidth={sw * 1.1}
+                  strokeLinejoin="miter" opacity={isRise ? 1 : opac} />
+          </g>
+        );
+      })}
+
+      {/* Focus overlays — pulse ring + tip crosshair + halo */}
+      {focus && focusTop && focusBase && (() => {
+        const pulseR = 10 + breath * 14;
+        return (
+          <g>
+            <circle cx={focusBase.x} cy={focusBase.y + 2} r={pulseR}
+                    fill="none" stroke="rgba(0,212,255,0.36)" strokeWidth="0.8" />
+            <circle cx={focusBase.x} cy={focusBase.y + 2} r={pulseR * 1.85}
+                    fill="none" stroke="rgba(0,212,255,0.14)" strokeWidth="0.5" />
+            <circle cx={focusTop.x} cy={focusTop.y} r="5.5" fill="#00d4ff"
+                    filter="url(#soft-glow)" opacity="0.85" />
+            <circle cx={focusTop.x} cy={focusTop.y} r="2.6" fill="#ffffff" />
+            <line x1={focusTop.x - 14} y1={focusTop.y} x2={focusTop.x - 5} y2={focusTop.y}
+                  stroke="rgba(0,212,255,0.75)" strokeWidth="0.8" />
+            <line x1={focusTop.x + 5}  y1={focusTop.y} x2={focusTop.x + 14} y2={focusTop.y}
+                  stroke="rgba(0,212,255,0.75)" strokeWidth="0.8" />
+            <line x1={focusTop.x} y1={focusTop.y - 14} x2={focusTop.x} y2={focusTop.y - 5}
+                  stroke="rgba(0,212,255,0.75)" strokeWidth="0.8" />
+            <line x1={focusTop.x} y1={focusTop.y + 5}  x2={focusTop.x} y2={focusTop.y + 14}
+                  stroke="rgba(0,212,255,0.75)" strokeWidth="0.8" />
+          </g>
+        );
+      })()}
+
+      {/* Base labels — quiet mono codes under each rod */}
+      {sorted.map(({ l, p, isFocus }) => {
+        const front = project(p.x, p.y + tileW, 0);
+        return (
+          <text key={"lbl-" + l.code}
+                x={front.x} y={front.y + 18}
+                fontFamily="JetBrains Mono, monospace"
+                fontSize={isFocus ? 10.5 : 8.5}
+                fontWeight="500"
+                letterSpacing="0.22em"
+                textAnchor="middle"
+                fill={isFocus ? "rgba(74,230,255,1)" : "rgba(238,242,246,0.55)"}>
+            {l.code}
+          </text>
+        );
+      })}
+
+      {/* Focus measurement readout — floats upper-right, caliper style */}
+      {focus && focusTop && (() => {
+        const anchor = { x: 748, y: 198 };
+        return (
+          <g fontFamily="JetBrains Mono, monospace">
+            <path d={`M${focusTop.x},${focusTop.y} L${focusTop.x + 40},${focusTop.y - 38} L${anchor.x - 10},${anchor.y}`}
+                  fill="none" stroke="rgba(0,212,255,0.55)"
+                  strokeWidth="0.8" strokeDasharray="2 3" />
+            <path d={`M${anchor.x - 10},${anchor.y - 30} L${anchor.x - 10},${anchor.y + 44} L${anchor.x + 208},${anchor.y + 44}`}
+                  fill="none" stroke="rgba(0,212,255,0.55)" strokeWidth="0.8" />
+            <text x={anchor.x} y={anchor.y - 18} fontSize="8.5"
+                  letterSpacing="0.24em" fill="rgba(238,242,246,0.42)" fontWeight="500">
+              §02.1 · FOCUS
+            </text>
+            <text x={anchor.x} y={anchor.y + 2} fontSize="10"
+                  letterSpacing="0.20em" fill="rgba(0,212,255,0.98)" fontWeight="500">
+              {focus.l.code} · {focus.l.name.toUpperCase()}
+            </text>
+            <text x={anchor.x} y={anchor.y + 26} fontSize="22"
+                  letterSpacing="-0.02em" fill="rgba(238,242,246,0.98)" fontWeight="500">
+              {focus.l.rise > 0 ? "+" : ""}{focus.l.rise.toFixed(2)}
+            </text>
+            <text x={anchor.x + 68} y={anchor.y + 26} fontSize="8.5"
+                  letterSpacing="0.20em" fill="rgba(238,242,246,0.48)">
+              RISE / 3W
+            </text>
+          </g>
+        );
+      })()}
+
+      {/* Gallery inscription — bottom plaque */}
+      <g fontFamily="JetBrains Mono, monospace" fill="rgba(238,242,246,0.38)">
+        <text x="500" y="660" fontSize="8.5"
+              letterSpacing="0.30em" textAnchor="middle" fontWeight="500">
+          WELLEN · ATLAS · DE/16 · KW 16 · 2026
+        </text>
+        <line x1="448" y1="668" x2="552" y2="668"
+              stroke="rgba(0,212,255,0.45)" strokeWidth="0.5" />
+      </g>
+    </svg>
+  );
+};
+Object.assign(window, { AtlasScene });
+
+
+/* ===== cockpit/hero-hud.jsx ===== */
+/* ---------------- HERO HUD ----------------
+   The spatial hero — the Atlas fills the viewport, the
+   recommendation sits as a HUD panel over the 3D scene.
+---------------------------------------------------- */
+
+const StatusStrip = () => {
+  const [clock, setClock] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const t = setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const hh = String(clock.getHours()).padStart(2, "0");
+  const mm = String(clock.getMinutes()).padStart(2, "0");
+  const ss = String(clock.getSeconds()).padStart(2, "0");
+  return (
+    <div className="status-strip">
+      <div>
+        <span className="status-dot"></span>
+        <span className="status-value">VIRALFLUX</span>
+        <span style={{color:"var(--chalk-30)"}}>/</span>
+        <span className="status-label">COCKPIT·01</span>
+      </div>
+      <div>
+        <span className="status-label">ED</span>
+        <span className="status-value">{window.WEEK.editionDate}</span>
+      </div>
+      <div>
+        <span className="status-label">KW</span>
+        <span className="status-value">{window.WEEK.kw}/{String(window.WEEK.year).slice(2)}</span>
+      </div>
+      <div>
+        <span className="status-label">MDL</span>
+        <span className="status-value">{window.WEEK.modelVersion}</span>
+        <span style={{color:"var(--signal)", marginLeft: 6}}>●</span>
+        <span className="status-label">CAL</span>
+      </div>
+      <div>
+        <span className="status-label">DRV</span>
+        <span className="status-value">{window.WEEK.driver}</span>
+      </div>
+      <div className="status-spacer"></div>
+      <div>
+        <span className="status-label">LEAD</span>
+        <span className="status-value" style={{color:"var(--signal)"}}>+{window.SHIFT.leadDays}d</span>
+      </div>
+      <div>
+        <span className="status-label">MODE</span>
+        <span className="status-value">DEMO · SANDBOX</span>
+      </div>
+      <div>
+        <span className="status-value num">{hh}:{mm}:<span style={{color:"var(--chalk-45)"}}>{ss}</span></span>
+        <span className="status-label" style={{marginLeft: 4}}>MEZ</span>
+      </div>
+    </div>
+  );
+};
+
+const CoordReadout = ({ focus }) => (
+  <div className="coord-readout">
+    <div><span className="k">VIEW</span> <span className="v">ORTHOGRAPHIC / DE-16</span></div>
+    <div><span className="k">AXIS</span> <span className="v">Y ← RISE (+3W HORIZON)</span></div>
+    <div><span className="k">COLOR</span> <span className="v">↑ SIG-CYAN · ↓ CHALK</span></div>
+    <div><span className="k">FOCUS</span> <span className="v" style={{color:"var(--signal)"}}>{focus} · BRANDENBURG</span></div>
+  </div>
+);
+
+const HudRecommendation = ({ onOpenAtlas }) => {
+  const s = window.SHIFT;
+  return (
+    <div className="hud">
+      <div className="hud-nr">§ 01 — EMPFEHLUNG / WOCHE {window.WEEK.kw}</div>
+      <div className="hud-kicker">
+        <span>3-Wochen-Horizont</span>
+        <span className="sep">·</span>
+        <span><window.MethodBadge calibrated={s.calib} onStage={true} /></span>
+        <span className="sep">·</span>
+        <span>Stand {window.WEEK.editionDate}</span>
+      </div>
+      <h1 className="hud-lede">
+        Verschiebe <span className="money">€82 000</span><br/>
+        <span className="from">{s.from}</span> <span className="arrow">→</span> <span className="to">{s.to}</span>
+      </h1>
+      <p className="hud-dek">
+        Die Welle verlagert sich nach Nordost. Notaufnahmen in Brandenburg
+        ziehen seit neun Tagen an; Bayern klingt seit KW 14 ab. Beide Pläne
+        sind verbunden — der Transfer ist ausführbar.
+      </p>
+
+      <div className="hud-metrics">
+        <div className="hud-metric">
+          <div className="label"><span className="k">KONFIDENZ</span><span className="v" style={{color:"var(--signal)"}}>{window.fmtPct(s.conf)}</span></div>
+          <div className="val signal">{Math.round(s.conf * 100)}<span style={{color:"var(--chalk-45)", fontSize: 18}}>%</span></div>
+          <div className="scale-bar">
+            <div className="fill" style={{width: `${s.conf * 100}%`}}></div>
+            <div className="ticks"></div>
+          </div>
+          <div className="sub">kalibriert · 0–100 %</div>
+        </div>
+        <div className="hud-metric">
+          <div className="label"><span className="k">PLAN-VERF.</span><span className="v">{window.fmtPct(s.planAvail)}</span></div>
+          <div className="val">{Math.round(s.planAvail * 100)}<span style={{color:"var(--chalk-45)", fontSize: 18}}>%</span></div>
+          <div className="scale-bar">
+            <div className="fill" style={{width: `${s.planAvail * 100}%`, background:"var(--chalk-60)", boxShadow:"none"}}></div>
+            <div className="ticks"></div>
+          </div>
+          <div className="sub">BB-Slots frei</div>
+        </div>
+        <div className="hud-metric">
+          <div className="label"><span className="k">LEAD</span><span className="v">+{s.leadDays} d</span></div>
+          <div className="val signal">+{s.leadDays}<span style={{color:"var(--chalk-45)", fontSize: 18}}> d</span></div>
+          <div className="scale-bar">
+            <div className="fill" style={{width: `${(s.leadDays/14) * 100}%`}}></div>
+            <div className="ticks"></div>
+          </div>
+          <div className="sub">ER &gt; Meldewesen</div>
+        </div>
+      </div>
+
+      <div className="hud-actions">
+        <button className="btn primary">
+          Shift anweisen
+          <span className="kbd">↵</span>
+        </button>
+        <button className="btn" onClick={onOpenAtlas}>
+          Atlas öffnen
+          <span className="kbd">[A]</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const HudRail = ({ onOpenAtlas }) => {
+  const sorted = [...window.LAENDER].sort((a,b) => b.rise - a.rise);
+  const top = sorted.slice(0, 8);
+  const maxAbs = Math.max(...window.LAENDER.map(l => Math.abs(l.rise)));
+  return (
+    <div className="hud-rail">
+      <div className="rail-head">
+        <span>BUNDESL. / RISE +3W</span>
+        <span style={{color:"var(--chalk-30)"}}>16 / 16</span>
+      </div>
+      {top.map((l, i) => {
+        const isRise = l.rise > 0.05;
+        const isFall = l.rise < -0.05;
+        const cls = isRise ? "rise" : isFall ? "fall" : "flat";
+        const barCount = 8;
+        const fill = Math.round((Math.abs(l.rise) / maxAbs) * barCount);
+        return (
+          <div key={l.code} className={`rail-row ${cls} ${l.code === "BB" ? "focus" : ""}`}>
+            <span className="idx">{String(i+1).padStart(2, "0")}</span>
+            <span className="code">{l.code}</span>
+            <span className="spark" style={{color: window.riseColor(l.rise)}}>
+              {Array.from({length: barCount}).map((_, j) => (
+                <span key={j} className="bar" style={{
+                  height: `${4 + j * 1.5}px`,
+                  opacity: j < fill ? 1 : 0.15,
+                }}></span>
+              ))}
+            </span>
+            <span className="val">{l.rise > 0 ? "+" : ""}{l.rise.toFixed(2)}</span>
+          </div>
+        );
+      })}
+      <div style={{marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--stage-hair)"}}>
+        <button className="btn" style={{width: "100%", justifyContent: "space-between"}} onClick={onOpenAtlas}>
+          <span>Alle 16 · Wellen-Atlas</span>
+          <span className="kbd">↗</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const BottomHud = () => (
+  <div className="bottom-hud">
+    <div className="cluster">
+      <span><span className="legend-dot" style={{background:"var(--signal)"}}></span>RISE +3W</span>
+      <span><span className="legend-dot" style={{background:"#9aa4ae"}}></span>PLATEAU</span>
+      <span><span className="legend-dot" style={{background:"#4a5058"}}></span>FALL</span>
+    </div>
+    <div className="cluster">
+      <span style={{color:"var(--chalk-45)"}}>SCROLL ↓</span>
+      <span style={{color:"var(--chalk)"}}>RATIONALE / EVIDENZ / KANDIDATEN</span>
+    </div>
+  </div>
+);
+
+const Hero = ({ onOpenAtlas }) => (
+  <section className="spatial" data-screen-label="01 Hero">
+    <div className="spatial-canvas">
+      <window.AtlasScene active={true} mode="hero" focusCode="BB" />
+    </div>
+    <div className="grid-bg"></div>
+    <StatusStrip />
+    <div className="stage-frame"></div>
+    <div className="corner tl"></div>
+    <div className="corner tr"></div>
+    <div className="corner bl"></div>
+    <div className="corner br"></div>
+    <CoordReadout focus="BB" />
+    <HudRecommendation onOpenAtlas={onOpenAtlas} />
+    <HudRail onOpenAtlas={onOpenAtlas} />
+    <BottomHud />
+  </section>
+);
+
+Object.assign(window, { Hero, StatusStrip, HudRecommendation, HudRail });
+
+
+/* ===== cockpit/sections.jsx ===== */
+/* ---------------- DAYLIGHT SECTIONS ---------------- */
+
+const SectionHead = ({ nr, title, desc, annot }) => (
+  <div className="section-head">
+    <div>
+      <div className="nr">§ {nr}</div>
+      {annot ? <div className="annot paper" style={{marginTop:12}}>{annot}</div> : null}
+    </div>
+    <div className="title">{title}</div>
+    <div className="desc">{desc}</div>
+  </div>
+);
+
+const RationaleSection = () => {
+  const s = window.SHIFT;
+  return (
+    <section className="daylight" data-screen-label="02 Rationale">
+      <div className="daylight-inner">
+        <SectionHead
+          nr="02 — RATIONALE"
+          title="Was hinter der Zahl steht"
+          desc="Drei Signale konvergieren. Alle drei sind unabhängig voneinander kalibriert; die Konfidenz ist ihr gewichtetes Produkt, nicht die Maximalschätzung."
+          annot="Nicht einfach hochgerechnet — kalibriert gegen 12 KW Historie."
+        />
+
+        <div className="two-col">
+          <div>
+            <dl className="kv-grid">
+              <dt>Quelle</dt>
+              <dd>
+                Bayern — abklingend (-0.28 rel., KW 14–16)
+                <span className="note">Notaufnahme-Spur seit KW 14 unter Meldewesen. Plan-Verfügbarkeit 0.71.</span>
+              </dd>
+              <dt>Ziel</dt>
+              <dd>
+                Brandenburg — steigend (+0.42 rel., nächste 3 KW)
+                <span className="note">ER-Spur führt Meldewesen um 8 Tage. Fan-Chart-Q50 KW 18 bei 0.78.</span>
+              </dd>
+              <dt>Betrag</dt>
+              <dd>
+                <span className="num" style={{fontSize: 20, letterSpacing: "-0.02em"}}>€82 000</span>
+                <span className="note">Maximum der Plan-Verfügbarkeit in BB-Slots. Kein heuristischer Aufschlag.</span>
+              </dd>
+              <dt>Konfidenz</dt>
+              <dd>
+                <span className="num" style={{fontSize: 20}}>{window.fmtPct(s.conf)}</span>
+                &nbsp;&nbsp;<window.MethodBadge calibrated={true} />
+                <span className="note">Kalibriert heißt: Als Cockpit {window.fmtPct(s.conf)} sagt, stimmte die Empfehlung in 78 % vergleichbarer Fälle.</span>
+              </dd>
+              <dt>Lead-Time</dt>
+              <dd>
+                <span className="num" style={{fontSize: 20, color: "var(--signal-dim)"}}>+{s.leadDays} Tage</span>
+                <span className="note">Notaufnahme-Spur vor amtlichem Meldewesen. Historisch 7–10 d, diese Woche +8 d.</span>
+              </dd>
+            </dl>
+          </div>
+
+          <div>
+            <dl className="kv-grid">
+              <dt>Counter-Test</dt>
+              <dd>
+                Ohne Shift: Erwartungswert 0.68 Fehlausspielung in BY-Slots über 3 Wochen (gewichtet).
+                <span className="note">Mit Shift: Erwartungswert fällt auf 0.22. Delta getragen durch BB-Slot-Verfügbarkeit.</span>
+              </dd>
+              <dt>Risiko</dt>
+              <dd>
+                BB-Wellengipfel könnte früher kommen als Q50 (KW 17 statt KW 18).
+                <span className="note">Q10 deckt das ab — Fan-Band berücksichtigt. Downside: -6 % ROI, nicht blockierend.</span>
+              </dd>
+              <dt>Evidenz</dt>
+              <dd>
+                SURVSTAT-RKI KW 15 · Notaufnahme-Feed DIVI KW 16 · Plan-Graph intern.
+                <span className="note">Alle drei Quellen live, Zeitstempel &lt; 24h. Kein synthetisches Data-Fill.</span>
+              </dd>
+              <dt>Nicht empfohlen</dt>
+              <dd>
+                Shift nach Sachsen-Anhalt. Kein verbundener Media-Plan.
+                <span className="note">Siehe Kandidaten-Tabelle Zeile 04 — „—" statt Betrag ist Vorsatz.</span>
+              </dd>
+            </dl>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  );
+};
+
+const CandidatesSection = () => (
+  <section className="daylight" style={{background: "var(--paper-alt)"}} data-screen-label="03 Kandidaten">
+    <div className="daylight-inner">
+      <SectionHead
+        nr="03 — KANDIDATEN"
+        title="Weitere Shift-Hypothesen"
+        desc="Vier Paare unter dem primären Cut. Jede Zeile zeigt Konfidenz, Methode (kalibriert vs. heuristisch) und warum sie nicht an Position 1 steht."
+        annot="Rang 04 bleibt leer — kein Plan, kein Betrag. Vorsatz, kein Bug."
+      />
+
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th style={{width: 40}}>#</th>
+            <th>Von</th>
+            <th></th>
+            <th>Nach</th>
+            <th className="r">Betrag</th>
+            <th className="r">Konfidenz</th>
+            <th>Methode</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {window.CANDIDATES.map((c, i) => (
+            <tr key={i} className={c.blocked ? "blocked" : ""}>
+              <td className="dim num">{String(i+1).padStart(2, "0")}</td>
+              <td>
+                <span style={{color:"var(--ink-45)"}}>[{c.fc}]</span>&nbsp;&nbsp;{c.from}
+              </td>
+              <td className="arrow">→</td>
+              <td>
+                <span style={{color:"var(--ink-45)"}}>[{c.tc}]</span>&nbsp;&nbsp;{c.to}
+              </td>
+              <td className="r">
+                {c.eur === "—" ? <window.Dash /> : <span className="num">{window.fmtEur(c.eur)}</span>}
+              </td>
+              <td className="r">
+                <window.ConfBar value={c.conf} signal={c.calib} />
+              </td>
+              <td>
+                <window.MethodBadge calibrated={c.calib} />
+              </td>
+              <td>
+                {c.note
+                  ? <span style={{fontFamily:"var(--sans)", fontSize: 13, color: "var(--ink-60)", letterSpacing: "-0.005em"}}>{c.note}</span>
+                  : <span className="text-dim" style={{fontSize: 11, letterSpacing: "0.08em"}}>—</span>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+    </div>
+  </section>
+);
+
+const FootRail = ({ onOpenTweaks }) => (
+  <footer className="page-foot">
+    <div>
+      <span>REDAKTIONSSCHLUSS {window.WEEK.editionDate} · {window.WEEK.editionTime}</span>
+    </div>
+    <div className="mid">
+      <span>NÄCHSTE AUSGABE {window.WEEK.nextEdition}</span>
+    </div>
+    <div className="right">
+      <a href="#" onClick={e => {e.preventDefault(); onOpenTweaks();}}>TWEAKS ↗</a>
+      &nbsp;&nbsp;&nbsp;
+      <span>ViralFlux · 2026</span>
+    </div>
+  </footer>
+);
+
+Object.assign(window, { RationaleSection, CandidatesSection, FootRail, SectionHead });
+
+
+/* ===== cockpit/drawers.jsx ===== */
+/* ---------------- DRAWERS ---------------- */
+
+const Drawer = ({ open, onClose, nr, title, children, paper = false }) => (
+  <>
+    <div className={`drawer-backdrop ${open ? "open" : ""}`} onClick={onClose} />
+    <aside className={`drawer ${paper ? "paper" : ""} ${open ? "open" : ""}`}>
+      <div className="drawer-header">
+        <span className="drawer-nr">§ {nr}</span>
+        <span className="drawer-title">{title}</span>
+        <button className="drawer-close" onClick={onClose}>
+          Schließen <span className="kbd">[ESC]</span>
+        </button>
+      </div>
+      <div className="drawer-body">
+        {children}
+      </div>
+    </aside>
+  </>
+);
+
+/* ----------- ATLAS DRAWER ----------- */
+const AtlasDrawer = ({ open, onClose }) => {
+  const sorted = [...window.LAENDER].sort((a,b) => b.rise - a.rise);
+  return (
+    <Drawer open={open} onClose={onClose} nr="02" title="Wellen-Atlas · KW 16 · DE-16">
+      <div style={{display: "grid", gridTemplateColumns: "1fr 320px", gap: 40}}>
+        <div>
+          <div className="atlas-wrap" style={{height: 520}}>
+            {open ? <window.AtlasScene active={open} mode="drawer" focusCode="BB" /> : null}
+            <div className="grid-bg"></div>
+            {/* Coord overlay */}
+            <div style={{
+              position: "absolute", top: 16, left: 16, zIndex: 3,
+              fontFamily: "var(--mono)", fontSize: 11, color: "var(--chalk-45)",
+              letterSpacing: "0.08em", textTransform: "uppercase",
+            }}>
+              ORTHOGRAPHIC · Y ← RISE +3W · FOCUS BB
+            </div>
+            <div style={{
+              position: "absolute", bottom: 16, right: 16, zIndex: 3,
+              fontFamily: "var(--mono)", fontSize: 10, color: "var(--chalk-30)",
+              letterSpacing: "0.12em", textTransform: "uppercase",
+            }}>
+              DE-16 · 11-Apr → 02-Mai · N=16
+            </div>
+          </div>
+
+          <div className="atlas-labels">
+            {sorted.map(l => (
+              <div key={l.code} className="atlas-lab">
+                <span className="dot" style={{background: window.riseColor(l.rise)}}></span>
+                <span className="code">{l.code}</span>
+                <span className="name">{l.name}</span>
+                <span className="val" style={{color: l.rise > 0 ? "var(--signal)" : "var(--chalk-45)"}}>
+                  {l.rise > 0 ? "+" : ""}{l.rise.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div style={{
+            fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: "var(--chalk-45)", marginBottom: 16,
+            paddingBottom: 12, borderBottom: "1px solid var(--stage-hair)",
+          }}>
+            Notes / Annotations
+          </div>
+          {window.ANNOTATIONS.atlas.map((t, i) => (
+            <div key={i} style={{marginBottom: 18}}>
+              <window.Annot>{t}</window.Annot>
+            </div>
+          ))}
+          <div style={{height: 1, background: "var(--stage-hair)", margin: "24px 0"}}></div>
+          <div style={{
+            fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: "var(--chalk-45)", marginBottom: 16,
+          }}>
+            Scale / Legend
+          </div>
+          <div style={{display: "grid", gap: 10, fontFamily: "var(--mono)", fontSize: 12, color: "var(--chalk-80)"}}>
+            <div style={{display:"flex", alignItems:"center", gap: 12}}>
+              <span style={{width: 12, height: 12, background: "#00d4ff", boxShadow: "0 0 6px #00d4ff"}}></span>
+              <span>+0.50 (max rise)</span>
+            </div>
+            <div style={{display:"flex", alignItems:"center", gap: 12}}>
+              <span style={{width: 12, height: 12, background: "#9aa4ae"}}></span>
+              <span>0.00 (plateau)</span>
+            </div>
+            <div style={{display:"flex", alignItems:"center", gap: 12}}>
+              <span style={{width: 12, height: 12, background: "#4a5058"}}></span>
+              <span>−0.40 (max fall)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Drawer>
+  );
+};
+
+/* ----------- FORECAST DRAWER ----------- */
+const FanChart = () => {
+  const W = 880, H = 360, pad = { t: 20, r: 24, b: 40, l: 56 };
+  const data = window.FORECAST_BB;
+  const xmin = 10, xmax = 20;
+  const ymin = 0.0, ymax = 1.0;
+
+  const xScale = kw => pad.l + (kw - xmin) / (xmax - xmin) * (W - pad.l - pad.r);
+  const yScale = v  => pad.t + (1 - (v - ymin) / (ymax - ymin)) * (H - pad.t - pad.b);
+
+  // Band paths
+  const bandPath = (key1, key2) => {
+    const fwd = data.map(d => `${xScale(d.kw)},${yScale(d[key1])}`).join(" ");
+    const rev = [...data].reverse().map(d => `${xScale(d.kw)},${yScale(d[key2])}`).join(" ");
+    return `M${fwd} L${rev} Z`;
+  };
+  const linePath = (key) => {
+    const pts = data.filter(d => d[key] != null).map(d => `${xScale(d.kw)},${yScale(d[key])}`);
+    return pts.length ? "M" + pts.join(" L") : "";
+  };
+
+  const nowX = xScale(16);
+
+  return (
+    <div className="fanchart-wrap">
+      <svg viewBox={`0 0 ${W} ${H}`}>
+        {/* Y grid */}
+        {[0, 0.25, 0.5, 0.75, 1.0].map(v => (
+          <g key={v}>
+            <line x1={pad.l} x2={W - pad.r} y1={yScale(v)} y2={yScale(v)} className="fan-tick" />
+            <text x={pad.l - 10} y={yScale(v) + 3} className="fan-label" textAnchor="end">{v.toFixed(2)}</text>
+          </g>
+        ))}
+        {/* X axis + ticks */}
+        <line x1={pad.l} x2={W - pad.r} y1={H - pad.b} y2={H - pad.b} className="fan-axis" />
+        {data.map(d => (
+          <g key={d.kw}>
+            <line x1={xScale(d.kw)} x2={xScale(d.kw)} y1={H - pad.b} y2={H - pad.b + 6} className="fan-axis" />
+            <text x={xScale(d.kw)} y={H - pad.b + 20} className="fan-label" textAnchor="middle">KW {d.kw}</text>
+          </g>
+        ))}
+
+        {/* Bands */}
+        <path d={bandPath("q10", "q90")} className="fan-band" />
+        <path d={bandPath("q10", "q90")} className="fan-band-inner" style={{clipPath: "inset(0)"}} />
+
+        {/* Now line */}
+        <line x1={nowX} x2={nowX} y1={pad.t} y2={H - pad.b} className="fan-now" />
+        <text x={nowX} y={pad.t - 4} className="fan-label" textAnchor="middle" style={{fill:"var(--warn)"}}>JETZT · KW 16</text>
+
+        {/* Median forecast line */}
+        <path d={linePath("q50")} className="fan-median" />
+
+        {/* Observed (SURVSTAT) */}
+        <path d={linePath("obs")} className="fan-obs" />
+
+        {/* ER (Notaufnahme) */}
+        <path d={linePath("er")} className="fan-er" />
+      </svg>
+      {/* Legend */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, marginTop: 24,
+        paddingTop: 20, borderTop: "1px solid var(--hairline)",
+        fontFamily: "var(--mono)", fontSize: 11, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: "var(--ink-60)",
+      }}>
+        <div>
+          <div style={{display:"flex", alignItems:"center", gap: 8}}>
+            <span style={{width:24, height:10, background: "rgba(17,18,20,0.14)"}}></span>
+            <span>80 %-CI · Q10/Q90</span>
+          </div>
+        </div>
+        <div>
+          <div style={{display:"flex", alignItems:"center", gap: 8}}>
+            <svg width="24" height="2" style={{flexShrink:0}}><line x1="0" y1="1" x2="24" y2="1" stroke="var(--ink)" strokeWidth="1.25" strokeDasharray="3 3" /></svg>
+            <span>Median Forecast</span>
+          </div>
+        </div>
+        <div>
+          <div style={{display:"flex", alignItems:"center", gap: 8}}>
+            <svg width="24" height="2" style={{flexShrink:0}}><line x1="0" y1="1" x2="24" y2="1" stroke="var(--ink)" strokeWidth="2" /></svg>
+            <span>SURVSTAT / Meldewesen</span>
+          </div>
+        </div>
+        <div>
+          <div style={{display:"flex", alignItems:"center", gap: 8}}>
+            <svg width="24" height="2" style={{flexShrink:0}}><line x1="0" y1="1" x2="24" y2="1" stroke="var(--signal-dim)" strokeWidth="2" strokeDasharray="5 3" /></svg>
+            <span>Notaufnahme (ER, +8 d)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ForecastDrawer = ({ open, onClose }) => (
+  <Drawer open={open} onClose={onClose} nr="03" title="Forecast · Brandenburg · ARI-Rate" paper={true}>
+    <div style={{display: "grid", gridTemplateColumns: "1fr 260px", gap: 40}}>
+      <div>
+        <FanChart />
+        <div className="calib-pair">
+          <div>
+            <div className="lab">Coverage Q10–Q90 / letzte 12 KW</div>
+            <div className="val sig">0.91</div>
+            <div className="sub">Ziel 0.80. Das Modell ist leicht konservativ — die Bänder decken häufiger als nötig.</div>
+          </div>
+          <div>
+            <div className="lab">Lead-Time ER vs. Meldewesen</div>
+            <div className="val">+8 <span style={{fontSize: 20, color: "var(--ink-60)"}}>Tage</span></div>
+            <div className="sub">Historisch 7–10 d. KW 13 lag bei +9 d, KW 12 bei +7 d. Stabil im Band.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style={{fontFamily:"var(--mono)", fontSize: 11, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--ink-45)", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--hairline)"}}>
+          Notes
+        </div>
+        {window.ANNOTATIONS.forecast.map((t, i) => (
+          <div key={i} style={{marginBottom: 18}}>
+            <window.Annot onPaper>{t}</window.Annot>
+          </div>
+        ))}
+      </div>
+    </div>
+  </Drawer>
+);
+
+/* ----------- IMPACT DRAWER ----------- */
+const ImpactDrawer = ({ open, onClose }) => {
+  const realized = window.IMPACT.filter(r => r.realized === true).length;
+  const linked = window.IMPACT.filter(r => r.outcomeEur !== "—" && r.outcomeEur != null).length;
+  return (
+    <Drawer open={open} onClose={onClose} nr="04" title="Wirkung · Feedback-Loop · KW 13–16" paper={true}>
+      <div style={{display: "grid", gridTemplateColumns: "1fr 260px", gap: 40}}>
+        <div>
+          <ul className="roster" style={{borderTop: "1px solid var(--hairline)"}}>
+            <li>
+              <span className="cell-head">KW</span>
+              <span className="cell-head">Empfehlung</span>
+              <span className="cell-head">Realisierung</span>
+              <span className="cell-head">Outcome</span>
+            </li>
+            {window.IMPACT.map((r, i) => (
+              <li key={i}>
+                <span className="rk">KW {r.kw}</span>
+                <span>
+                  {r.rec}
+                  <span className="sub">{window.fmtEur(r.eur)}</span>
+                </span>
+                <span>
+                  {r.realized === true  ? <span style={{color: "var(--ink)"}}>realisiert</span> :
+                   r.realized === false ? <span style={{color: "var(--warn)"}}>nicht realisiert</span> :
+                                          <span style={{color: "var(--ink-60)"}}>laufend</span>}
+                  <span className="sub">{r.realized === null ? "KW 16 aktuell" : r.realized ? "Agentur bestätigt" : "Agentur-Review"}</span>
+                </span>
+                <span>
+                  {r.outcomeEur === "—" || r.outcomeEur == null
+                    ? <span><span className="dash">—</span></span>
+                    : <span className="num">{window.fmtEur(r.outcomeEur)}</span>}
+                  <span className="sub">{r.outcomeNote}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="monument-trio">
+            <div className="monument">
+              <span className="lab">Empfehlungen · KW 13–16</span>
+              <span className="big">04</span>
+              <span className="note">Alle vier basierten auf kalibrierter Konfidenz ≥ 0.50.</span>
+            </div>
+            <div className="monument">
+              <span className="lab">davon realisiert</span>
+              <span className="big">02</span>
+              <span className="note">Zwei Shifts von der Agentur ausgeführt. Eine ausstehend, eine laufend.</span>
+            </div>
+            <div className="monument">
+              <span className="lab">mit Outcome verbunden</span>
+              <span className="big">01</span>
+              <span className="note">Nur wo Verkaufs- und Media-Plan-Daten verbunden sind. Der Rest bleibt leer.</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style={{fontFamily:"var(--mono)", fontSize: 11, letterSpacing:"0.12em", textTransform:"uppercase", color:"var(--ink-45)", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--hairline)"}}>
+            Notes
+          </div>
+          {window.ANNOTATIONS.impact.map((t, i) => (
+            <div key={i} style={{marginBottom: 18}}>
+              <window.Annot onPaper>{t}</window.Annot>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Drawer>
+  );
+};
+
+/* ----------- DOCK ----------- */
+const DrawerDock = ({ onOpen }) => (
+  <div className="drawer-dock">
+    <button className="drawer-tab" onClick={() => onOpen("atlas")}>
+      <span className="tab-idx">§02</span>Wellen-Atlas
+    </button>
+    <button className="drawer-tab" onClick={() => onOpen("forecast")}>
+      <span className="tab-idx">§03</span>Forecast
+    </button>
+    <button className="drawer-tab" onClick={() => onOpen("impact")}>
+      <span className="tab-idx">§04</span>Wirkung
+    </button>
+  </div>
+);
+
+Object.assign(window, { Drawer, AtlasDrawer, ForecastDrawer, ImpactDrawer, DrawerDock, FanChart });
+
+
+/* ===== cockpit/app.jsx ===== */
+/* ---------------- APP + TWEAKS ---------------- */
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "cyan",
+  "paper": "bone",
+  "density": "default",
+  "hudMode": "expanded"
+}/*EDITMODE-END*/;
+
+const ACCENTS = {
+  cyan:    { "--signal": "#00d4ff", "--signal-dim": "#0ea5c4", "--signal-glow": "rgba(0,212,255,0.16)" },
+  green:   { "--signal": "#7cff88", "--signal-dim": "#3ec454", "--signal-glow": "rgba(124,255,136,0.14)" },
+  amber:   { "--signal": "#ffb23d", "--signal-dim": "#d18722", "--signal-glow": "rgba(255,178,61,0.14)" },
+  magenta: { "--signal": "#ff3dd4", "--signal-dim": "#c416a0", "--signal-glow": "rgba(255,61,212,0.14)" },
+};
+
+const PAPERS = {
+  bone:     { "--paper": "#f5f2ea", "--paper-alt": "#eee9dc" },
+  offwhite: { "--paper": "#fafaf6", "--paper-alt": "#f0ede4" },
+  graphite: { "--paper": "#17191d", "--paper-alt": "#121418" },
+};
+
+function applyTweaks(t) {
+  const root = document.documentElement;
+  const a = ACCENTS[t.accent] || ACCENTS.cyan;
+  const p = PAPERS[t.paper] || PAPERS.bone;
+  Object.entries({ ...a, ...p }).forEach(([k, v]) => root.style.setProperty(k, v));
+  if (t.paper === "graphite") {
+    root.style.setProperty("--ink", "#e8edf2");
+    root.style.setProperty("--ink-80", "rgba(232,237,242,.80)");
+    root.style.setProperty("--ink-60", "rgba(232,237,242,.60)");
+    root.style.setProperty("--ink-45", "rgba(232,237,242,.45)");
+    root.style.setProperty("--ink-30", "rgba(232,237,242,.30)");
+    root.style.setProperty("--ink-15", "rgba(232,237,242,.12)");
+    root.style.setProperty("--hairline", "rgba(232,237,242,.14)");
+    root.style.setProperty("--hairline-strong", "rgba(232,237,242,.28)");
+  } else {
+    root.style.setProperty("--ink", "#111214");
+    root.style.setProperty("--ink-80", "rgba(17,18,20,.80)");
+    root.style.setProperty("--ink-60", "rgba(17,18,20,.60)");
+    root.style.setProperty("--ink-45", "rgba(17,18,20,.45)");
+    root.style.setProperty("--ink-30", "rgba(17,18,20,.30)");
+    root.style.setProperty("--ink-15", "rgba(17,18,20,.15)");
+    root.style.setProperty("--hairline", "rgba(17,18,20,.16)");
+    root.style.setProperty("--hairline-strong", "rgba(17,18,20,.32)");
+  }
+}
+
+const Chip = ({ on, onClick, children }) => (
+  <button className={`tw-chip ${on ? "on" : ""}`} onClick={onClick}>{children}</button>
+);
+
+const TweaksPanel = ({ visible, tweaks, setTweak, onClose }) => {
+  if (!visible) return null;
+  return (
+    <div className="tweaks-panel">
+      <h4>
+        <span>TWEAKS</span>
+        <span className="kw">KW {window.WEEK.kw}</span>
+      </h4>
+      <div className="tw-group">
+        <div className="lab">Signal-Akzent</div>
+        <div className="tw-chips">
+          <Chip on={tweaks.accent === "cyan"} onClick={() => setTweak("accent", "cyan")}>Cyan</Chip>
+          <Chip on={tweaks.accent === "green"} onClick={() => setTweak("accent", "green")}>Grün</Chip>
+          <Chip on={tweaks.accent === "amber"} onClick={() => setTweak("accent", "amber")}>Amber</Chip>
+          <Chip on={tweaks.accent === "magenta"} onClick={() => setTweak("accent", "magenta")}>Magenta</Chip>
+        </div>
+      </div>
+      <div className="tw-group">
+        <div className="lab">Paper-Ton (Daylight-Sektionen)</div>
+        <div className="tw-chips">
+          <Chip on={tweaks.paper === "bone"}     onClick={() => setTweak("paper", "bone")}>Bone</Chip>
+          <Chip on={tweaks.paper === "offwhite"} onClick={() => setTweak("paper", "offwhite")}>Offwhite</Chip>
+          <Chip on={tweaks.paper === "graphite"} onClick={() => setTweak("paper", "graphite")}>Graphite (dark)</Chip>
+        </div>
+      </div>
+      <div className="tw-group">
+        <div className="lab">HUD-Modus</div>
+        <div className="tw-chips">
+          <Chip on={tweaks.hudMode === "expanded"} onClick={() => setTweak("hudMode", "expanded")}>Expanded</Chip>
+          <Chip on={tweaks.hudMode === "minimal"}  onClick={() => setTweak("hudMode", "minimal")}>Minimal</Chip>
+        </div>
+      </div>
+      <div style={{marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--stage-hair)", display: "flex", justifyContent: "space-between"}}>
+        <span style={{color:"var(--chalk-45)", fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase"}}>
+          ↑ Via Toolbar-Toggle
+        </span>
+        <button onClick={onClose} style={{
+          fontFamily: "var(--mono)", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase",
+          color: "var(--chalk-45)", background: "none", border: 0, cursor: "pointer",
+        }}>× close</button>
+      </div>
+    </div>
+  );
+};
+
+function useKey(key, fn) {
+  React.useEffect(() => {
+    const h = e => { if (e.key === key || e.key === key.toLowerCase()) fn(e); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [fn]);
+}
+
+const App = () => {
+  const [openDrawer, setOpenDrawer] = React.useState(null);
+  const [tweaksVisible, setTweaksVisible] = React.useState(false);
+  const [tweaks, setTweaks] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem("vf.tweaks.v3");
+      return saved ? { ...TWEAK_DEFAULTS, ...JSON.parse(saved) } : TWEAK_DEFAULTS;
+    } catch (e) { return TWEAK_DEFAULTS; }
+  });
+
+  const setTweak = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    try { localStorage.setItem("vf.tweaks.v3", JSON.stringify(next)); } catch (e) {}
+    try {
+      window.parent.postMessage({type:'__edit_mode_set_keys', edits:{[k]:v}}, '*');
+    } catch(e) {}
+  };
+
+  React.useEffect(() => { applyTweaks(tweaks); }, [tweaks]);
+
+  // Host edit-mode protocol — register first, then signal availability
+  React.useEffect(() => {
+    const handler = (e) => {
+      const m = e.data || {};
+      if (m.type === "__activate_edit_mode")   setTweaksVisible(true);
+      if (m.type === "__deactivate_edit_mode") setTweaksVisible(false);
+    };
+    window.addEventListener("message", handler);
+    try { window.parent.postMessage({type:'__edit_mode_available'}, '*'); } catch(e) {}
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  useKey("Escape", () => setOpenDrawer(null));
+  useKey("a",      () => setOpenDrawer(d => d === "atlas"    ? null : "atlas"));
+  useKey("f",      () => setOpenDrawer(d => d === "forecast" ? null : "forecast"));
+  useKey("w",      () => setOpenDrawer(d => d === "impact"   ? null : "impact"));
+
+  React.useEffect(() => {
+    document.body.style.overflow = openDrawer ? "hidden" : "";
+  }, [openDrawer]);
+
+  return (
+    <div className="cockpit-root" data-screen-label="Cockpit · KW 16">
+      <window.Hero onOpenAtlas={() => setOpenDrawer("atlas")} />
+      <window.RationaleSection />
+      <window.CandidatesSection />
+      <window.FootRail onOpenTweaks={() => setTweaksVisible(v => !v)} />
+
+      <window.DrawerDock onOpen={setOpenDrawer} />
+      <window.AtlasDrawer    open={openDrawer === "atlas"}    onClose={() => setOpenDrawer(null)} />
+      <window.ForecastDrawer open={openDrawer === "forecast"} onClose={() => setOpenDrawer(null)} />
+      <window.ImpactDrawer   open={openDrawer === "impact"}   onClose={() => setOpenDrawer(null)} />
+
+      <TweaksPanel
+        visible={tweaksVisible}
+        tweaks={tweaks}
+        setTweak={setTweak}
+        onClose={() => setTweaksVisible(false)}
+      />
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+
+</script>
+</body>
+</html>

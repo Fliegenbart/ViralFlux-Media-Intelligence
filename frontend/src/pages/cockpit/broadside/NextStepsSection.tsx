@@ -63,12 +63,13 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
     if (!mediaPlanConnected) {
       cards.push({
         id: 'upload-csv',
-        kicker: 'Wichtigster Baustein',
-        title: 'Media-Plan + Outcomes per CSV hochladen',
+        kicker: 'Pilot-Start · Woche 1',
+        title: 'Erste GELO-CSV hochladen',
         body:
-          'Ohne verbundenen Media-Plan bleiben alle EUR-Werte Dashes — ' +
-          'Schiebe eine CSV mit Wochen × Bundesland × Produkt ins Data ' +
-          'Office. Das System beginnt sofort mit Reconciliation und füllt § I.',
+          'Eine Datei mit Wochenwerten (Spend + Sales + Reichweite) ' +
+          'pro Produkt × Bundesland reicht, damit das Cockpit aus ' +
+          'Prognose Rechenschaft macht. § IV füllt sich am Abend, ' +
+          '§ II zeigt konkrete EUR-Shifts ab Woche 2.',
         cta: 'Data Office öffnen',
         href: '/cockpit/data',
         tone: 'action',
@@ -76,12 +77,12 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
       });
       cards.push({
         id: 'm2m-api',
-        kicker: 'Für produktiven Betrieb',
-        title: 'GELO-IT für M2M-API-Key kontaktieren',
+        kicker: 'Dauerbetrieb · nach Pilot',
+        title: 'M2M-API an GELO-BI anbinden',
         body:
-          'Wöchentliches Handschieben einer CSV ist die Bridge, nicht ' +
-          'das Ziel. Die M2M-API pushed dieselben Zeilen direkt aus dem ' +
-          'GELO-BI-Stack — ein Anruf zum Austausch des API-Keys.',
+          'Wöchentliches CSV-Handschieben ist Bridge, nicht Ziel. Der ' +
+          'POST-Endpoint nimmt die gleichen Zeilen als JSON aus dem ' +
+          'GELO-BI-Stack direkt entgegen — ein API-Key-Austausch.',
         cta: 'data@peix.de',
         href: 'mailto:data@peix.de?subject=M2M-API-Key%20f%C3%BCr%20GELO',
         external: true,
@@ -174,12 +175,10 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
         }
         primer={
           <>
-            Statt eines stillen Seiten-Endes bekommst du hier konkrete
-            nächste Schritte, berechnet aus dem aktuellen Cockpit-Zustand:
-            was <b>fehlt</b> (ungelöste Daten, ausstehende Integrationen),
-            was <b>läuft</b> (Retraining-Zyklen, Drift-Warnungen), und was
-            du <b>sofort tun</b> kannst. Die Karten sind nach Priorität
-            sortiert; oben steht der grösste Hebel.
+            Alles was du gleich morgen anstoßen kannst, damit dieses
+            Cockpit vom Demo-Asset zum operativen Werkzeug wird. Die
+            Karten sind nach Hebel sortiert — oben der grösste Schritt
+            Richtung Pilot-Go-Live.
           </>
         }
       />

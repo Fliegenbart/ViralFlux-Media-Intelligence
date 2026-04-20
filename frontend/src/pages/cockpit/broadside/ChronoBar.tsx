@@ -80,7 +80,7 @@ export const ChronoBar: React.FC<Props> = ({
       <div className="chrono-inner">
         <div className="chrono-brand">
           <span className="dot" />
-          VIRALFLUX · COCKPIT
+          FLUXENGINE
         </div>
         <div className="chrono-ticks">
           {kwOffsets.map((w) => {

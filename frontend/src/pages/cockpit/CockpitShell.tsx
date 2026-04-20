@@ -62,10 +62,51 @@ export const CockpitShell: React.FC = () => {
     return (
       <div className="peix">
         <div
-          className="peix-shell"
-          style={{ padding: 80, textAlign: 'center' }}
+          className="peix-shell flux-loading"
+          style={{
+            padding: '120px 40px',
+            textAlign: 'center',
+            minHeight: '60vh',
+          }}
         >
-          <span className="peix-kicker">loading cockpit…</span>
+          <div className="flux-loading-mark">◆</div>
+          <h1
+            style={{
+              fontFamily: "'Supreme', 'General Sans', sans-serif",
+              fontWeight: 500,
+              fontSize: 32,
+              margin: '24px 0 8px',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            FluxEngine lädt Cockpit
+          </h1>
+          <p
+            style={{
+              fontFamily: "'General Sans', sans-serif",
+              fontSize: 15,
+              color: '#4A5261',
+              margin: '0 auto',
+              maxWidth: '52ch',
+              lineHeight: 1.6,
+            }}
+          >
+            Modelle, Regionen, Truth-Quellen werden gerade in den Speicher
+            gezogen — gleich steht der Wochen-Forecast für{' '}
+            <b>{virusTyp}</b> auf dem Schirm.
+          </p>
+          <div
+            style={{
+              marginTop: 32,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10,
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              color: '#8B9788',
+            }}
+          >
+            peix · labpulse · honest-by-default
+          </div>
         </div>
       </div>
     );

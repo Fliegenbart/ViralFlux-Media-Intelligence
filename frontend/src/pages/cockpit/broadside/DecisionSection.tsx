@@ -306,13 +306,13 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Links siehst du die <b>eine</b> Media-Empfehlung dieser Woche
-            — oder eine ehrliche Leerseite, wenn keine zu vertreten ist.
-            Rechts ein Vernier-Instrument: die <b>Konfidenz</b> des
-            Modells als Skala mit Nadel statt Prozent-Pille, darunter
-            Lead-Time, Coverage und Training-Panel-Reife als Kontext.
-            Wert für dich: die eine Zahl, die du am Montag umsetzt —
-            oder das Signal „heute passt keine Platzhalter-Zahl".
+            Die <b>eine Empfehlung</b> der Woche: „Verschiebe X € aus A
+            nach B." Rechts die Konfidenz als Vernier-Skala mit Nadel
+            — kein Prozent-Pill, das Genauigkeit vortäuscht. Wenn kein
+            Media-Plan verbunden ist, zeigt das Panel ehrlich „Signal
+            klar, EUR-Shift wartet" statt eine Fantasie-Zahl. Probier
+            die <b>Demo-Szene</b>, wenn du sehen willst, wie die
+            Empfehlung aussieht, sobald GELO-Budget angebunden ist.
           </>
         }
       />

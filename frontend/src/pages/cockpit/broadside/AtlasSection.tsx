@@ -813,15 +813,13 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Jedes Bundesland als Turm. <b>Höhe</b> = erwartete
-            Atemwegs-Welle in 7 Tagen gegenüber heute, <b>Farbe</b> =
-            Richtung (rot für Anstieg, grün für Rückgang). Die drei
-            höchsten Länder bekommen ein schwebendes Label mit der
-            konkreten Zahl („+45 % · 7d"). Graue Türme = regionales
-            Modell für dieses Virus noch nicht trainiert — keine
-            Prognose, statt einer schlechten. Wert für dich:
-            Wellenbewegung in Deutschland auf einen Blick, inklusive
-            der Frage, wo du Budget aktivierst oder zurückziehst.
+            Deutschland in 16 Türmen. <b>Höhe</b> = erwartete
+            Atemwegs-Welle in 7 Tagen gegenüber heute. <b>Farbe</b> =
+            Richtung. Die Top-3 bekommen ein schwebendes Label mit der
+            konkreten Zahl. <b>Hover über einen Turm</b> → sofort eine
+            Klartext-Erklärung, was das Modell erwartet und was das
+            für Media-Aktivierung bedeutet. Das ist der Kern: sehen
+            wohin die Welle läuft, bevor RKI es meldet.
           </>
         }
       />

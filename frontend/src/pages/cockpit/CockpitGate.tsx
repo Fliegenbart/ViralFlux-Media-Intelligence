@@ -57,13 +57,13 @@ export const CockpitGate: React.FC<{ onUnlocked?: () => void }> = ({ onUnlocked 
         <div className="peix-gate__mark">◆</div>
         <div className="peix-gate__kicker">peix · labpulse</div>
         <h1 className="peix-gate__headline">
-          Wellen-Cockpit
+          FluxEngine
           <em> — für Eingeladene.</em>
         </h1>
         <p className="peix-gate__dek">
-          Diese Ansicht zeigt regionale Frühsignale für respiratorische Wellen
-          und verbindet sie mit Mediaplanung. Bitte Passwort eingeben, um
-          fortzufahren.
+          Regionaler Wellen-Forecast + Media-Shift-Empfehlungen für Pharma.
+          7-Tage-Horizont, 16 Bundesländer, honest-by-default. Passwort
+          eingeben, um das Pilot-Cockpit zu öffnen.
         </p>
         <form onSubmit={handleSubmit} className="peix-gate__form" autoComplete="off">
           <label className="peix-gate__label" htmlFor="peix-gate-pw">

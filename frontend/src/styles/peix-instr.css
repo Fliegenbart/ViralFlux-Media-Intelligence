@@ -142,6 +142,161 @@
 .peix-instr .chrono-meta { display: flex; gap: 24px; font-size: 10px; color: rgba(244, 241, 234, 0.65); }
 .peix-instr .chrono-meta b { color: var(--paper); font-weight: 500; }
 
+/* Mobile / Tablet: StatusStrip → 2 Spalten, Atlas niedriger, TOC (falls
+   aktiviert) versteckt. */
+@media (max-width: 900px) {
+  .peix-instr .status-strip-inner {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px 0;
+    padding: 10px 20px;
+  }
+  .peix-instr .status-strip .status-cell {
+    padding: 4px 12px;
+    border-right: 0.5px solid var(--ink-20);
+    border-bottom: 0.5px solid var(--ink-20);
+  }
+  .peix-instr .status-strip .status-cell:nth-child(2n) {
+    border-right: none;
+  }
+  .peix-instr .status-strip .status-cell:nth-last-child(-n+2) {
+    border-bottom: none;
+  }
+  .peix-instr .atlas-wrap { height: 420px; margin: 0 -16px; }
+  .peix-instr .next-steps-grid { grid-template-columns: 1fr; }
+  .peix-instr .impact-unlock-timeline .unlock-row { grid-template-columns: 1fr; }
+  .peix-instr .chrono-inner { flex-wrap: wrap; padding: 8px 16px; gap: 10px; }
+  .peix-instr .chrono-ticks { display: none; }
+  .peix-instr .chrono-virus-switcher { order: 2; }
+}
+@media (max-width: 600px) {
+  .peix-instr .sec-head { grid-template-columns: 36px 1fr; gap: 12px; }
+  .peix-instr .sec-title { font-size: 22px; }
+  .peix-instr .sec-primer { font-size: 14px; max-width: 100%; }
+  .peix-instr .decision-grid { grid-template-columns: 1fr; gap: 32px; }
+  .peix-instr .atlas-wrap { height: 340px; }
+}
+
+/* Loading-Screen */
+.peix .flux-loading {
+  animation: flux-fade-in 280ms ease-out;
+}
+.peix .flux-loading-mark {
+  font-size: 48px;
+  color: #C2542A;
+  animation: flux-pulse 1.8s ease-in-out infinite;
+}
+@keyframes flux-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes flux-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Status-Strip: 'ja, das läuft'-Zeile direkt unter der ChronoBar.
+   Paper-background, 4 Zellen mit Haarlinien getrennt. */
+.peix-instr .status-strip {
+  background: var(--paper);
+  border-bottom: 0.5px solid var(--ink-20);
+  position: sticky;
+  top: 48px; /* hängt genau unter der 48px ChronoBar */
+  z-index: 90;
+}
+.peix-instr .status-strip-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 10px 32px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  font-family: 'JetBrains Mono', monospace;
+}
+.peix-instr .status-strip .status-cell {
+  padding: 2px 18px;
+  border-right: 0.5px solid var(--ink-20);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.peix-instr .status-strip .status-cell:first-child { padding-left: 0; }
+.peix-instr .status-strip .status-cell:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+.peix-instr .status-strip .status-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+}
+.peix-instr .status-strip .status-value {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.peix-instr .status-strip .status-value.ok {
+  color: var(--oxide, #8b9788);
+}
+.peix-instr .status-strip .status-value.waiting {
+  color: var(--ink-60);
+}
+
+/* § IV Impact — Unlock-Timeline chips. Rendered instead of the raw
+   dashes when the Outcome-Pipeline is not yet connected. Three time
+   horizons so a reader understands 'heute / nach 1 Woche / nach 4
+   Wochen' what unlocks. */
+.peix-instr .impact-unlock-timeline {
+  margin: 12px 0 28px;
+}
+.peix-instr .impact-unlock-timeline .unlock-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.peix-instr .impact-unlock-timeline .unlock-chip {
+  padding: 16px 18px;
+  border: 0.5px solid var(--ink-20);
+  border-left-width: 3px;
+}
+.peix-instr .impact-unlock-timeline .unlock-chip.ready {
+  border-left-color: var(--oxide, #8b9788);
+  background: color-mix(in srgb, var(--oxide, #8b9788) 4%, transparent);
+}
+.peix-instr .impact-unlock-timeline .unlock-chip.pending {
+  border-left-color: var(--ink-40);
+  background: transparent;
+  opacity: 0.85;
+}
+.peix-instr .impact-unlock-timeline .unlock-label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+  margin-bottom: 6px;
+}
+.peix-instr .impact-unlock-timeline .unlock-value {
+  display: block;
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+.peix-instr .impact-unlock-timeline .unlock-chip.ready .unlock-value {
+  color: var(--oxide, #8b9788);
+}
+.peix-instr .impact-unlock-timeline .unlock-note {
+  display: block;
+  font-family: 'General Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-60);
+}
+
 /* Virus-switcher in the ChronoBar — single source of truth for which
    virus the whole page is showing (§ I-V + Next-Steps). Minimal
    segmented control in the instrument palette. */

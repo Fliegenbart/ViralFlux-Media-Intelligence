@@ -93,18 +93,48 @@ export const ImpactSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            „Hatten wir recht?" — hier wird jede ausgegebene Empfehlung
-            gegen den tatsächlichen Outcome der Folgewoche gelegt. Heute
-            steht hier fast alles auf Strich, weil der Outcome-Loop
-            (CSV-Import bzw. GELO-M2M) gerade erst anläuft; nach 4–8
-            Wochen echter Daten sollten <b>Empfehlungen vs. Realität</b>,
-            gewonnene Reichweite und Fehl-Shifts sichtbar werden. Wert
-            für dich: der Kreislauf, der aus Prognose eine Entscheidung
-            mit Rechenschaft macht — ohne dass sich das System selbst
-            bewertet.
+            „Hatten wir recht?" — hier wird jede Empfehlung gegen den
+            tatsächlichen Outcome der Folgewoche gelegt. Das Panel ist
+            <b> vollständig verdrahtet</b> (Ingest-Endpoint, Match-Key,
+            Reconciliation-Layout stehen); es wartet auf die erste
+            CSV oder den ersten M2M-Push aus GELO, um aus Prognose
+            Rechenschaft zu machen. Genau hier entsteht der Unterschied
+            zwischen einem schönen Forecast-Bild und einem Tool, das
+            beweisen muss, dass es hilft.
           </>
         }
       />
+
+      {!connected ? (
+        <div className="impact-unlock-timeline">
+          <div className="unlock-row">
+            <div className="unlock-chip ready">
+              <span className="unlock-label">Woche 0 · heute</span>
+              <span className="unlock-value">Ingest bereit</span>
+              <span className="unlock-note">
+                Endpoint + Schema + Cockpit-Rendering warten auf erste
+                Zeile.
+              </span>
+            </div>
+            <div className="unlock-chip pending">
+              <span className="unlock-label">Woche +1 nach 1. Upload</span>
+              <span className="unlock-value">Erste Verknüpfung</span>
+              <span className="unlock-note">
+                Die Empfehlung dieser Woche bekommt ihren ersten
+                Outcome-Partner — § IV füllt sich sofort.
+              </span>
+            </div>
+            <div className="unlock-chip pending">
+              <span className="unlock-label">Woche +4 nach CSV-Strecke</span>
+              <span className="unlock-value">Trend sichtbar</span>
+              <span className="unlock-note">
+                Reichweiten-Lift, Fehl-Shifts, Hit-Rate werden aus vier
+                Wochen Daten erstmals statistisch lesbar.
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="impact-row">
         <div className="impact-cell">

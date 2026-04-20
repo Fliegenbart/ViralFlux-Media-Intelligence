@@ -10,6 +10,50 @@ import BacktestSection from './BacktestSection';
 import NextStepsSection from './NextStepsSection';
 
 /**
+ * StatusStrip — a compact "ja, das läuft"-Zeile unter der ChronoBar.
+ * Beantwortet ohne Scroll die Frage "was seh ich hier": wie viele
+ * Viren, wie viel regionale Tiefe, welcher Horizont, Outcome-State.
+ * Pitch-orientiert.
+ */
+const StatusStrip: React.FC<{ snapshot: CockpitSnapshot; supportedViruses: readonly string[] }> = ({
+  snapshot,
+  supportedViruses,
+}) => {
+  const activeRegions = snapshot.regions.filter(
+    (r) => r.decisionLabel !== 'TrainingPending',
+  ).length;
+  const totalRegions = snapshot.regions.length || 16;
+  const horizon = snapshot.modelStatus?.horizonDays ?? 14;
+  const outcomeConnected = snapshot.mediaPlan?.connected === true;
+  return (
+    <div className="status-strip">
+      <div className="status-strip-inner">
+        <div className="status-cell">
+          <span className="status-label">Viren live</span>
+          <span className="status-value">{supportedViruses.length} / 4</span>
+        </div>
+        <div className="status-cell">
+          <span className="status-label">Regional ({snapshot.virusLabel ?? snapshot.virusTyp})</span>
+          <span className="status-value">
+            {activeRegions} / 16 Bundesländer
+          </span>
+        </div>
+        <div className="status-cell">
+          <span className="status-label">Forecast-Horizont</span>
+          <span className="status-value">{horizon} Tage</span>
+        </div>
+        <div className="status-cell">
+          <span className="status-label">Outcome-Loop</span>
+          <span className={`status-value${outcomeConnected ? ' ok' : ' waiting'}`}>
+            {outcomeConnected ? 'verbunden' : 'bereit · wartet auf CSV'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * Broadside — Instrumentation-Redesign 2026-04-18.
  *
  * Aesthetic: wissenschaftliches Messinstrument, nicht SaaS-Dashboard.
@@ -110,6 +154,7 @@ export const Broadside: React.FC<Props> = ({
         onVirusChange={onVirusChange}
         supportedViruses={supportedViruses}
       />
+      <StatusStrip snapshot={snapshot} supportedViruses={supportedViruses} />
       <main className="page">
         {/* 2026-04-20: Atlas promoted to § I — the 3D wave map is the
             consistent aha-moment for first-time readers (confirmed during

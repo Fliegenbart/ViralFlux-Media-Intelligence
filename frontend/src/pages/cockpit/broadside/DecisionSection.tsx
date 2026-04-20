@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { CockpitSnapshot } from '../types';
 import { fmtEurCompactOrDash, fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
@@ -258,10 +258,40 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const hasStrongSignal = strongRisers.length > 0;
   const mediaPlanConnected = snapshot.mediaPlan?.connected === true;
 
+  // Demo-Budget-Szene: when no real recommendation is available AND no
+  // Media-Plan is connected, offer a "what-if" simulation so a
+  // first-time reader can see how the cockpit would translate the atlas
+  // signal into a concrete EUR shift once data lands. The card is
+  // explicitly marked DEMO and bound to an assumption-budget input; it
+  // does not pretend to be a real recommendation.
+  const [demoOpen, setDemoOpen] = useState(false);
+  const [demoBudget, setDemoBudget] = useState(100_000);
+
+  const topFallers = useMemo(
+    () =>
+      [...snapshot.regions]
+        .filter(
+          (r) =>
+            typeof r.delta7d === 'number' &&
+            r.delta7d < -0.05 &&
+            r.decisionLabel !== 'TrainingPending',
+        )
+        .sort((a, b) => (a.delta7d ?? 0) - (b.delta7d ?? 0))
+        .slice(0, 1),
+    [snapshot.regions],
+  );
+  const demoTo = strongRisers[0] ?? null;
+  const demoFrom = topFallers[0] ?? null;
+  const demoShiftEur =
+    demoTo && demoFrom
+      ? Math.round((demoBudget * Math.min(0.35, (demoTo.delta7d ?? 0) * 0.4)) / 1_000) * 1_000
+      : 0;
+  const showDemo = !mediaPlanConnected && !rec && hasStrongSignal && demoTo && demoFrom;
+
   return (
     <section className="instr-section" id="sec-decision">
       <SectionHeader
-        numeral="I"
+        numeral="II"
         title="Entscheidung der Woche"
         subtitle={
           <>
@@ -373,6 +403,58 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
                   Honest-by-default: keine Platzhalter-Beträge.
                 </p>
               </div>
+
+              {showDemo ? (
+                <div className={`demo-budget${demoOpen ? ' open' : ''}`}>
+                  <button
+                    type="button"
+                    className="demo-budget-toggle"
+                    onClick={() => setDemoOpen(!demoOpen)}
+                  >
+                    <span className="demo-badge">Demo-Szene</span>
+                    {demoOpen ? 'Was-wäre-wenn schließen' : 'Was wäre wenn? Simulierte EUR-Shift ansehen'}
+                  </button>
+                  {demoOpen ? (
+                    <div className="demo-budget-body">
+                      <div className="demo-note">
+                        <b>Demo — keine echten Daten.</b> Angenommen ein
+                        Wochenbudget wäre verbunden, würde das System das
+                        atlas-beobachtete Signal etwa so in einen Shift
+                        übersetzen. Zahl ist rein illustrativ.
+                      </div>
+                      <label className="demo-budget-slider">
+                        <span>Angenommenes Wochenbudget</span>
+                        <input
+                          type="range"
+                          min={20_000}
+                          max={500_000}
+                          step={10_000}
+                          value={demoBudget}
+                          onChange={(e) => setDemoBudget(Number(e.target.value))}
+                        />
+                        <output>
+                          {demoBudget.toLocaleString('de-DE')} €
+                        </output>
+                      </label>
+                      <p className="demo-statement">
+                        <span className="demo-verb">Verschiebe</span>{' '}
+                        <span className="demo-amt">
+                          {demoShiftEur.toLocaleString('de-DE')} €
+                        </span>{' '}
+                        aus <span className="demo-from">{demoFrom!.name}</span>{' '}
+                        <span className="demo-faller-delta">
+                          ({fmtSignedPct(demoFrom!.delta7d)})
+                        </span>{' '}
+                        nach <span className="demo-to">{demoTo!.name}</span>{' '}
+                        <span className="demo-riser-delta">
+                          ({fmtSignedPct(demoTo!.delta7d)})
+                        </span>
+                        .
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </>
           ) : (
             <>

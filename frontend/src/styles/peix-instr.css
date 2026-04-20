@@ -142,6 +142,42 @@
 .peix-instr .chrono-meta { display: flex; gap: 24px; font-size: 10px; color: rgba(244, 241, 234, 0.65); }
 .peix-instr .chrono-meta b { color: var(--paper); font-weight: 500; }
 
+/* Virus-switcher in the ChronoBar — single source of truth for which
+   virus the whole page is showing (§ I-V + Next-Steps). Minimal
+   segmented control in the instrument palette. */
+.peix-instr .chrono-virus-switcher {
+  display: inline-flex;
+  gap: 0;
+  border: 0.5px solid rgba(244, 241, 234, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.peix-instr .chrono-virus-btn {
+  background: transparent;
+  border: none;
+  color: rgba(244, 241, 234, 0.6);
+  padding: 4px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-right: 0.5px solid rgba(244, 241, 234, 0.15);
+  transition: all 80ms ease-out;
+}
+.peix-instr .chrono-virus-btn:last-child {
+  border-right: none;
+}
+.peix-instr .chrono-virus-btn:hover {
+  background: rgba(244, 241, 234, 0.06);
+  color: var(--paper);
+}
+.peix-instr .chrono-virus-btn.active {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* -----------------------------------------------------
    PAGE STRUCTURE
 ----------------------------------------------------- */
@@ -567,6 +603,232 @@
   border-bottom: 1px dotted currentColor;
   cursor: help;
   opacity: .85;
+}
+
+/* Demo-Budget-Szene — what-if simulation card in § II when no rec
+   is available and no Media-Plan is connected. Explicitly marked as
+   demo so nobody reads the figure as a real recommendation. */
+.peix-instr .demo-budget {
+  margin-top: 28px;
+  border: 1px dashed var(--signal, #c2542a);
+  background: color-mix(in srgb, var(--signal, #c2542a) 3%, transparent);
+}
+.peix-instr .demo-budget-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 18px;
+  background: transparent;
+  border: none;
+  font-family: 'General Sans', sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+.peix-instr .demo-budget-toggle:hover {
+  background: color-mix(in srgb, var(--signal, #c2542a) 6%, transparent);
+}
+.peix-instr .demo-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--signal, #c2542a);
+  background: color-mix(in srgb, var(--signal, #c2542a) 14%, transparent);
+  padding: 3px 8px;
+  font-weight: 600;
+}
+.peix-instr .demo-budget-body {
+  padding: 4px 18px 22px;
+  border-top: 0.5px dashed var(--signal, #c2542a);
+}
+.peix-instr .demo-note {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-60);
+  margin: 16px 0 20px;
+  line-height: 1.55;
+}
+.peix-instr .demo-note b {
+  color: var(--signal, #c2542a);
+  font-weight: 600;
+  font-style: normal;
+}
+.peix-instr .demo-budget-slider {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  margin: 18px 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+}
+.peix-instr .demo-budget-slider output {
+  font-size: 14px;
+  color: var(--ink);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.peix-instr .demo-budget-slider input[type="range"] {
+  width: 100%;
+}
+.peix-instr .demo-statement {
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--ink);
+  margin: 0;
+}
+.peix-instr .demo-verb { color: var(--ink-60); }
+.peix-instr .demo-amt {
+  color: var(--signal, #c2542a);
+  font-weight: 600;
+}
+.peix-instr .demo-from { color: var(--ink); font-weight: 500; }
+.peix-instr .demo-to { color: var(--oxide, #8b9788); font-weight: 500; }
+.peix-instr .demo-faller-delta,
+.peix-instr .demo-riser-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  color: var(--ink-60);
+}
+
+/* § III view-mode toggle ('Einfach' vs. 'Volle Labor-Ansicht').
+   Segmented control + hint copy; renders above ForecastControls. */
+.peix-instr .fc-mode-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 18px 0 10px;
+  flex-wrap: wrap;
+}
+.peix-instr .fc-mode-btn {
+  background: transparent;
+  border: 0.5px solid var(--ink-20);
+  color: var(--ink-60);
+  padding: 6px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 100ms ease-out;
+}
+.peix-instr .fc-mode-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+  border-color: var(--ink-40);
+}
+.peix-instr .fc-mode-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.peix-instr .fc-mode-hint {
+  font-family: 'Instrument Serif', Georgia, serif;
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-60);
+}
+
+/* Simple-mode: hide the secondary ephemeride columns so only the
+   Lead-Time hero remains. The chart stays as-is (SVG cannot be
+   cheaply masked from the outside without a refactor), but the
+   cognitive load drops substantially. */
+.peix-instr .fc-mode-simple .ephemeris-cols {
+  display: none;
+}
+.peix-instr .fc-mode-simple .ephemeris {
+  padding-bottom: 8px;
+}
+
+/* ================================================================
+   § VI Next-Steps — action cards grid at the bottom of the cockpit
+   ================================================================ */
+.peix-instr .next-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+.peix-instr .next-step-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 20px 22px 22px;
+  background: var(--paper);
+  border: 0.5px solid var(--ink-20);
+  border-left: 4px solid var(--ink-40);
+  transition: all 140ms ease-out;
+  position: relative;
+}
+.peix-instr .next-step-card.tone-action {
+  border-left-color: var(--signal, #c2542a);
+}
+.peix-instr .next-step-card.tone-wait {
+  border-left-color: var(--oxide, #8b9788);
+}
+.peix-instr .next-step-card.tone-default {
+  border-left-color: var(--ink-40);
+}
+.peix-instr .next-step-card:hover {
+  background: color-mix(in srgb, var(--ink) 3%, var(--paper));
+  border-color: var(--ink-40);
+  transform: translateY(-1px);
+}
+.peix-instr .next-step-card .ns-kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+  margin-bottom: 10px;
+}
+.peix-instr .next-step-card .ns-title {
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.peix-instr .next-step-card .ns-body {
+  font-family: 'General Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-60);
+  margin: 0 0 16px;
+}
+.peix-instr .next-step-card .ns-cta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.peix-instr .next-step-card.tone-action .ns-cta {
+  color: var(--signal, #c2542a);
+}
+.peix-instr .next-step-card.tone-wait .ns-cta {
+  color: var(--oxide, #8b9788);
+}
+.peix-instr .next-step-card .ns-cta-arrow {
+  transition: transform 140ms ease-out;
+}
+.peix-instr .next-step-card:hover .ns-cta-arrow {
+  transform: translateX(4px);
 }
 
 /* Drift-banner — prominent warning above the strip chart when the

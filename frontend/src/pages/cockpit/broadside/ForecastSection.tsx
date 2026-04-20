@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { CockpitSnapshot, TimelinePoint } from '../types';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
-import { useCockpitSnapshot } from '../useCockpitSnapshot';
+// useCockpitSnapshot removed 2026-04-20 — virus is globally managed.
 import { useBacktest } from '../useBacktest';
 import {
   useForecastVintage,
@@ -918,11 +918,9 @@ const EphemerisFoot: React.FC<{
 // ForecastControls — Virus-Switcher + Vintage-Toggle über dem Chart
 // -----------------------------------------------------------------
 
-const VIRUS_CHOICES: Array<{ value: string; label: string }> = [
-  { value: 'Influenza A', label: 'Influenza A' },
-  { value: 'Influenza B', label: 'Influenza B' },
-  { value: 'RSV A', label: 'RSV A' },
-];
+// (VIRUS_CHOICES removed 2026-04-20 — virus selection moved to ChronoBar
+//  so all five sections always tell the same story. Kept the constant
+//  name reserved to ease a potential future in-section override.)
 
 // -----------------------------------------------------------------
 // DriftBanner — fires when reconciliation.drift_detected is true
@@ -964,29 +962,13 @@ const DriftBanner: React.FC<{
 );
 
 const ForecastControls: React.FC<{
-  virusTyp: string;
-  onVirusChange: (v: string) => void;
   showVintage: boolean;
   onToggleVintage: (v: boolean) => void;
   vintageRunCount: number;
   vintageLoading: boolean;
-}> = ({ virusTyp, onVirusChange, showVintage, onToggleVintage, vintageRunCount, vintageLoading }) => (
+}> = ({ showVintage, onToggleVintage, vintageRunCount, vintageLoading }) => (
   <div className="fc-controls">
-    <div className="fc-controls-left">
-      <span className="fc-controls-kicker">Spur</span>
-      <div className="fc-virus-switcher" role="tablist">
-        {VIRUS_CHOICES.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            className={virusTyp === opt.value ? 'active' : ''}
-            onClick={() => onVirusChange(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </div>
+    <div className="fc-controls-left" />
     <div className="fc-controls-right">
       <label
         className={`fc-vintage-toggle${showVintage ? ' on' : ''}`}
@@ -1179,41 +1161,31 @@ const ModelProofPanel: React.FC<{
 // -----------------------------------------------------------------
 
 export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) => {
-  // Local Virus-State: Section-lokaler Virus-Switcher. Default = primary
-  // snapshot virus. Bei Wechsel fetched die Section einen eigenen Snapshot
-  // für den gewählten Virus (SWR-dedupes wenn derselbe wie primary).
-  const [virusTyp, setVirusTyp] = useState<string>(
-    primarySnapshot.virusTyp || 'Influenza A',
-  );
-  const [showVintage, setShowVintage] = useState<boolean>(true);
-
-  // Lokaler Snapshot für den gewählten Virus. Wenn gleich dem primary,
-  // teilen beide Hooks den SWR-Cache-Eintrag.
-  const { snapshot: localSnapshot, loading: localLoading } = useCockpitSnapshot({
-    virusTyp,
-    horizonDays: 14,
-    leadTarget: 'ATEMWEGSINDEX',
-  });
+  // 2026-04-20: local virus state removed. The virus is now globally
+  // selected via ChronoBar → CockpitShell → the primary snapshot, so
+  // § I, § II, § III, § IV and § V always tell the same story. The
+  // ForecastControls row keeps the Vintage-Spuren toggle, the virus
+  // buttons are gone (they moved into ChronoBar).
+  const virusTyp = primarySnapshot.virusTyp || 'Influenza A';
+  const [showVintage, setShowVintage] = useState<boolean>(false);
+  // 2026-04-20: § III has a lot going on (three channels + ephemeride +
+  // q-quantile fan + vintage + ephemeris foot + model-proof panel). The
+  // persona walkthrough flagged it as overwhelming for first-time readers.
+  // Solution: default to a simple view (chart + lead-time hero only),
+  // opt-in to the full lab-recorder detail via this toggle.
+  const [detailMode, setDetailMode] = useState<boolean>(false);
 
   // Vintage-Runs (für Chart-Overlay)
   const { data: vintagePayload, loading: vintageLoading } = useForecastVintage(virusTyp, 5);
   const vintageRuns = vintagePayload?.runs ?? [];
 
   // Regional-Backtest = die AUTORITÄREN Gütezahlen des Cockpit-Modells.
-  // Diese Zahlen ersetzen den früheren Legacy-Reconciliation-Panel und
-  // liefern auch den Hero-Lead aus 68 Walk-forward-Folds statt aus einem
-  // Snapshot-Artefakt (Timeline-Gap).
   const { data: backtestData, loading: backtestLoading } = useBacktest({
     virusTyp, horizonDays: 7,
   });
 
-  // Aktiver Snapshot: localSnapshot wenn geladen, sonst primary als
-  // Fallback (verhindert leeres Rendering während des Virus-Wechsels,
-  // das Ergebnis wird sich nur minimal unterscheiden).
-  const snapshot =
-    localSnapshot && localSnapshot.virusTyp === virusTyp
-      ? localSnapshot
-      : primarySnapshot;
+  const snapshot = primarySnapshot;
+  const localLoading = false;
 
   const timeline = snapshot.timeline ?? [];
   const cov80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
@@ -1406,7 +1378,10 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
   const trajectory = snapshot.modelStatus?.trajectorySource;
 
   return (
-    <section className="instr-section" id="sec-forecast">
+    <section
+      className={`instr-section fc-mode-${detailMode ? 'detail' : 'simple'}`}
+      id="sec-forecast"
+    >
       <SectionHeader
         numeral="III"
         title="Forecast-Zeitreise"
@@ -1448,14 +1423,36 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         }
       />
 
-      <ForecastControls
-        virusTyp={virusTyp}
-        onVirusChange={setVirusTyp}
-        showVintage={showVintage}
-        onToggleVintage={setShowVintage}
-        vintageRunCount={vintageRuns.length}
-        vintageLoading={vintageLoading}
-      />
+      <div className="fc-mode-toggle-row">
+        <button
+          type="button"
+          className={`fc-mode-btn${!detailMode ? ' active' : ''}`}
+          onClick={() => setDetailMode(false)}
+        >
+          Einfach
+        </button>
+        <button
+          type="button"
+          className={`fc-mode-btn${detailMode ? ' active' : ''}`}
+          onClick={() => setDetailMode(true)}
+        >
+          Volle Labor-Ansicht
+        </button>
+        <span className="fc-mode-hint">
+          {detailMode
+            ? 'Drei Streifen · Ephemeride · Q-Quantile · Vintage-Spuren'
+            : 'Nur Q50 + HEUTE + Lead-Time — komplett ehrlich, weniger Noise'}
+        </span>
+      </div>
+
+      {detailMode ? (
+        <ForecastControls
+          showVintage={showVintage}
+          onToggleVintage={setShowVintage}
+          vintageRunCount={vintageRuns.length}
+          vintageLoading={vintageLoading}
+        />
+      ) : null}
 
       {vintagePayload?.reconciliation?.drift_detected ? (
         <DriftBanner
@@ -1479,11 +1476,13 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         forecast={forecastRows}
       />
 
-      <ModelProofPanel
-        data={backtestData}
-        loading={backtestLoading}
-        virusTyp={virusTyp}
-      />
+      {detailMode ? (
+        <ModelProofPanel
+          data={backtestData}
+          loading={backtestLoading}
+          virusTyp={virusTyp}
+        />
+      ) : null}
     </section>
   );
 };

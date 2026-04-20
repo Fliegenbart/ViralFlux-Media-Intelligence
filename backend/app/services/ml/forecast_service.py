@@ -170,9 +170,13 @@ DEFAULT_XGB_QUANTILE_CONFIG: dict[str, dict[str, Any]] = {
         "n_jobs": 1,
     },
     "lower": {
+        # Q10 stays shallow; under-estimating the lower bound is the whole
+        # point and deeper trees tend to collapse to near-zero for small
+        # samples. Minimal min_child_weight to avoid degenerate splits.
         "n_estimators": 100,
         "max_depth": 4,
         "learning_rate": 0.05,
+        "min_child_weight": 2,
         "objective": "reg:quantileerror",
         "quantile_alpha": 0.1,
         "random_state": 42,
@@ -180,9 +184,18 @@ DEFAULT_XGB_QUANTILE_CONFIG: dict[str, dict[str, Any]] = {
         "n_jobs": 1,
     },
     "upper": {
-        "n_estimators": 100,
-        "max_depth": 4,
+        # Q90 — widened (max_depth 4 → 6, n_estimators 100 → 160, added
+        # L1 + min_child_weight) so Influenza A no longer plateaus at
+        # 1903.39 for every T+7 query. Root cause (see D1 diagnostic in
+        # plans/schau-dir-das-tool-swirling-knuth.md): shallow trees with
+        # N≈100 collapsed into a single leaf for all recent feature rows.
+        # Deeper trees + mild regularisation give the upper quantile the
+        # capacity to respond to momentum shifts without overfitting.
+        "n_estimators": 160,
+        "max_depth": 6,
         "learning_rate": 0.05,
+        "min_child_weight": 2,
+        "reg_alpha": 0.1,
         "objective": "reg:quantileerror",
         "quantile_alpha": 0.9,
         "random_state": 42,

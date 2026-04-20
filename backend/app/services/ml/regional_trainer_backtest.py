@@ -213,18 +213,24 @@ def build_backtest_bundle(
         )
         reg_lower = trainer._fit_regressor_from_frame(train_df, feature_columns, {
             "n_estimators": 100,
-            "max_depth": 3,
+            "max_depth": 4,
             "learning_rate": 0.05,
+            "min_child_weight": 2,
             "objective": "reg:quantileerror",
             "quantile_alpha": 0.1,
             "random_state": 42,
             "verbosity": 0,
             "n_jobs": 1,
         })
+        # Q90 reparameterised 2026-04-20 — see REGIONAL_REGRESSOR_CONFIG
+        # upper notes for the rationale (plateau-breaker via max_depth 5 +
+        # min_child_weight + mild L1).
         reg_upper = trainer._fit_regressor_from_frame(train_df, feature_columns, {
-            "n_estimators": 100,
-            "max_depth": 3,
+            "n_estimators": 130,
+            "max_depth": 5,
             "learning_rate": 0.05,
+            "min_child_weight": 2,
+            "reg_alpha": 0.1,
             "objective": "reg:quantileerror",
             "quantile_alpha": 0.9,
             "random_state": 42,

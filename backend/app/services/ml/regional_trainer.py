@@ -105,6 +105,7 @@ REGIONAL_REGRESSOR_CONFIG: dict[str, dict[str, Any]] = {
         "n_estimators": 140,
         "max_depth": 4,
         "learning_rate": 0.05,
+        "min_child_weight": 2,
         "objective": "reg:quantileerror",
         "quantile_alpha": 0.5,
         "random_state": 42,
@@ -113,8 +114,9 @@ REGIONAL_REGRESSOR_CONFIG: dict[str, dict[str, Any]] = {
     },
     "lower": {
         "n_estimators": 100,
-        "max_depth": 3,
+        "max_depth": 4,
         "learning_rate": 0.05,
+        "min_child_weight": 2,
         "objective": "reg:quantileerror",
         "quantile_alpha": 0.1,
         "random_state": 42,
@@ -122,9 +124,16 @@ REGIONAL_REGRESSOR_CONFIG: dict[str, dict[str, Any]] = {
         "n_jobs": 1,
     },
     "upper": {
-        "n_estimators": 100,
-        "max_depth": 3,
+        # Q90 on the regional pooled panel. Kept slightly more conservative
+        # than the national DEFAULT_XGB_QUANTILE_CONFIG (max_depth 5 vs. 6)
+        # because regional panels can have as few as ~50 rows per BL for
+        # RSV A — too-deep trees collapse into per-row leaves. Still a
+        # genuine lift from the prior max_depth=3 plateau-generator.
+        "n_estimators": 130,
+        "max_depth": 5,
         "learning_rate": 0.05,
+        "min_child_weight": 2,
+        "reg_alpha": 0.1,
         "objective": "reg:quantileerror",
         "quantile_alpha": 0.9,
         "random_state": 42,

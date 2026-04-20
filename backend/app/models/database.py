@@ -374,7 +374,7 @@ class MLForecast(Base):
 class LLMRecommendation(Base):
     """LLM-generierte Empfehlungen."""
     __tablename__ = "llm_recommendations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=_utc_now, index=True)
     recommendation_text = Column(String, nullable=False)
@@ -385,9 +385,22 @@ class LLMRecommendation(Base):
     approved_by = Column(String)
     approved_at = Column(DateTime)
     modified_action = Column(JSON)  # Falls vom User angepasst
-    
+
     forecast_id = Column(Integer, ForeignKey('ml_forecasts.id'))
     forecast = relationship("MLForecast")
+
+    # Outcome-loop link — populated when the outcome matcher confidently
+    # associates a MediaOutcomeRecord with this recommendation. Nullable
+    # because (a) historical rows pre-date the matcher and (b) not every
+    # recommendation will ever receive a matchable outcome. See migration
+    # e2b7a9c3d4f1 for the DB-level constraint.
+    outcome_record_id = Column(
+        Integer,
+        ForeignKey("media_outcome_records.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    outcome_record = relationship("MediaOutcomeRecord")
 
 
 class AuditLog(Base):

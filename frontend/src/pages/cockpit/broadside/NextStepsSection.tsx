@@ -1,0 +1,236 @@
+import React, { useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import type { CockpitSnapshot } from '../types';
+import SectionHeader from './SectionHeader';
+import { useForecastVintage } from '../useForecastVintage';
+
+/**
+ * § VI — Nächste Schritte.
+ *
+ * Schluss-Kachel-Set für einen Entscheider, der bis hier durchgescrollt
+ * hat. Statt einen stillen Seiten-Fuß zu servieren, listen wir 2-4
+ * konkrete, zustandsabhängige Aktionen auf:
+ *   - "CSV hochladen" — wenn der Media-Plan noch nicht verbunden ist
+ *   - "GELO-IT kontaktieren" — für den M2M-Key-Rollout
+ *   - "Retraining abwarten" — wenn Drift erkannt wurde
+ *   - "Forecast neu anfordern" — wenn das Signal stark ist aber EUR fehlen
+ *   - "Data Office öffnen" — Standard-Diagnose-Einstieg
+ *
+ * Die Cards werden in priority-Reihenfolge gerendert; leer bleibt das
+ * Panel nie, weil der Data-Office-Link als Default am Ende steht.
+ */
+
+interface Props {
+  snapshot: CockpitSnapshot;
+}
+
+interface StepCard {
+  id: string;
+  kicker: string;
+  title: string;
+  body: string;
+  cta: string;
+  href?: string;
+  external?: boolean;
+  tone: 'action' | 'wait' | 'default';
+  priority: number;
+}
+
+const STRONG_RISER_THRESHOLD = 0.15;
+
+export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
+  const { data: vintagePayload } = useForecastVintage(snapshot.virusTyp, 1);
+
+  const hasStrongSignal = useMemo(() => {
+    return snapshot.regions.some(
+      (r) =>
+        typeof r.delta7d === 'number' &&
+        r.delta7d > STRONG_RISER_THRESHOLD &&
+        r.decisionLabel !== 'TrainingPending',
+    );
+  }, [snapshot.regions]);
+
+  const mediaPlanConnected = snapshot.mediaPlan?.connected === true;
+  const driftDetected = vintagePayload?.reconciliation?.drift_detected === true;
+  const hasRec = snapshot.primaryRecommendation !== null;
+  const pendingRegions = snapshot.regions.filter(
+    (r) => r.decisionLabel === 'TrainingPending',
+  ).length;
+
+  const cards = useMemo<StepCard[]>(() => {
+    const cards: StepCard[] = [];
+
+    if (!mediaPlanConnected) {
+      cards.push({
+        id: 'upload-csv',
+        kicker: 'Wichtigster Baustein',
+        title: 'Media-Plan + Outcomes per CSV hochladen',
+        body:
+          'Ohne verbundenen Media-Plan bleiben alle EUR-Werte Dashes — ' +
+          'Schiebe eine CSV mit Wochen × Bundesland × Produkt ins Data ' +
+          'Office. Das System beginnt sofort mit Reconciliation und füllt § I.',
+        cta: 'Data Office öffnen',
+        href: '/cockpit/data',
+        tone: 'action',
+        priority: 100,
+      });
+      cards.push({
+        id: 'm2m-api',
+        kicker: 'Für produktiven Betrieb',
+        title: 'GELO-IT für M2M-API-Key kontaktieren',
+        body:
+          'Wöchentliches Handschieben einer CSV ist die Bridge, nicht ' +
+          'das Ziel. Die M2M-API pushed dieselben Zeilen direkt aus dem ' +
+          'GELO-BI-Stack — ein Anruf zum Austausch des API-Keys.',
+        cta: 'data@peix.de',
+        href: 'mailto:data@peix.de?subject=M2M-API-Key%20f%C3%BCr%20GELO',
+        external: true,
+        tone: 'action',
+        priority: 90,
+      });
+    }
+
+    if (driftDetected) {
+      cards.push({
+        id: 'drift-wait',
+        kicker: 'Operationaler Hinweis',
+        title: 'Drift-Warnung: nächsten Retraining-Zyklus abwarten',
+        body:
+          'Das Modell weicht systematisch vom Truth-Signal ab. Das ' +
+          'nächste monatliche Retraining kalibriert nach; bis dahin ' +
+          'sind Empfehlungen mit Vorsicht zu lesen. Der Cron läuft am ' +
+          '1. des Monats um 07:10 UTC.',
+        cta: 'Retraining-Status ansehen',
+        href: '/cockpit/data',
+        tone: 'wait',
+        priority: 80,
+      });
+    }
+
+    if (!hasRec && hasStrongSignal && !mediaPlanConnected) {
+      cards.push({
+        id: 'request-forecast',
+        kicker: 'Wenn der Media-Plan anliegt',
+        title: 'Forecast mit Budget-Anchor neu anfordern',
+        body:
+          'Das Wellen-Signal ist aktuell deutlich, aber ohne ' +
+          'Media-Plan keine EUR-Empfehlung. Sobald der Plan im Data ' +
+          'Office sitzt, reicht ein Refresh und § II zieht den ' +
+          'konkreten Shift-Vorschlag.',
+        cta: 'Cockpit neu laden',
+        tone: 'wait',
+        priority: 70,
+      });
+    }
+
+    if (pendingRegions > 0) {
+      cards.push({
+        id: 'pending-training',
+        kicker: 'Atlas-Abdeckung',
+        title: `${pendingRegions} Bundesland${pendingRegions === 1 ? '' : 'ländern'} fehlt regionales Modell`,
+        body:
+          'Für diese Bundesländer liegt kein trainiertes regionales ' +
+          'Panel vor — die Atlas-Kacheln stehen auf "Training pending". ' +
+          'Mehr SURVSTAT-Tiefe oder das nächste Retraining mit breiterer ' +
+          'Datenbasis füllt die Lücke.',
+        cta: 'Truth-Coverage prüfen',
+        href: '/cockpit/data',
+        tone: 'wait',
+        priority: 50,
+      });
+    }
+
+    cards.push({
+      id: 'data-office',
+      kicker: 'Standard-Einstieg',
+      title: 'Data Office öffnen',
+      body:
+        'Coverage-Heatmap, Upload-Panel, Import-Historie, M2M-Doku — ' +
+        'das Betriebszentrum für alles, was unter dem Cockpit liegt.',
+      cta: 'Zum Data Office',
+      href: '/cockpit/data',
+      tone: 'default',
+      priority: 10,
+    });
+
+    return cards.sort((a, b) => b.priority - a.priority).slice(0, 4);
+  }, [
+    mediaPlanConnected,
+    driftDetected,
+    hasRec,
+    hasStrongSignal,
+    pendingRegions,
+  ]);
+
+  return (
+    <section className="instr-section" id="sec-next-steps">
+      <SectionHeader
+        numeral="VI"
+        title="Nächste Schritte"
+        subtitle={
+          <>
+            {cards.length} Handlung{cards.length === 1 ? '' : 'en'} · zustandsabhängig
+          </>
+        }
+        primer={
+          <>
+            Statt eines stillen Seiten-Endes bekommst du hier konkrete
+            nächste Schritte, berechnet aus dem aktuellen Cockpit-Zustand:
+            was <b>fehlt</b> (ungelöste Daten, ausstehende Integrationen),
+            was <b>läuft</b> (Retraining-Zyklen, Drift-Warnungen), und was
+            du <b>sofort tun</b> kannst. Die Karten sind nach Priorität
+            sortiert; oben steht der grösste Hebel.
+          </>
+        }
+      />
+      <div className="next-steps-grid">
+        {cards.map((card) => {
+          const content = (
+            <>
+              <div className="ns-kicker">{card.kicker}</div>
+              <div className="ns-title">{card.title}</div>
+              <p className="ns-body">{card.body}</p>
+              <div className="ns-cta">
+                {card.cta}
+                <span className="ns-cta-arrow" aria-hidden>
+                  →
+                </span>
+              </div>
+            </>
+          );
+          if (card.href && card.external) {
+            return (
+              <a
+                key={card.id}
+                className={`next-step-card tone-${card.tone}`}
+                href={card.href}
+                target={card.href.startsWith('mailto:') ? undefined : '_blank'}
+                rel="noreferrer"
+              >
+                {content}
+              </a>
+            );
+          }
+          if (card.href) {
+            return (
+              <Link
+                key={card.id}
+                className={`next-step-card tone-${card.tone}`}
+                to={card.href}
+              >
+                {content}
+              </Link>
+            );
+          }
+          return (
+            <div key={card.id} className={`next-step-card tone-${card.tone}`}>
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+export default NextStepsSection;

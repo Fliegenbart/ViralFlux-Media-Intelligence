@@ -7,6 +7,7 @@ import AtlasSection from './AtlasSection';
 import ForecastSection from './ForecastSection';
 import ImpactSection from './ImpactSection';
 import BacktestSection from './BacktestSection';
+import NextStepsSection from './NextStepsSection';
 
 /**
  * Broadside — Instrumentation-Redesign 2026-04-18.
@@ -32,6 +33,9 @@ import BacktestSection from './BacktestSection';
 
 interface Props {
   snapshot: CockpitSnapshot;
+  virusTyp: string;
+  onVirusChange: (v: string) => void;
+  supportedViruses: readonly string[];
 }
 
 const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
@@ -88,19 +92,35 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
   );
 };
 
-export const Broadside: React.FC<Props> = ({ snapshot }) => {
+export const Broadside: React.FC<Props> = ({
+  snapshot,
+  virusTyp,
+  onVirusChange,
+  supportedViruses,
+}) => {
   const kwMatch = snapshot.isoWeek.match(/\d+/);
   const currentKw = kwMatch ? parseInt(kwMatch[0], 10) : 1;
 
   return (
     <div className="peix-instr">
-      <ChronoBar currentKw={currentKw} client={snapshot.client} />
+      <ChronoBar
+        currentKw={currentKw}
+        client={snapshot.client}
+        virusTyp={virusTyp}
+        onVirusChange={onVirusChange}
+        supportedViruses={supportedViruses}
+      />
       <main className="page">
-        <DecisionSection snapshot={snapshot} />
+        {/* 2026-04-20: Atlas promoted to § I — the 3D wave map is the
+            consistent aha-moment for first-time readers (confirmed during
+            persona walkthrough). Decision follows as § II because the
+            recommendation reads as the verdict after the evidence. */}
         <AtlasSection snapshot={snapshot} />
+        <DecisionSection snapshot={snapshot} />
         <ForecastSection snapshot={snapshot} />
         <ImpactSection snapshot={snapshot} />
         <BacktestSection snapshot={snapshot} />
+        <NextStepsSection snapshot={snapshot} />
         <PageFooter snapshot={snapshot} />
       </main>
     </div>

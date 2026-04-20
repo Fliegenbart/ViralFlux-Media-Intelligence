@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import '../../styles/peix.css';
 import '../../styles/peix-gate.css';
 import '../../styles/peix-exhibit.css';
@@ -7,6 +7,22 @@ import '../../styles/peix-instr.css';
 import CockpitGate from './CockpitGate';
 import { useCockpitSnapshot } from './useCockpitSnapshot';
 import { Broadside } from './broadside/Broadside';
+
+/**
+ * Default virus at page load. Influenza B is today's strongest
+ * combination of (RANKING_OK gate, no drift, MAPE 30 %, N=103) — the
+ * "best data basis" rule. Deliberate static choice: the persona
+ * walkthrough called it out, the composite score confirmed it. Review
+ * monthly; a backend /virus-readiness endpoint that picks the
+ * default dynamically is on the backlog.
+ */
+const DEFAULT_VIRUS = 'Influenza B';
+export const SUPPORTED_VIRUSES: readonly string[] = [
+  'Influenza A',
+  'Influenza B',
+  'RSV A',
+  'SARS-CoV-2',
+];
 
 /**
  * CockpitShell — the single user-facing surface.
@@ -27,8 +43,9 @@ import { Broadside } from './broadside/Broadside';
  */
 
 export const CockpitShell: React.FC = () => {
+  const [virusTyp, setVirusTyp] = useState<string>(DEFAULT_VIRUS);
   const { snapshot, loading, error, reload } = useCockpitSnapshot({
-    virusTyp: 'Influenza A',
+    virusTyp,
     horizonDays: 14,
     leadTarget: 'ATEMWEGSINDEX',
   });
@@ -79,7 +96,14 @@ export const CockpitShell: React.FC = () => {
 
   if (!snapshot) return null;
 
-  return <Broadside snapshot={snapshot} />;
+  return (
+    <Broadside
+      snapshot={snapshot}
+      virusTyp={virusTyp}
+      onVirusChange={setVirusTyp}
+      supportedViruses={SUPPORTED_VIRUSES}
+    />
+  );
 };
 
 export default CockpitShell;

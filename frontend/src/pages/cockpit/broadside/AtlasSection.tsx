@@ -641,7 +641,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   return (
     <section className="instr-section" id="sec-atlas">
       <SectionHeader
-        numeral="II"
+        numeral="I"
         title="Wellen-Atlas"
         subtitle={
           <>

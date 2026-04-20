@@ -23,7 +23,19 @@ import { Link } from 'react-router-dom';
 interface Props {
   currentKw: number;  // z. B. 16 — aus snapshot.isoWeek parsed
   client: string;     // "GELO"
+  virusTyp: string;
+  onVirusChange: (v: string) => void;
+  supportedViruses: readonly string[];
 }
+
+// Short labels for the ChronoBar switcher — full names are too long for
+// the sticky top bar. Tooltip carries the full name for accessibility.
+const VIRUS_SHORT: Record<string, string> = {
+  'Influenza A': 'Flu-A',
+  'Influenza B': 'Flu-B',
+  'RSV A': 'RSV',
+  'SARS-CoV-2': 'Cov-2',
+};
 
 function fmtEpoch(now: Date): string {
   return String(Math.floor(now.getTime() / 1000));
@@ -45,7 +57,13 @@ function fmtNextMondayCountdown(now: Date): string {
   return `${d}d ${h}:${m}:${s}`;
 }
 
-export const ChronoBar: React.FC<Props> = ({ currentKw, client }) => {
+export const ChronoBar: React.FC<Props> = ({
+  currentKw,
+  client,
+  virusTyp,
+  onVirusChange,
+  supportedViruses,
+}) => {
   const [now, setNow] = useState<Date>(() => new Date());
 
   useEffect(() => {
@@ -87,6 +105,21 @@ export const ChronoBar: React.FC<Props> = ({ currentKw, client }) => {
         </div>
         <div className="chrono-meta">
           <span>CLIENT <b>{client}</b></span>
+        </div>
+        <div className="chrono-virus-switcher" role="tablist" aria-label="Virus auswählen">
+          {supportedViruses.map((v) => (
+            <button
+              key={v}
+              type="button"
+              role="tab"
+              aria-selected={v === virusTyp}
+              className={`chrono-virus-btn${v === virusTyp ? ' active' : ''}`}
+              onClick={() => onVirusChange(v)}
+              title={v}
+            >
+              {VIRUS_SHORT[v] ?? v}
+            </button>
+          ))}
         </div>
         <Link to="/cockpit/data" className="chrono-data-link" title="Data Office · Uploads & Coverage">
           DATA ↗

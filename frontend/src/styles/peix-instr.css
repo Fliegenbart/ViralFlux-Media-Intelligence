@@ -350,6 +350,28 @@
 }
 .peix-instr .vernier-head .badge-heur::before { content: ''; width: 6px; height: 6px; background: var(--signal); border-radius: 50%; }
 
+/* Not-evaluated badge — fires when the backend reports calibrationMode
+   'unknown' (no backtest available). Distinct from 'heuristic' because
+   heuristic means "we looked and chose not to calibrate"; unknown means
+   "no evaluation exists yet". Dashed hollow outline instead of a filled
+   dot so the eye can tell: this panel is intentionally silent. */
+.peix-instr .vernier-head .badge-unknown {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--ink-40);
+  font-weight: 500;
+  border: 1px dashed var(--ink-20);
+  padding: 2px 8px;
+  border-radius: 2px;
+  cursor: help;
+}
+.peix-instr .vernier-head .badge-unknown::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border: 1px dashed var(--ink-40);
+  border-radius: 50%;
+}
+
 /* Empty-state badge — rendered when there is no recommendation, so the
    Vernier must not advertise a fake zero Konfidenz. Muted dashed outline
    mirrors the 'Kein Signal' message without competing with the
@@ -545,6 +567,45 @@
   border-bottom: 1px dotted currentColor;
   cursor: help;
   opacity: .85;
+}
+
+/* Drift-banner — prominent warning above the strip chart when the
+   latest reconciliation block reports drift_detected=true. Uses the
+   Signal-Terracotta accent so it reads as an operational alert, not
+   as static annotation. */
+.peix-instr .fc-drift-banner {
+  border: 1px solid var(--signal, #c2542a);
+  border-left-width: 4px;
+  background: color-mix(in srgb, var(--signal, #c2542a) 5%, transparent);
+  padding: 14px 20px 16px;
+  margin: 16px 0 12px;
+}
+.peix-instr .fc-drift-banner-head {
+  display: flex; align-items: baseline; gap: 14px;
+  margin-bottom: 6px;
+}
+.peix-instr .fc-drift-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--signal, #c2542a);
+  background: color-mix(in srgb, var(--signal, #c2542a) 14%, transparent);
+  padding: 3px 8px;
+  font-weight: 600;
+}
+.peix-instr .fc-drift-scope {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--ink-60); letter-spacing: 0.04em;
+}
+.peix-instr .fc-drift-body {
+  margin: 0;
+  font-family: 'General Sans', sans-serif;
+  font-size: 14px; line-height: 1.5;
+  color: var(--ink);
+  max-width: 76ch;
+}
+.peix-instr .fc-drift-body b {
+  color: var(--signal, #c2542a);
+  font-weight: 600;
 }
 
 .peix-instr .atlas-bracket {

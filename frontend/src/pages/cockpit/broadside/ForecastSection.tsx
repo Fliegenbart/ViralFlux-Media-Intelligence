@@ -924,6 +924,45 @@ const VIRUS_CHOICES: Array<{ value: string; label: string }> = [
   { value: 'RSV A', label: 'RSV A' },
 ];
 
+// -----------------------------------------------------------------
+// DriftBanner — fires when reconciliation.drift_detected is true
+// -----------------------------------------------------------------
+// Why separate from the ModelProof/Reconciliation blocks: drift is a
+// time-critical operational warning (the model has been systematically
+// off over the recent window), not a summary metric. It deserves its
+// own banner at the top of § III so a decision-maker notices it
+// regardless of which panel they scroll to.
+const DriftBanner: React.FC<{
+  mape: number | null;
+  correlation: number | null;
+  samples: number;
+  virusTyp: string;
+}> = ({ mape, correlation, samples, virusTyp }) => (
+  <div className="fc-drift-banner" role="alert">
+    <div className="fc-drift-banner-head">
+      <span className="fc-drift-badge">Drift erkannt</span>
+      <span className="fc-drift-scope">{virusTyp} · {samples} Wochen-Paare</span>
+    </div>
+    <p className="fc-drift-body">
+      Das Modell weicht auf den letzten {samples} Wochen systematisch vom
+      Truth-Signal ab
+      {mape !== null ? (
+        <>
+          {' '}(<b>MAPE {mape.toFixed(0)} %</b>)
+        </>
+      ) : null}
+      {correlation !== null ? (
+        <>
+          , Korrelation {correlation >= 0 ? '+' : ''}{correlation.toFixed(2)}
+        </>
+      ) : null}
+      . Empfehlungen aus diesem Forecast sind mit <b>Vorsicht</b> zu lesen,
+      bis das nächste Retraining die Drift korrigiert oder die Abweichung
+      sich stabilisiert.
+    </p>
+  </div>
+);
+
 const ForecastControls: React.FC<{
   virusTyp: string;
   onVirusChange: (v: string) => void;
@@ -1417,6 +1456,15 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         vintageRunCount={vintageRuns.length}
         vintageLoading={vintageLoading}
       />
+
+      {vintagePayload?.reconciliation?.drift_detected ? (
+        <DriftBanner
+          mape={vintagePayload.reconciliation.mape}
+          correlation={vintagePayload.reconciliation.correlation}
+          samples={vintagePayload.reconciliation.samples}
+          virusTyp={virusTyp}
+        />
+      ) : null}
 
       <StripChart
         timeline={timeline}

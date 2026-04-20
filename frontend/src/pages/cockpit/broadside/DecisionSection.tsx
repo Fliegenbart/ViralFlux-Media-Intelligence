@@ -34,9 +34,11 @@ interface Props {
 // -----------------------------------------------------------------
 // VernierScale — mechanische Skala
 // -----------------------------------------------------------------
+type CalibrationMode = 'calibrated' | 'heuristic' | 'skipped' | 'unknown' | string;
+
 const VernierScale: React.FC<{
   pct: number | null;       // 0..1 — null when no recommendation exists
-  calibrated: boolean;
+  calibrationMode: CalibrationMode;
   leadDays: number | null;
   horizonWeeks: number;
   cov80: number | null;
@@ -46,7 +48,7 @@ const VernierScale: React.FC<{
   maturityLabel: string | null;
 }> = ({
   pct,
-  calibrated,
+  calibrationMode,
   leadDays,
   horizonWeeks,
   cov80,
@@ -58,6 +60,9 @@ const VernierScale: React.FC<{
   const hasValue = pct !== null;
   const clamped = hasValue ? Math.max(0, Math.min(1, pct as number)) : 0;
   const display = Math.round(clamped * 100);
+  const calibrated = calibrationMode === 'calibrated';
+  const calibrationUnknown =
+    calibrationMode === 'unknown' || !calibrationMode || calibrationMode === '';
 
   // Ticks: major at 0/25/50/75/100, minor at 10/20/30/40/60/70/80/90
   const majorTicks = [0, 25, 50, 75, 100];
@@ -75,6 +80,18 @@ const VernierScale: React.FC<{
         {hasValue ? (
           calibrated ? (
             <span className="badge-cal">Kalibriert</span>
+          ) : calibrationUnknown ? (
+            <span
+              className="badge-unknown"
+              title={
+                'Kalibrierung für dieses Virus ist aktuell nicht bewertet — ' +
+                'es liegt kein Backtest-Lauf vor, der einen Kalibrierungs-' +
+                'Modus feststellen könnte. Der Zahlenwert ist ein Ranking-' +
+                'Score, keine kalibrierte Wahrscheinlichkeit.'
+              }
+            >
+              Nicht bewertet
+            </span>
           ) : (
             <span className="badge-heur">Heuristisch</span>
           )
@@ -133,9 +150,17 @@ const VernierScale: React.FC<{
         <div>
           <dt>Kalibrierung</dt>
           <dd>
-            {calibrated ? 'isotonic' : '—'}{' '}
+            {calibrated
+              ? 'isotonic'
+              : calibrationUnknown
+                ? '—'
+                : 'heuristisch'}{' '}
             <span className="unit">
-              {calibrated ? '' : 'nicht kalibriert'}
+              {calibrated
+                ? ''
+                : calibrationUnknown
+                  ? 'nicht bewertet'
+                  : 'nicht kalibriert'}
             </span>
           </dd>
         </div>
@@ -165,7 +190,8 @@ const VernierScale: React.FC<{
 // -----------------------------------------------------------------
 export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const rec = snapshot.primaryRecommendation;
-  const calibrated = snapshot.modelStatus?.calibrationMode === 'calibrated';
+  const calibrationMode = snapshot.modelStatus?.calibrationMode ?? 'unknown';
+  const calibrated = calibrationMode === 'calibrated';
   const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? null;
   const horizonWeeks = Math.max(
     1,
@@ -370,7 +396,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
 
         <VernierScale
           pct={rec ? rec.confidence : null}
-          calibrated={calibrated}
+          calibrationMode={calibrationMode}
           leadDays={bestLag}
           horizonWeeks={horizonWeeks}
           cov80={cov80}

@@ -217,6 +217,41 @@ class ForecastRegistry:
             champion_metrics=champion_metrics,
         ) == []
 
+    # Coverage-escape-hatch thresholds for the metric gate. A champion whose
+    # coverage_80 is far below the nominal 0.80 is by definition a
+    # broken-intervals model (the 2026-04-20 Q90-plateau on Influenza A
+    # where Q90 collapsed to 1903.39 produced coverage_80 ≈ 0.33). In that
+    # regime the WIS comparison alone can keep a bad champion in place
+    # because narrow intervals ironically look 'confident' on WIS. The
+    # escape allows a candidate to promote when it materially widens the
+    # intervals back toward the nominal level, provided WIS does not
+    # regress catastrophically.
+    _COVERAGE_ESCAPE_MIN_DELTA = 0.15      # absolute coverage_80 gain required
+    _COVERAGE_ESCAPE_MAX_WIS_RATIO = 1.25   # candidate may be up to 25% worse on WIS
+    _COVERAGE_ESCAPE_CHAMPION_MAX = 0.50    # only triggers when champion is already below this
+
+    def _coverage_escape_unlocks(
+        self,
+        *,
+        candidate_metrics: dict[str, Any],
+        champion_metrics: dict[str, Any],
+        candidate_wis: float,
+        champion_wis: float,
+    ) -> bool:
+        """Return True when the candidate should bypass the WIS gate because
+        it materially repairs a broken-intervals champion."""
+        if "coverage_80" not in candidate_metrics or "coverage_80" not in champion_metrics:
+            return False
+        candidate_cov = float(candidate_metrics["coverage_80"])
+        champion_cov = float(champion_metrics["coverage_80"])
+        if champion_cov >= self._COVERAGE_ESCAPE_CHAMPION_MAX:
+            return False
+        if candidate_cov - champion_cov < self._COVERAGE_ESCAPE_MIN_DELTA:
+            return False
+        if candidate_wis > champion_wis * self._COVERAGE_ESCAPE_MAX_WIS_RATIO:
+            return False
+        return True
+
     def _metric_gate_blockers(
         self,
         *,
@@ -230,11 +265,17 @@ class ForecastRegistry:
 
         candidate_wis = float(candidate_metrics.get("relative_wis") or candidate_metrics.get("wis") or 9999.0)
         champion_wis = float(champion_metrics.get("relative_wis") or champion_metrics.get("wis") or 9999.0)
-        if candidate_wis > champion_wis * 0.99:
+        coverage_escape = self._coverage_escape_unlocks(
+            candidate_metrics=candidate_metrics,
+            champion_metrics=champion_metrics,
+            candidate_wis=candidate_wis,
+            champion_wis=champion_wis,
+        )
+        if candidate_wis > champion_wis * 0.99 and not coverage_escape:
             return ["wis_not_better_than_champion"]
 
         if "crps" in candidate_metrics and "crps" in champion_metrics:
-            if float(candidate_metrics["crps"]) > float(champion_metrics["crps"]) * 1.01:
+            if float(candidate_metrics["crps"]) > float(champion_metrics["crps"]) * 1.01 and not coverage_escape:
                 return ["crps_regressed"]
 
         for metric_name in ("coverage_95",):

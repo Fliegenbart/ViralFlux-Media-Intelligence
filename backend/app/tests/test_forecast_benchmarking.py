@@ -104,6 +104,76 @@ class ForecastBenchmarkingTests(unittest.TestCase):
 
         self.assertTrue(str(registry.registry_root).endswith("/backend/app/ml_models/forecast_registry"))
 
+    def test_registry_coverage_escape_promotes_candidate_when_champion_intervals_broken(self) -> None:
+        """Reproduces the 2026-04-20 Q90-plateau scenario: champion has
+        coverage_80=0.33 (broken intervals) and slightly better relative
+        WIS. The candidate widens intervals to coverage_80=0.62. The
+        escape hatch must let it promote — keeping a broken champion in
+        place because narrow intervals look 'confident' on WIS is exactly
+        the failure mode the escape prevents."""
+        registry = ForecastRegistry()
+        promoted = registry.should_promote(
+            candidate_metrics={
+                "relative_wis": 0.372,
+                "wis": 1541.41,
+                "coverage_80": 0.619,
+                "crps": 1.2,
+                "ece": 0.04,
+            },
+            champion_metrics={
+                "relative_wis": 0.333,
+                "wis": 2648.70,
+                "coverage_80": 0.333,
+                "crps": 1.25,
+                "ece": 0.045,
+            },
+        )
+        self.assertTrue(promoted)
+
+    def test_registry_coverage_escape_does_not_apply_when_champion_coverage_is_fine(self) -> None:
+        """If the champion's coverage_80 is already close to nominal, the
+        escape must not fire; the regular WIS gate must still block worse
+        candidates."""
+        registry = ForecastRegistry()
+        promoted = registry.should_promote(
+            candidate_metrics={
+                "relative_wis": 0.372,
+                "coverage_80": 0.85,
+                "crps": 1.2,
+                "ece": 0.04,
+            },
+            champion_metrics={
+                "relative_wis": 0.333,
+                "coverage_80": 0.75,
+                "crps": 1.25,
+                "ece": 0.045,
+            },
+        )
+        self.assertFalse(promoted)
+
+    def test_registry_coverage_escape_bounded_by_wis_ratio(self) -> None:
+        """Even a big coverage improvement cannot justify a catastrophic
+        WIS regression. The _COVERAGE_ESCAPE_MAX_WIS_RATIO bound keeps the
+        escape from promoting wildly over-wide intervals."""
+        registry = ForecastRegistry()
+        promoted = registry.should_promote(
+            candidate_metrics={
+                "wis": 10_000.0,
+                "relative_wis": 2.5,
+                "coverage_80": 0.80,
+                "crps": 1.2,
+                "ece": 0.04,
+            },
+            champion_metrics={
+                "wis": 2648.70,
+                "relative_wis": 0.333,
+                "coverage_80": 0.33,
+                "crps": 1.25,
+                "ece": 0.045,
+            },
+        )
+        self.assertFalse(promoted)
+
     def test_registry_load_scope_backfills_legacy_regional_champion_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_root = Path(tmpdir)

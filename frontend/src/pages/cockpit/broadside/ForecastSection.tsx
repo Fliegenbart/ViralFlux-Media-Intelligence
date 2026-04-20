@@ -417,14 +417,26 @@ const StripChart: React.FC<ChartProps> = ({ timeline, vintageRuns = [], showVint
           y1={chronoY} y2={chronoY}
           stroke="#0D0F12" strokeWidth={0.5} strokeOpacity={0.35}
         />
-        {/* Left-end chronology kicker */}
+        {/* Left-end chronology kicker — the label is the astronomy-nautical
+             term for a position-over-time table; in this cockpit it's the
+             timeline row that pins the Peaks of both truth sources and the
+             HEUTE marker. Subtitle makes that explicit so nobody has to
+             look up the Latin. */}
         <text
-          x={PAD_L - 12} y={chronoY + 4}
+          x={PAD_L - 12} y={chronoY - 6}
           textAnchor="end"
           fontFamily="JetBrains Mono" fontSize={10} fontWeight={500}
           fill="#0D0F12" fillOpacity={0.45} letterSpacing="0.16em"
         >
           EPHEMERIDE
+        </text>
+        <text
+          x={PAD_L - 12} y={chronoY + 7}
+          textAnchor="end"
+          fontFamily="JetBrains Mono" fontSize={9} fontWeight={400}
+          fill="#0D0F12" fillOpacity={0.35} letterSpacing="0.14em"
+        >
+          ZEITACHSE · PEAKS + HEUTE
         </text>
 
         {chronoEventRows.map(({ evt, x, labelAbove }) => {
@@ -937,7 +949,16 @@ const ForecastControls: React.FC<{
       </div>
     </div>
     <div className="fc-controls-right">
-      <label className={`fc-vintage-toggle${showVintage ? ' on' : ''}`}>
+      <label
+        className={`fc-vintage-toggle${showVintage ? ' on' : ''}`}
+        title={
+          'Vintage-Spuren blenden frühere Forecast-Versionen als schwache ' +
+          'graue Linien ein — so siehst du, ob das Modell in den letzten ' +
+          'Wochen stabil dieselbe Welle vorhergesagt hat oder ob es hin ' +
+          'und her geschwenkt ist. Ein Vertrauens-Indikator für die aktuelle ' +
+          'Prognose.'
+        }
+      >
         <input
           type="checkbox"
           checked={showVintage}
@@ -949,7 +970,7 @@ const ForecastControls: React.FC<{
           {vintageLoading ? (
             <span className="fc-toggle-hint"> · lädt</span>
           ) : vintageRunCount > 0 ? (
-            <span className="fc-toggle-hint"> · {vintageRunCount} Runs</span>
+            <span className="fc-toggle-hint"> · {vintageRunCount} frühere Runs</span>
           ) : (
             <span className="fc-toggle-hint"> · keine Historie</span>
           )}
@@ -1373,8 +1394,17 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
             aus Q10 / Q50 / Q90. Enger Fächer = Modell ist sich sicher,
             breiter Fächer = mehr Unsicherheit, typisch kurz vor einem
             Wellenwechsel. Darunter die „Lead-Time" gegen das Meldewesen:
-            wie viele Tage früher hätten Abwasser-Signal die Welle
+            wie viele Tage früher hätten Abwasser-Signale die Welle
             angekündigt als die offizielle Inzidenz-Meldung.
+            {' '}
+            <b>Glossar:</b> Die <b>Ephemeride</b> oben ist die Zeitachse
+            mit den Peaks beider Truth-Quellen und dem HEUTE-Marker (der
+            Begriff kommt aus der Astronomie — eine Tabelle der
+            Position-zu-einem-Zeitpunkt). Aktivierst du{' '}
+            <b>Vintage-Spuren</b>, werden vergangene Forecast-Versionen
+            als schwache graue Linien eingeblendet — ein Vertrauens-Check:
+            hat das Modell dieselbe Welle die letzten Wochen stabil
+            vorhergesagt oder hin-und-her geschwenkt?
           </>
         }
       />

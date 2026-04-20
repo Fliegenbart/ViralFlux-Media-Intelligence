@@ -227,23 +227,23 @@
 }
 
 /* Section primer — optional reader's guide under the header.
-   Serif to distinguish it from the data labels (mono/sans), muted
-   colour so it recedes after the first read, max-width for readable
-   line-length. */
+   2026-04-20: switched from Instrument-Serif-italic (editorial look but
+   hard to read at paragraph length) to General Sans regular. Higher
+   contrast, wider line-height — optimised for reading, not decoration.
+   Bold runs stay dark ink so key terms visually anchor the sentence. */
 .peix-instr .sec-primer {
-  font-family: 'Instrument Serif', 'Charter', Georgia, serif;
-  font-size: 16px;
-  line-height: 1.55;
-  color: var(--ink-60);
+  font-family: 'General Sans', 'Inter', -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-70, #3a424c);
   margin: 12px 0 32px;
-  max-width: 72ch;
-  font-style: italic;
+  max-width: 68ch;
+  font-weight: 400;
 }
 .peix-instr .sec-primer b,
 .peix-instr .sec-primer strong {
   color: var(--ink);
-  font-weight: 500;
-  font-style: normal;
+  font-weight: 600;
 }
 
 /* Status gate — GO / WATCH / UNKNOWN */

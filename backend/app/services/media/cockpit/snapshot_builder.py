@@ -67,17 +67,22 @@ BUNDESLAND_NAMES: dict[str, str] = {
     "TH": "Thüringen",
 }
 
-# Regional panel artefacts that exist on disk today. Two parallel architectures:
+# Regional panel artefacts that exist on disk today. Three architectures
+# in parallel:
 #   * Influenza A has per-Bundesland XGBoost artefacts under
 #     ml_models/regional/influenza_a/<bl_code>/ (16/16 regions).
-#   * RSV A has a pooled panel under ml_models/regional_panel/rsv_a/horizon_7/
-#     (cluster + national regressors, no per-Bundesland split); the
-#     RegionalForecastService still produces predictions per Bundesland via
-#     the pooled panel when we enable the virus here.
-# A virus landing in this set signals "regional Ansicht freigeschaltet". The
-# training-panel badge (see _read_training_panel) carries the honesty about
-# N=57 so this list stays a pure enablement switch.
-_REGIONAL_VIRUSES = {"Influenza A", "RSV A"}
+#   * Influenza B + RSV A have pooled panels under
+#     ml_models/regional_panel/<slug>/horizon_7/ (cluster + national
+#     regressors, no per-Bundesland split); the RegionalForecastService
+#     still produces predictions per Bundesland via the pooled panel
+#     when we enable the virus here. Missing Bundesländer get
+#     TrainingPending placeholders in _map_region_predictions.
+# A virus landing in this set signals "regional Ansicht freigeschaltet".
+# The training-panel badge (see _read_training_panel) carries the
+# honesty about N=57 so this list stays a pure enablement switch.
+# SARS-CoV-2 stays out intentionally — drift + MAPE 168 % put it in
+# shadow/watch-only mode (see REGIONAL_NON_PILOT_HORIZON_REASONS).
+_REGIONAL_VIRUSES = {"Influenza A", "Influenza B", "RSV A"}
 
 # Default horizon / target combination for the headline "2 weeks ahead vs
 # Notaufnahme"-story. Configurable via the API query parameters, but these

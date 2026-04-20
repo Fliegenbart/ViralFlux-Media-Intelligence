@@ -154,7 +154,27 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
       priority: 10,
     });
 
-    return cards.sort((a, b) => b.priority - a.priority).slice(0, 4);
+    // Wirkungsquantifizierung als sichtbarer Pilot-Meilenstein.
+    // Ehrliche Versprechen: das wird quantifiziert, sobald GELO-Outcomes
+    // 8 Wochen lang reingelaufen sind. Dem Pitch-Publikum macht das
+    // den Roadmap-Moment greifbar, ohne dass das Tool heute schon eine
+    // 'wir haben X % Media-Waste vermieden'-Zahl behaupten muss.
+    cards.push({
+      id: 'pilot-milestone',
+      kicker: 'Pilot-Meilenstein · Woche 8',
+      title: 'Erstes „Media-Waste vermieden"-Statement',
+      body:
+        'Sobald acht Wochen GELO-Sell-Out-Daten zurückgeflossen sind, ' +
+        'rechnet § IV das erste belastbare Wirkungsdelta aus: wie viel ' +
+        'Reichweite die Shifts gebracht haben, wo Empfehlungen geirrt ' +
+        'haben, welche Prozent-Punkte Budget-Effizienz gewonnen wurden. ' +
+        'Heute ein Versprechen, dann eine Zahl.',
+      cta: 'Im Pitch-Deck als Meilenstein',
+      tone: 'wait',
+      priority: 30,
+    });
+
+    return cards.sort((a, b) => b.priority - a.priority).slice(0, 5);
   }, [
     mediaPlanConnected,
     driftDetected,

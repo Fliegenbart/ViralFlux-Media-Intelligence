@@ -376,6 +376,32 @@ def _lead_block_from_backtest(
     event_cal = metrics.get("event_calibration") or {}
     date_range = metrics.get("date_range") or {}
 
+    # 2026-04-20 Tier-2-Fix: ATEMWEGSINDEX-Backtests haben aktuell
+    # keine interval_coverage gespeichert; RKI_ARE-Runs für dieselbe
+    # virus/horizon Kombination haben sie. Wenn coverage hier leer
+    # ist, holen wir den letzten RKI_ARE-Backtest und übernehmen
+    # NUR die Coverage-Werte (Source bleibt aber ATEMWEGSINDEX, das
+    # ist der korrekte target_source für die Lead-Time-Story).
+    coverage_source: str | None = None
+    if not coverage and target_source != "RKI_ARE":
+        fallback_row = (
+            db.query(BacktestRun)
+            .filter(
+                BacktestRun.virus_typ == virus_typ,
+                BacktestRun.horizon_days == int(horizon_days),
+                BacktestRun.status == "success",
+                BacktestRun.target_source == "RKI_ARE",
+            )
+            .order_by(desc(BacktestRun.created_at))
+            .first()
+        )
+        if fallback_row:
+            fallback_metrics = dict((fallback_row.metrics or {}))
+            fallback_coverage = fallback_metrics.get("interval_coverage") or {}
+            if fallback_coverage:
+                coverage = fallback_coverage
+                coverage_source = "RKI_ARE-Backtest (Fallback)"
+
     return {
         "horizonDays": int(horizon_days),
         "targetSource": target_source,
@@ -389,6 +415,7 @@ def _lead_block_from_backtest(
         "baselinePassed": bool(quality_gate.get("baseline_passed") or False),
         "intervalCoverage80Pct": _optional_float(coverage.get("coverage_80_pct")),
         "intervalCoverage95Pct": _optional_float(coverage.get("coverage_95_pct")),
+        "intervalCoverageSource": coverage_source,
         "backtestEndDate": str(date_range.get("end") or "") or None,
         "backtestCalibrationMode": _infer_calibration_mode(event_cal),
         "hasRun": row is not None,

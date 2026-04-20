@@ -23,9 +23,18 @@ const StatusStrip: React.FC<{ snapshot: CockpitSnapshot; supportedViruses: reado
   const activeRegions = snapshot.regions.filter(
     (r) => r.decisionLabel !== 'TrainingPending',
   ).length;
-  const totalRegions = snapshot.regions.length || 16;
   const horizon = snapshot.modelStatus?.horizonDays ?? 14;
   const outcomeConnected = snapshot.mediaPlan?.connected === true;
+  // RKI-typischer Lag: SURVSTAT-Wochenwerte erscheinen ca. 5-7 Tage nach
+  // Wochenende. Heute (KW N) sind also Daten bis KW N-1 verfügbar. Diese
+  // Zelle vermeidet die "warum ist das Tool nicht aktuell"-Frage.
+  const isoWeek = (() => {
+    const m = snapshot.isoWeek.match(/(\d+)\D+(\d+)/);
+    return m ? { kw: parseInt(m[1], 10), year: parseInt(m[2], 10) } : null;
+  })();
+  const dataStandLabel = isoWeek
+    ? `KW ${String(isoWeek.kw - 1).padStart(2, '0')} / ${isoWeek.year}`
+    : '—';
   return (
     <div className="status-strip">
       <div className="status-strip-inner">
@@ -38,6 +47,13 @@ const StatusStrip: React.FC<{ snapshot: CockpitSnapshot; supportedViruses: reado
           <span className="status-value">
             {activeRegions} / 16 Bundesländer
           </span>
+        </div>
+        <div
+          className="status-cell"
+          title="RKI SURVSTAT veröffentlicht jede Woche mit ca. 5-7 Tagen Verzug. Das Cockpit rechnet auf diesem aktuellen Stand."
+        >
+          <span className="status-label">Daten-Stand</span>
+          <span className="status-value">{dataStandLabel}</span>
         </div>
         <div className="status-cell">
           <span className="status-label">Forecast-Horizont</span>

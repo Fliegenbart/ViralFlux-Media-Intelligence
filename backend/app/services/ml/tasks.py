@@ -303,7 +303,14 @@ def _select_missing_backfill_targets(
     return [target for target in normalized_candidates if target not in existing_scope_dates]
 
 
-@celery_app.task(bind=True, name="train_xgboost_model_task")
+@celery_app.task(
+    bind=True,
+    name="train_xgboost_model_task",
+    # National XGBoost-Training: 4 Viren × Stack-Meta-Fit. Ähnliches
+    # Profil wie Regional, aber leichter. 30 min soft / 45 min hard.
+    soft_time_limit=1800,
+    time_limit=2700,
+)
 def train_xgboost_model_task(
     self,
     virus_typ: str | None = None,
@@ -956,7 +963,16 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
     })
 
 
-@celery_app.task(bind=True, name="train_regional_models_task")
+@celery_app.task(
+    bind=True,
+    name="train_regional_models_task",
+    # Regional-Training braucht echt Zeit: 4 Viren × 3 Horizonte × Walk-
+    # forward-Panel-Fit + Calibration-Search. Empirisch ~10 min pro Virus.
+    # 1 h soft / 1.5 h hard lässt Puffer für 4 Viren sequentiell und
+    # verhindert das bisherige Timeout-Problem (default 10/15 min).
+    soft_time_limit=3600,
+    time_limit=5400,
+)
 def train_regional_models_task(
     self,
     virus_typ: str | None = None,

@@ -93,17 +93,39 @@ def train_selected_viruses_all_regions(
     weather_forecast_vintage_mode: str | None = None,
     weather_vintage_comparison: bool = False,
 ) -> dict[str, Any]:
-    return {
-        virus_typ: trainer.train_all_regions(
-            virus_typ=virus_typ,
-            lookback_days=lookback_days,
-            horizon_days=horizon_days,
-            horizon_days_list=horizon_days_list,
-            weather_forecast_vintage_mode=weather_forecast_vintage_mode,
-            weather_vintage_comparison=weather_vintage_comparison,
-        )
-        for virus_typ in virus_types
-    }
+    """Train all regions for each virus, mit Per-Virus-Error-Isolation.
+
+    Ohne try/except würde ein Fehler oder Timeout bei einem Virus (etwa
+    Calibration-Fit-Failure bei Influenza A) die Schleife abbrechen —
+    die restlichen Viren kriegen kein Update. Mit per-Virus-Catch laufen
+    Flu B / RSV A durch, selbst wenn Flu A explodiert. Der Fehler steht
+    dann als ``{"status": "error", "error": "..."}`` im Ergebnis-Dict.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+    out: dict[str, Any] = {}
+    for virus_typ in virus_types:
+        try:
+            out[virus_typ] = trainer.train_all_regions(
+                virus_typ=virus_typ,
+                lookback_days=lookback_days,
+                horizon_days=horizon_days,
+                horizon_days_list=horizon_days_list,
+                weather_forecast_vintage_mode=weather_forecast_vintage_mode,
+                weather_vintage_comparison=weather_vintage_comparison,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.exception(
+                "Regional training failed for %s — continuing with remaining viruses",
+                virus_typ,
+            )
+            out[virus_typ] = {
+                "status": "error",
+                "virus_typ": virus_typ,
+                "error": str(exc),
+                "error_type": type(exc).__name__,
+            }
+    return out
 
 
 def load_artifacts(

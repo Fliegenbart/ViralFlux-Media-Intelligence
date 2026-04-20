@@ -69,18 +69,22 @@ def train_and_forecast(
 
     y = df["y"].to_numpy(dtype=float)
     issue_date = pd_module.Timestamp(df["ds"].max()).to_pydatetime()
-    target_date = issue_date + timedelta_cls(days=horizon)
     last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
-    forecast_records = [
-        {
-            "ds": target_date,
-            "yhat": prediction,
-            "yhat_lower": lower_bound,
-            "yhat_upper": upper_bound,
-            "trend_momentum_7d": last_momentum,
-            "outbreak_risk_score": service._compute_outbreak_risk(prediction, y),
-        }
-    ]
+    current_y = float(y[-1]) if len(y) > 0 else prediction
+    risk = service._compute_outbreak_risk(prediction, y)
+    # Trajektorie über alle h Tage statt nur T+h — gibt dem Frontend eine
+    # vollständige Forecast-Spur für Fan-Chart + Vintage-Overlay.
+    forecast_records = _expand_forecast_trajectory(
+        issue_date=issue_date,
+        horizon=horizon,
+        current_y=current_y,
+        prediction=prediction,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        last_momentum=last_momentum,
+        outbreak_risk=risk,
+        timedelta_cls=timedelta_cls,
+    )
     event_bundle = service._build_event_probability_model_from_panel(panel)
     event_model = event_bundle.get("model")
     live_event_feature_row = service._build_live_event_feature_row(
@@ -162,15 +166,67 @@ def train_and_forecast(
         "timestamp": utc_now_fn(),
     }
 
+    final_target = forecast_records[-1]["ds"] if forecast_records else issue_date
     logger.info(
-        "Forecast completed for %s/%s/h%s: target_date=%s, features=%s",
+        "Forecast completed for %s/%s/h%s: points=%d target_date=%s features=%s",
         virus_typ,
         region_code,
         horizon,
-        target_date.date(),
+        len(forecast_records),
+        final_target.date() if hasattr(final_target, "date") else final_target,
         len(feature_importance),
     )
     return result
+
+
+def _expand_forecast_trajectory(
+    *,
+    issue_date,
+    horizon: int,
+    current_y: float,
+    prediction: float,
+    lower_bound: float,
+    upper_bound: float,
+    last_momentum: float,
+    outbreak_risk: float,
+    timedelta_cls: Any,
+) -> list[dict[str, Any]]:
+    """Expand a single-point T+h forecast into a daily trajectory.
+
+    Der direct-stacking-Ansatz liefert genau einen Datenpunkt (T+h). Für
+    Chart-Darstellung + Vintage-Overlay brauchen wir aber eine Trajektorie
+    über die gesamten h Tage. Wir bauen sie per linearer Interpolation
+    zwischen ``current_y`` (heute = 100 %) und ``prediction`` (T+h), mit
+    zeitabhängig wachsendem Unsicherheits-Fächer: Q10/Q90 expandieren
+    proportional zum Offset-Anteil, so dass an T+1 die Unsicherheit
+    klein ist und an T+h voll entfaltet.
+
+    Das ist keine neue Modell-Inferenz, sondern die natürliche
+    Rekonstruktion der Trajektorie aus dem End-Punkt-Forecast. Jeder
+    intermediate point wird ehrlich mit same quantile-semantics versehen.
+    """
+    records: list[dict[str, Any]] = []
+    for offset in range(1, horizon + 1):
+        t = offset / horizon  # 1/h, 2/h, ..., h/h
+        yhat = current_y + (prediction - current_y) * t
+        # Unsicherheit wächst mit t: an t=0 ist sie kollabiert auf yhat,
+        # an t=1 volle horizon-Bounds. Sqrt-Skalierung erzeugt realistisch
+        # expansive Kegel (schneller zu Beginn, langsamer am Ende).
+        uscale = t ** 0.5 if t > 0 else 0.0
+        yhat_lo = yhat - (prediction - lower_bound) * uscale
+        yhat_hi = yhat + (upper_bound - prediction) * uscale
+        # Sanity: keine negativen Inzidenzen, lo <= yhat <= hi
+        yhat_lo = max(0.0, min(yhat_lo, yhat))
+        yhat_hi = max(yhat_hi, yhat)
+        records.append({
+            "ds": issue_date + timedelta_cls(days=offset),
+            "yhat": yhat,
+            "yhat_lower": yhat_lo,
+            "yhat_upper": yhat_hi,
+            "trend_momentum_7d": last_momentum,
+            "outbreak_risk_score": outbreak_risk,
+        })
+    return records
 
 
 def save_forecast(
@@ -184,8 +240,12 @@ def save_forecast(
     ml_forecast_cls: Any,
     logger: Any,
 ) -> int:
+    from app.core.time import utc_now  # local import to avoid circulars
+
     logger.info("Saving forecast to database...")
-    count = 0
+    inserted = 0
+    updated = 0
+    now = utc_now()
     region_code = normalize_forecast_region_fn(forecast_data.get("region"))
     horizon = ensure_supported_horizon_fn(
         forecast_data.get("horizon_days", default_decision_horizon_days)
@@ -234,20 +294,34 @@ def save_forecast(
         if existing:
             for key, val in kwargs.items():
                 setattr(existing, key, val)
+            # Bug-fix 2026-04-19: created_at beim UPDATE auf NOW setzen, sonst
+            # sieht die Tabelle tot aus obwohl täglich neu befüllt. Ohne dies
+            # erscheint MAX(created_at) als letztes INSERT-Datum, was Vintage-
+            # Tracking und Monitoring in die Irre führt.
+            setattr(existing, "created_at", now)
+            updated += 1
         else:
             forecast_record = ml_forecast_cls(
                 forecast_date=item["ds"],
                 virus_typ=forecast_data["virus_typ"],
                 region=region_code,
                 horizon_days=horizon,
+                created_at=now,
                 **kwargs,
             )
             service.db.add(forecast_record)
-            count += 1
+            inserted += 1
 
     service.db.commit()
-    logger.info(f"Saved {count} new forecast records")
-    return count
+    logger.info(
+        "Saved forecast records: %d inserted, %d updated (virus=%s, region=%s, h=%s)",
+        inserted,
+        updated,
+        forecast_data.get("virus_typ"),
+        region_code,
+        horizon,
+    )
+    return inserted + updated
 
 
 def run_forecasts_for_all_viruses(

@@ -153,19 +153,24 @@ def inference_from_loaded_models(
     upper_bound = max(upper_bound, prediction)
 
     issue_date = pd_module.Timestamp(df["ds"].max()).to_pydatetime()
-    target_date = issue_date + timedelta_cls(days=horizon)
     last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
     risk = service._compute_outbreak_risk(prediction, y)
-    forecast_records: list[dict[str, Any]] = [
-        {
-            "ds": target_date,
-            "yhat": prediction,
-            "yhat_lower": lower_bound,
-            "yhat_upper": upper_bound,
-            "trend_momentum_7d": last_momentum,
-            "outbreak_risk_score": risk,
-        }
-    ]
+    current_y = float(y[-1]) if len(y) > 0 else prediction
+    # Trajektorie über alle h Tage statt nur T+h — siehe
+    # ``forecast_service_pipeline._expand_forecast_trajectory`` für die
+    # Uncertainty-Expansion-Semantik.
+    from app.services.ml.forecast_service_pipeline import _expand_forecast_trajectory
+    forecast_records: list[dict[str, Any]] = _expand_forecast_trajectory(
+        issue_date=issue_date,
+        horizon=horizon,
+        current_y=current_y,
+        prediction=prediction,
+        lower_bound=lower_bound,
+        upper_bound=upper_bound,
+        last_momentum=last_momentum,
+        outbreak_risk=risk,
+        timedelta_cls=timedelta_cls,
+    )
 
     model_version = metadata.get("version", "xgb_stack_v1_loaded")
     backtest_metrics = dict(metadata.get("backtest_metrics") or {})
@@ -256,8 +261,10 @@ def inference_from_loaded_models(
         "timestamp": utc_now_fn(),
     }
 
+    _final_target = forecast_records[-1]["ds"] if forecast_records else issue_date
     logger.info(
         f"Inference completed for {virus_typ}/{region_code}/h{horizon}: "
-        f"target_date={target_date.date()}, model={model_version}"
+        f"points={len(forecast_records)} target_date={_final_target.date() if hasattr(_final_target, 'date') else _final_target} "
+        f"model={model_version}"
     )
     return result

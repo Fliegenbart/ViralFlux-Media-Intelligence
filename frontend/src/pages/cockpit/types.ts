@@ -137,6 +137,13 @@ export interface ShiftRecommendation {
   expectedReachUplift: number | null;
   why: string;
   primary?: boolean;
+  /**
+   * True when the recommendation comes from the live ranking-signal
+   * pair (top-riser / top-faller) rather than from a budget-anchored
+   * optimiser. Signal-mode rec always has amountEur=null — the Demo-
+   * Szene rechnet einen hypothetischen Betrag auf Wunsch nach.
+   */
+  signalMode?: boolean;
 }
 
 export interface TimelinePoint {
@@ -274,7 +281,16 @@ export interface CockpitSnapshot {
   /** Null when mediaPlan.connected === false. */
   totalSpendEur: number | null;
   /** Mean pRising across regions. Legacy field; same honesty caveat as pRising. */
+  /** Legacy alias for averageWaveProbability. Kept for backwards compat. */
   averageConfidence: number | null;
+  /**
+   * Durchschnittliche Steige-Wahrscheinlichkeit über alle Bundesländer
+   * (Mittelwert pRising). Post-Saison naturgemäß niedrig — darf nicht
+   * als "Modell-Konfidenz" gelesen werden. Der Begleit-String
+   * `averageWaveProbabilityContext` liefert die Einordnung.
+   */
+  averageWaveProbability?: number | null;
+  averageWaveProbabilityContext?: string;
   primaryRecommendation: ShiftRecommendation | null;
   secondaryRecommendations: ShiftRecommendation[];
   regions: RegionForecast[];

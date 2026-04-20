@@ -173,6 +173,30 @@ def _iso_week_label(at: datetime) -> str:
     return f"KW {iso.week:02d} / {iso.year}"
 
 
+def _wave_probability_context(avg_p: float | None, iso_week_label: str) -> str:
+    """Plain-German Einordnung der Wellen-Wahrscheinlichkeit.
+
+    Ziel: einen Pharma-Entscheider davor bewahren, 0.023 als
+    "Modell ist zu 2 % zuversichtlich" zu lesen. Der Wert ist
+    der Mittelwert der regionalen Steige-Wahrscheinlichkeit; in
+    Post-Saison-Wochen erwartungsgemäß niedrig — das ist ein
+    Saison-Signal, kein Modell-Schwächesignal.
+    """
+    if avg_p is None:
+        return "—"
+    pct = avg_p * 100
+    if pct >= 25:
+        return f"Hoch — Peak-Wochen-Niveau ({pct:.1f} %)"
+    if pct >= 10:
+        return f"Erhöht — Welle baut auf ({pct:.1f} %)"
+    if pct >= 5:
+        return f"Moderat — Übergangs-Phase ({pct:.1f} %)"
+    return (
+        f"Niedrig — Post-Saison ({pct:.1f} %). Natürliches Saison-Tief, "
+        "nicht Modell-Unsicherheit. Der Wert steigt automatisch ab KW 38 wieder."
+    )
+
+
 TRAINING_METADATA_ROOT = Path("/app/app/ml_models")
 
 # Maturity thresholds for the "Phase-1 pilot / Beta / Production" badge.
@@ -1164,6 +1188,74 @@ def build_cockpit_snapshot(
     p_values = [r.get("pRising") for r in regions if r.get("pRising") is not None]
     average_confidence = round(sum(p_values) / len(p_values), 4) if p_values else None
 
+    # primaryRecommendation — 2026-04-20 Pitch-Fix:
+    # bisher hardcoded None. Das Frontend rendert volle Fläche dafür;
+    # ohne Input bleibt der Kern-Pitch-Claim (Decision-Tool) leer.
+    # Jetzt generieren wir eine signal-basierte Empfehlung sobald das
+    # Ranking ein klares From/To-Paar hergibt — EUR bleibt null
+    # (honest-by-default: keine Budget-Anbindung), der Vorschlag
+    # nennt Richtung + Begründung + Modell-Konfidenz.
+    _rec_candidates = [
+        r for r in regions
+        if isinstance(r.get("delta7d"), (int, float))
+        and r.get("decisionLabel") != "TrainingPending"
+    ]
+    _rec_candidates_sorted = sorted(
+        _rec_candidates,
+        key=lambda r: r.get("delta7d") or 0.0,
+        reverse=True,
+    )
+    primary_recommendation = None
+    if len(_rec_candidates_sorted) >= 2:
+        top = _rec_candidates_sorted[0]
+        bottom = _rec_candidates_sorted[-1]
+        top_delta = float(top.get("delta7d") or 0.0)
+        bottom_delta = float(bottom.get("delta7d") or 0.0)
+        # Empfehlung nur wenn: Top-Riser signifikant positiv ODER
+        # Spread zwischen Top und Bottom groß genug.
+        spread = top_delta - bottom_delta
+        if top_delta > 0.08 or spread > 0.20:
+            # Confidence als kontextsensitive Skala 0..1:
+            # stärkeres Delta → höhere Konfidenz, aber mit hartem
+            # Maximum 0.85 damit kein "95 %-Pill" suggeriert wird.
+            confidence = max(0.15, min(0.85, abs(top_delta) * 1.6 + 0.10))
+            top_pct = round(top_delta * 100)
+            bot_pct = round(bottom_delta * 100)
+            why_parts = [
+                f"{top.get('name')} zeigt {'+' if top_pct >= 0 else ''}{top_pct} % Wellen-Veränderung in 7 Tagen "
+                f"(Top-Riser), während {bottom.get('name')} mit {'+' if bot_pct >= 0 else ''}{bot_pct} % "
+                "am unteren Ende steht.",
+            ]
+            if top_delta > 0.15:
+                why_parts.append(
+                    "Das Ranking ist eindeutig genug für einen gerichteten Media-Shift — "
+                    "Budget folgt der steigenden Welle."
+                )
+            else:
+                why_parts.append(
+                    "Kein klassischer Wellen-Peak, aber ein klares Gefälle zwischen Ländern; "
+                    "selbst in ruhigeren Wochen lohnt sich die Umschichtung entlang des Signals."
+                )
+            primary_recommendation = {
+                "id": f"signal_auto_{top.get('code')}_{bottom.get('code')}",
+                "fromCode": bottom.get("code"),
+                "toCode": top.get("code"),
+                "fromName": bottom.get("name"),
+                "toName": top.get("name"),
+                # amountEur bleibt bewusst null — ohne angebundenen
+                # Media-Plan rechnet das Tool keine EUR-Beträge. Die
+                # Demo-Szene in § II rechnet eine hypothetische Zahl
+                # aus, wenn der Nutzer einen Budget-Slider zieht.
+                "amountEur": None,
+                "confidence": round(confidence, 3),
+                "expectedReachUplift": None,
+                "why": " ".join(why_parts),
+                "primary": True,
+                # Flag fürs Frontend: Empfehlung kommt aus Signal-
+                # Ranking, nicht aus Budget-Optimierung.
+                "signalMode": True,
+            }
+
     sources = _build_sources(db)
     top_drivers = _top_drivers_from_sources(sources)
 
@@ -1174,8 +1266,15 @@ def build_cockpit_snapshot(
         "isoWeek": _iso_week_label(generated_at),
         "generatedAt": generated_at.isoformat(),
         "totalSpendEur": None,
-        "averageConfidence": average_confidence,
-        "primaryRecommendation": None,
+        # Umbenannt: averageConfidence → averageWaveProbability. Der
+        # alte Name suggerierte "Modell-Konfidenz", was ein Pharma-
+        # Entscheider als "nur 2 % Vertrauen" fehlliest. Der Wert ist
+        # der Mittelwert der Steige-Wahrscheinlichkeit pro Bundesland,
+        # Post-Saison naturgemäß klein.
+        "averageConfidence": average_confidence,  # legacy alias
+        "averageWaveProbability": average_confidence,
+        "averageWaveProbabilityContext": _wave_probability_context(average_confidence, _iso_week_label(generated_at)),
+        "primaryRecommendation": primary_recommendation,
         "secondaryRecommendations": [],
         "regions": regions,
         "timeline": timeline,

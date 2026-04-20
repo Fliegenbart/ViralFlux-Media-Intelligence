@@ -29,11 +29,12 @@ from datetime import date as pd_date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
 from app.models.database import (
+    AuditLog,
     BacktestRun,
     MLForecast,
     NotaufnahmeSyndromData,
@@ -588,6 +589,93 @@ _SURVSTAT_DISEASES_FOR_VIRUS: dict[str, tuple[str, ...]] = {
 }
 
 
+COCKPIT_TIMELINE_SNAPSHOT_ACTION = "COCKPIT_TIMELINE_SNAPSHOT"
+COCKPIT_TIMELINE_SNAPSHOT_ENTITY = "CockpitTimeline"
+
+
+def _persist_cockpit_timeline_snapshot(
+    db: Session,
+    *,
+    virus_typ: str,
+    horizon_days: int,
+    timeline: list[dict[str, Any]],
+) -> None:
+    """Write one audit-log entry per (virus, horizon, day).
+
+    Idempotent: skips when a row with the same (action, entity_type,
+    metadata.snapshot_day, metadata.virus_typ, metadata.horizon_days)
+    already exists today. The payload carries a compact form of the
+    timeline (date + observed + q10/q50/q90 + edActivity) so the
+    vintage-overlay endpoint can reconstruct the historical forecast
+    directly.
+    """
+    if not timeline:
+        return
+
+    today = utc_now().date()
+    snapshot_day = today.isoformat()
+
+    # Idempotency check via raw SQL (JSON column, not JSONB → kein .astext).
+    # Prüft ob heute bereits ein Snapshot für (virus, horizon) existiert.
+    existing = db.execute(
+        text("""
+            SELECT COUNT(id) FROM audit_logs
+            WHERE action = :act
+              AND entity_type = :ent
+              AND DATE(timestamp) = :today
+              AND (new_value->'metadata'->>'virus_typ') = :v
+              AND (new_value->'metadata'->>'horizon_days') = :h
+        """),
+        {
+            "act": COCKPIT_TIMELINE_SNAPSHOT_ACTION,
+            "ent": COCKPIT_TIMELINE_SNAPSHOT_ENTITY,
+            "today": today,
+            "v": str(virus_typ),
+            "h": str(int(horizon_days)),
+        },
+    ).scalar()
+    if existing and int(existing) > 0:
+        return
+
+    # Compact timeline rows
+    compact: list[dict[str, Any]] = []
+    for row in timeline:
+        compact.append({
+            "date": row.get("date"),
+            "observed": row.get("observed"),
+            "edActivity": row.get("edActivity"),
+            "q10": row.get("q10"),
+            "q50": row.get("q50"),
+            "q90": row.get("q90"),
+            "interpolated": bool(row.get("interpolated")),
+            "horizon_days": row.get("horizonDays") or int(horizon_days),
+        })
+
+    payload = {
+        "action": COCKPIT_TIMELINE_SNAPSHOT_ACTION,
+        "timestamp": utc_now().isoformat(),
+        "metadata": {
+            "virus_typ": str(virus_typ),
+            "horizon_days": int(horizon_days),
+            "snapshot_day": snapshot_day,
+            "timeline_length": len(compact),
+        },
+        "timeline": compact,
+    }
+
+    entry = AuditLog(
+        timestamp=utc_now(),
+        action=COCKPIT_TIMELINE_SNAPSHOT_ACTION,
+        entity_type=COCKPIT_TIMELINE_SNAPSHOT_ENTITY,
+        entity_id=0,
+        user="system.cockpit_snapshot",
+        new_value=payload,
+        reason=f"Auto-snapshot {virus_typ} h{horizon_days} @ {snapshot_day}",
+    )
+    db.add(entry)
+    db.commit()
+
+
 def _build_timeline_from_national(
     db: Session,
     virus_typ: str,
@@ -899,6 +987,18 @@ def build_cockpit_snapshot(
         )
 
     timeline = _build_timeline_from_national(db, virus_typ, horizon_days)
+
+    # Option-D: persistiere die Timeline als Audit-Event, idempotent pro Tag.
+    # Gibt uns eine wachsende Historie von Forecast-Vintages — jeder Tag
+    # akkumuliert einen weiteren Snapshot, ohne extra Cron-Job oder Schema-
+    # Änderung. Vintage-Overlay liest dann aus audit_logs direkt.
+    try:
+        _persist_cockpit_timeline_snapshot(
+            db, virus_typ=virus_typ, horizon_days=horizon_days, timeline=timeline,
+        )
+    except Exception:  # noqa: BLE001
+        # Never block snapshot delivery on audit-write failure.
+        logger.exception("persist_cockpit_timeline_snapshot failed (non-fatal)")
 
     if model_status["calibrationMode"] in {"heuristic", "skipped"}:
         notes.append(

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.brand_defaults import resolve_request_brand
 from app.api.deps import get_current_admin, get_current_user
+from app.api.media_routes_cockpit_snapshot import require_cockpit_auth
 from app.api.m2m_auth import verify_m2m_api_key
 from app.api.media_contracts import OutcomeImportRequest, OutcomeIngestRequest, json_safe_response
 from app.db.schema_contracts import MLForecastSchemaMismatchError
@@ -18,7 +19,7 @@ from app.services.media.v2_service import MediaV2Service
 router = APIRouter()
 
 
-@router.get("/outcomes/coverage", dependencies=[Depends(get_current_user)])
+@router.get("/outcomes/coverage", dependencies=[Depends(require_cockpit_auth)])
 async def get_media_outcomes_coverage(
     brand: str | None = Query(default=None),
     virus_typ: str = "Influenza A",
@@ -89,7 +90,7 @@ async def get_media_pilot_readout(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.get("/evidence/truth", dependencies=[Depends(get_current_user)])
+@router.get("/evidence/truth", dependencies=[Depends(require_cockpit_auth)])
 async def get_media_truth_evidence(
     brand: str | None = Query(default=None),
     virus_typ: str = "Influenza A",
@@ -104,7 +105,7 @@ async def get_media_truth_evidence(
     )
 
 
-@router.get("/outcomes/import-batches", dependencies=[Depends(get_current_user)])
+@router.get("/outcomes/import-batches", dependencies=[Depends(require_cockpit_auth)])
 async def list_media_outcome_import_batches(
     brand: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=100),
@@ -118,7 +119,7 @@ async def list_media_outcome_import_batches(
     })
 
 
-@router.get("/outcomes/import-batches/{batch_id}", dependencies=[Depends(get_current_user)])
+@router.get("/outcomes/import-batches/{batch_id}", dependencies=[Depends(require_cockpit_auth)])
 async def get_media_outcome_import_batch_detail(
     batch_id: str,
     db: Session = Depends(get_db),
@@ -130,7 +131,7 @@ async def get_media_outcome_import_batch_detail(
     return json_safe_response(detail)
 
 
-@router.get("/outcomes/template", dependencies=[Depends(get_current_user)])
+@router.get("/outcomes/template", dependencies=[Depends(require_cockpit_auth)])
 async def download_media_outcome_template(
     db: Session = Depends(get_db),
 ):

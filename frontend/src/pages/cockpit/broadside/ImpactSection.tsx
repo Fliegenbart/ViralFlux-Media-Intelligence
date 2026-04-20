@@ -91,6 +91,19 @@ export const ImpactSection: React.FC<Props> = ({ snapshot }) => {
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
+        primer={
+          <>
+            „Hatten wir recht?" — hier wird jede ausgegebene Empfehlung
+            gegen den tatsächlichen Outcome der Folgewoche gelegt. Heute
+            steht hier fast alles auf Strich, weil der Outcome-Loop
+            (CSV-Import bzw. GELO-M2M) gerade erst anläuft; nach 4–8
+            Wochen echter Daten sollten <b>Empfehlungen vs. Realität</b>,
+            gewonnene Reichweite und Fehl-Shifts sichtbar werden. Wert
+            für dich: der Kreislauf, der aus Prognose eine Entscheidung
+            mit Rechenschaft macht — ohne dass sich das System selbst
+            bewertet.
+          </>
+        }
       />
 
       <div className="impact-row">

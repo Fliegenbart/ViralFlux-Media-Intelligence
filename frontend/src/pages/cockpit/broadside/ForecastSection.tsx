@@ -1365,6 +1365,18 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
+        primer={
+          <>
+            Drei Streifen wie ein Lab-Messschreiber: <b>Notaufnahmen</b>,{' '}
+            <b>Meldewesen</b> und <b>Q-Quantile</b> des Forecasts. Links
+            die letzten Wochen als Ist-Wert, ab <b>HEUTE</b> der Fächer
+            aus Q10 / Q50 / Q90. Enger Fächer = Modell ist sich sicher,
+            breiter Fächer = mehr Unsicherheit, typisch kurz vor einem
+            Wellenwechsel. Darunter die „Lead-Time" gegen das Meldewesen:
+            wie viele Tage früher hätten Abwasser-Signal die Welle
+            angekündigt als die offizielle Inzidenz-Meldung.
+          </>
+        }
       />
 
       <ForecastControls

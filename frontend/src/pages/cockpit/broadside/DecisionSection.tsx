@@ -248,6 +248,17 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
+        primer={
+          <>
+            Links siehst du die <b>eine</b> Media-Empfehlung dieser Woche
+            — oder eine ehrliche Leerseite, wenn keine zu vertreten ist.
+            Rechts ein Vernier-Instrument: die <b>Konfidenz</b> des
+            Modells als Skala mit Nadel statt Prozent-Pille, darunter
+            Lead-Time, Coverage und Training-Panel-Reife als Kontext.
+            Wert für dich: die eine Zahl, die du am Montag umsetzt —
+            oder das Signal „heute passt keine Platzhalter-Zahl".
+          </>
+        }
       />
 
       <div className="decision-grid">

@@ -126,6 +126,21 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
+        primer={
+          <>
+            Das Modell wird rückwirkend gegen echte Vergangenheit
+            getestet: Jede Woche wird der Forecast mit Wissen bis dahin
+            neu berechnet und gegen das tatsächliche Ergebnis verglichen.
+            Die drei Monument-Zahlen sind <b>PR-AUC</b> (Ranking-Güte,
+            höher besser), <b>Precision@Top-3</b> (wie oft die drei
+            gerankten Bundesländer auch die echten Top-Wellen waren) und
+            <b> Median-Lead-Zeit</b> (um wie viele Tage das Signal dem
+            Meldewesen vorausläuft). Vergleich ist immer die
+            Persistenz-Baseline — also „was wäre, wenn wir einfach die
+            letzte Woche wiederholt hätten". Wert für dich: Beweis, dass
+            der Forecast nicht einfach nur mit einer Zahl um sich wirft.
+          </>
+        }
       />
 
       <div className="backtest-head">

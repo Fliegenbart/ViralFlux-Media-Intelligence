@@ -651,6 +651,19 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
+        primer={
+          <>
+            Jedes Bundesland als Turm. <b>Höhe</b> = erwartete
+            Atemwegs-Welle in 7 Tagen gegenüber heute, <b>Farbe</b> =
+            Richtung (rot für Anstieg, grün für Rückgang). Die drei
+            höchsten Länder bekommen ein schwebendes Label mit der
+            konkreten Zahl („+45 % · 7d"). Graue Türme = regionales
+            Modell für dieses Virus noch nicht trainiert — keine
+            Prognose, statt einer schlechten. Wert für dich:
+            Wellenbewegung in Deutschland auf einen Blick, inklusive
+            der Frage, wo du Budget aktivierst oder zurückziehst.
+          </>
+        }
       />
 
       <div className="atlas-wrap">

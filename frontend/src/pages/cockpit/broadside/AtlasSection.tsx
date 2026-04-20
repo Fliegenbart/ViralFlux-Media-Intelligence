@@ -588,6 +588,15 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
     [topRisers],
   );
 
+  const activeRegionCount = useMemo(
+    () =>
+      snapshot.regions.filter(
+        (r) => r.decisionLabel !== 'TrainingPending',
+      ).length,
+    [snapshot.regions],
+  );
+  const pendingRegionCount = snapshot.regions.length - activeRegionCount;
+
   const shiftFromCode = snapshot.primaryRecommendation?.fromCode ?? null;
   const shiftToCode = snapshot.primaryRecommendation?.toCode ?? null;
 
@@ -629,7 +638,9 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         title="Wellen-Atlas"
         subtitle={
           <>
-            {snapshot.regions.length} Bundesländer · Höhe = {horizonDays}-Tage-Forecast · Farbe = Richtung
+            {activeRegionCount} / 16 Bundesländer
+            {pendingRegionCount > 0 ? ` (${pendingRegionCount} Training pending)` : ''}{' '}
+            · Höhe = {horizonDays}-Tage-Forecast · Farbe = Richtung
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
@@ -670,8 +681,13 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           </div>
           <div className="atlas-hud-corner bl">
             <div>
-              {snapshot.regions.length} / 16 Länder aktiv
+              {activeRegionCount} / 16 Länder aktiv
             </div>
+            {pendingRegionCount > 0 ? (
+              <div className="atlas-hud-pending">
+                {pendingRegionCount}× Training pending
+              </div>
+            ) : null}
             <div>
               Top-3 Spotlights <span className="sig">●●●</span>
             </div>

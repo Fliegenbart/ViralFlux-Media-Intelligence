@@ -108,8 +108,15 @@ export interface RegionForecast {
   currentSpendEur: number | null;
   /** Recommended spend delta, EUR. Null when no media plan is connected. */
   recommendedShiftEur: number | null;
-  /** Decision label from the regional decision engine. */
-  decisionLabel?: 'Watch' | 'Prepare' | 'Activate' | null;
+  /**
+   * Decision label from the regional decision engine.
+   * `'TrainingPending'` is a snapshot-builder placeholder emitted when the
+   * regional service could not score a Bundesland (usually because the
+   * pooled panel lacks coverage for that region). Such tiles must be
+   * rendered as muted "Training pending" placeholders rather than
+   * mistaken for a zero-signal forecast.
+   */
+  decisionLabel?: 'Watch' | 'Prepare' | 'Activate' | 'TrainingPending' | null;
 }
 
 export interface ShiftRecommendation {

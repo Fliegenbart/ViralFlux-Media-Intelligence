@@ -231,7 +231,10 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self.assertEqual(payload["modelStatus"]["lead"]["bestLagDays"], -7)
 
     def test_forecast_readiness_watch_when_no_backtest_and_no_ranking(self) -> None:
-        # Neither ranking metrics (patched empty) nor lead backtest => WATCH
+        # Neither ranking metrics (patched empty) nor lead backtest => WATCH.
+        # RSV A is now regional-enabled (T1.1), so regionalAvailable is True
+        # even in the no-evidence case — the WATCH banner depends on
+        # ranking+lead evidence, not on the regional enablement flag.
         patches = self._patch_external(ranking_metrics={})  # no precision value
         for p in patches:
             p.start()
@@ -246,7 +249,7 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
             for p in patches:
                 p.stop()
         self.assertEqual(payload["modelStatus"]["forecastReadiness"], "WATCH")
-        self.assertFalse(payload["modelStatus"]["regionalAvailable"])
+        self.assertTrue(payload["modelStatus"]["regionalAvailable"])
 
     def test_headline_aliases_match_lead_block(self) -> None:
         self._insert_backtest(
@@ -335,9 +338,33 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
 
     # ---------- regions ----------
 
-    def test_rsv_a_returns_empty_regions_and_explanatory_note(self) -> None:
+    def test_rsv_a_regional_service_invoked_and_missing_padded_training_pending(self) -> None:
+        """RSV A is now regional-enabled via the pooled panel.
+
+        Pre-2026-04-20 this test asserted empty regions and no service call
+        because RSV A was hard-excluded. Since T1.1 the virus is enabled;
+        the service IS called at h=7, and Bundesländer the service could
+        not score are padded with ``decisionLabel = "TrainingPending"``
+        so the atlas never shows silent gaps.
+        """
         self._insert_backtest(virus_typ="RSV A", target_source="ATEMWEGSINDEX")
-        fake = _FakeRegionalForecastService({"predictions": []})
+        fake = _FakeRegionalForecastService(
+            {
+                "status": "success",
+                "predictions": [
+                    {
+                        "bundesland": "BY",
+                        "event_probability": 0.21,
+                        "expected_next_week_incidence": 42.0,
+                        "current_incidence": 40.0,
+                        "prediction_interval": {"lower": 35.0, "upper": 55.0},
+                        "decision_label": "Watch",
+                        "reason_trace": {"why": ["pilot signal"]},
+                        "change_pct": 5.0,
+                    },
+                ],
+            }
+        )
         patches = self._patch_external()
         for p in patches:
             p.start()
@@ -351,10 +378,24 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         finally:
             for p in patches:
                 p.stop()
-        self.assertEqual(payload["regions"], [])
-        self.assertEqual(fake.calls, [])  # regional service not invoked when regionalAvailable=false
+
+        self.assertTrue(payload["modelStatus"]["regionalAvailable"])
+        self.assertEqual(len(fake.calls), 1)
+        self.assertEqual(fake.calls[0]["virus_typ"], "RSV A")
+        self.assertEqual(fake.calls[0]["horizon_days"], 7)
+        self.assertEqual(len(payload["regions"]), 16)
+
+        by_region = next(r for r in payload["regions"] if r["code"] == "BY")
+        self.assertEqual(by_region["decisionLabel"], "Watch")
+
+        pending = [r for r in payload["regions"] if r["decisionLabel"] == "TrainingPending"]
+        self.assertEqual(len(pending), 15)
+        for placeholder in pending:
+            self.assertIsNone(placeholder["delta7d"])
+            self.assertIsNone(placeholder["pRising"])
+            self.assertIsNone(placeholder["forecast"])
         self.assertTrue(
-            any("kein regionales modell" in n.lower() for n in payload["notes"]),
+            any("Training pending" in n for n in payload["notes"]),
             payload["notes"],
         )
 

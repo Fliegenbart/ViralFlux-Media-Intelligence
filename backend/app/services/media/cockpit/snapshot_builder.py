@@ -67,8 +67,17 @@ BUNDESLAND_NAMES: dict[str, str] = {
     "TH": "Thüringen",
 }
 
-# Regional XGBoost artefacts that actually exist on disk (see /app/app/ml_models/regional).
-_REGIONAL_VIRUSES = {"Influenza A"}
+# Regional panel artefacts that exist on disk today. Two parallel architectures:
+#   * Influenza A has per-Bundesland XGBoost artefacts under
+#     ml_models/regional/influenza_a/<bl_code>/ (16/16 regions).
+#   * RSV A has a pooled panel under ml_models/regional_panel/rsv_a/horizon_7/
+#     (cluster + national regressors, no per-Bundesland split); the
+#     RegionalForecastService still produces predictions per Bundesland via
+#     the pooled panel when we enable the virus here.
+# A virus landing in this set signals "regional Ansicht freigeschaltet". The
+# training-panel badge (see _read_training_panel) carries the honesty about
+# N=57 so this list stays a pure enablement switch.
+_REGIONAL_VIRUSES = {"Influenza A", "RSV A"}
 
 # Default horizon / target combination for the headline "2 weeks ahead vs
 # Notaufnahme"-story. Configurable via the API query parameters, but these
@@ -577,7 +586,14 @@ def _build_sources(db: Session) -> list[dict[str, Any]]:
 def _map_region_predictions(
     regional_payload: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """Map service.predict_all_regions() output to the CockpitSnapshot regions[]."""
+    """Map service.predict_all_regions() output to the CockpitSnapshot regions[].
+
+    Missing Bundesländer (service returned <16 predictions) are padded with
+    explicit ``decisionLabel = "TrainingPending"`` placeholders instead of
+    being dropped silently. The frontend can render an honest "Training
+    pending" tile rather than a grey blank for those regions, and the
+    snapshot note counts how many are still pending.
+    """
     notes: list[str] = []
     predictions = regional_payload.get("predictions") or []
     status = regional_payload.get("status")
@@ -588,10 +604,12 @@ def _map_region_predictions(
         return [], notes
 
     mapped: list[dict[str, Any]] = []
+    seen_codes: set[str] = set()
     for pred in predictions:
         bl_code = str(pred.get("bundesland") or "").strip()
         if bl_code not in BUNDESLAND_NAMES:
             continue
+        seen_codes.add(bl_code)
         interval = pred.get("prediction_interval") or {}
         expected = pred.get("expected_next_week_incidence")
         q50 = _optional_float(expected)
@@ -656,6 +674,30 @@ def _map_region_predictions(
                 "recommendedShiftEur": None,
                 "decisionLabel": decision_label,
             }
+        )
+
+    # Pad missing Bundesländer with TrainingPending placeholders so the map
+    # always shows all 16 tiles — an absent tile is ambiguous (bug? coverage
+    # gap?), an explicit "Training pending" tile names it.
+    missing_codes = [code for code in BUNDESLAND_NAMES if code not in seen_codes]
+    for bl_code in missing_codes:
+        mapped.append(
+            {
+                "code": bl_code,
+                "name": BUNDESLAND_NAMES[bl_code],
+                "delta7d": None,
+                "pRising": None,
+                "forecast": None,
+                "drivers": [],
+                "currentSpendEur": None,
+                "recommendedShiftEur": None,
+                "decisionLabel": "TrainingPending",
+            }
+        )
+    if missing_codes:
+        notes.append(
+            f"{len(missing_codes)} von {len(BUNDESLAND_NAMES)} Bundesländern ohne regionalen Forecast "
+            "— Kacheln sind als 'Training pending' markiert."
         )
     return mapped, notes
 

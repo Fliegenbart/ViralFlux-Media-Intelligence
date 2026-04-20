@@ -486,6 +486,10 @@
 .peix-instr .atlas-hud-corner.br { bottom: 0; right: 0; text-align: right; }
 .peix-instr .atlas-hud-corner b   { color: var(--paper); font-weight: 500; }
 .peix-instr .atlas-hud-corner .sig { color: var(--signal); }
+.peix-instr .atlas-hud-pending {
+  color: var(--oxide, rgba(244, 241, 234, 0.7));
+  opacity: .85;
+}
 
 .peix-instr .atlas-bracket {
   position: absolute;

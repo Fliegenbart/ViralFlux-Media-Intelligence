@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { CockpitSnapshot, RegionForecast, Bundesland } from '../types';
 import { fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
@@ -50,6 +50,17 @@ interface AtlasSceneProps {
   topRiserCodes: Set<Bundesland>;
   shiftFromCode: Bundesland | null;
   shiftToCode: Bundesland | null;
+  virusLabel: string;
+  onHoverRegion?: (code: string | null) => void;
+}
+
+// Hover-State: which tower the pointer currently hovers. null when not
+// over any tower. Lives outside the Three.js useEffect because it's
+// bridging the 3D scene to a React-rendered tooltip overlay.
+interface HoverState {
+  code: string;
+  screenX: number;
+  screenY: number;
 }
 
 // ---------------------------------------------------------------
@@ -112,8 +123,19 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
   topRiserCodes,
   shiftFromCode,
   shiftToCode,
+  virusLabel,
+  onHoverRegion,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const [hover, setHover] = useState<HoverState | null>(null);
+
+  // regionsByCode — keeps tooltip body copy in sync with the latest
+  // props without having to drill into the Three.js closure.
+  const regionsByCode = useMemo(() => {
+    const m = new Map<string, RegionForecast>();
+    regions.forEach((r) => m.set(r.code, r));
+    return m;
+  }, [regions]);
 
   // Stabile Dep-Signaturen: Scene soll nicht bei jedem Re-render des
   // Parents neu initialisieren.
@@ -258,6 +280,9 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
       regions.forEach((r) => byCode.set(r.code, r));
       const disposables: any[] = [];
       const pulseRings: any[] = [];
+      // Tower meshes tracked for raycaster hover detection. The userData.code
+      // on each mesh lets the React tooltip resolve the region payload.
+      const towerMeshes: any[] = [];
 
       const signalColor = new THREE.Color('#C2542A');
       const slateColor = new THREE.Color('#4A5261');
@@ -304,7 +329,9 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
         mesh.rotation.y = (code.charCodeAt(0) % 7) * 0.12;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        mesh.userData = { code, kind: 'tower' };
         group.add(mesh);
+        towerMeshes.push(mesh);
         disposables.push(geo, mat);
 
         // Hair-line edges — hex outline glows on risers.
@@ -548,9 +575,56 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
       };
       window.addEventListener('resize', onResize);
 
+      // ----- Hover raycaster ---------------------------------------
+      // Projects the pointer into the 3D scene, intersects with the
+      // tower meshes, and lifts the hovered region's code into React
+      // state. The tooltip UI is rendered outside the canvas as a
+      // plain React <div> so it can use HTML typography + line
+      // breaks — pure Three.js text would force canvas textures.
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      let lastHoveredCode: string | null = null;
+      const onPointerMove = (e: PointerEvent) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const hits = raycaster.intersectObjects(towerMeshes, false);
+        if (hits.length > 0) {
+          const code = (hits[0].object as any).userData?.code as string | undefined;
+          if (code) {
+            if (code !== lastHoveredCode) {
+              lastHoveredCode = code;
+              onHoverRegion?.(code);
+            }
+            setHover({ code, screenX: e.clientX, screenY: e.clientY });
+            renderer.domElement.style.cursor = 'pointer';
+            return;
+          }
+        }
+        if (lastHoveredCode !== null) {
+          lastHoveredCode = null;
+          onHoverRegion?.(null);
+        }
+        setHover(null);
+        renderer.domElement.style.cursor = '';
+      };
+      const onPointerLeave = () => {
+        if (lastHoveredCode !== null) {
+          lastHoveredCode = null;
+          onHoverRegion?.(null);
+        }
+        setHover(null);
+        renderer.domElement.style.cursor = '';
+      };
+      renderer.domElement.addEventListener('pointermove', onPointerMove);
+      renderer.domElement.addEventListener('pointerleave', onPointerLeave);
+
       cleanup = () => {
         cancelAnimationFrame(raf);
         window.removeEventListener('resize', onResize);
+        renderer.domElement.removeEventListener('pointermove', onPointerMove);
+        renderer.domElement.removeEventListener('pointerleave', onPointerLeave);
         disposables.forEach((d) => d.dispose?.());
         renderer.dispose();
         if (mount) mount.innerHTML = '';
@@ -565,7 +639,93 @@ const AtlasScene: React.FC<AtlasSceneProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regionsKey, topRiserKey, topRisersKey, beamKey]);
 
-  return <div className="atlas-canvas" ref={mountRef} />;
+  const hoverRegion = hover ? regionsByCode.get(hover.code) ?? null : null;
+
+  return (
+    <>
+      <div className="atlas-canvas" ref={mountRef} />
+      {hover && hoverRegion ? (
+        <AtlasTooltip
+          hover={hover}
+          region={hoverRegion}
+          virusLabel={virusLabel}
+        />
+      ) : null}
+    </>
+  );
+};
+
+// -----------------------------------------------------------------
+// AtlasTooltip — HTML-overlay at the pointer position, showing a
+// plain-language explanation of the hovered tower. Rendered outside
+// the WebGL canvas so we can use crisp typography + multi-line copy.
+// Positioned via fixed coordinates (screenX/Y from the pointer event).
+// -----------------------------------------------------------------
+const AtlasTooltip: React.FC<{
+  hover: HoverState;
+  region: RegionForecast;
+  virusLabel: string;
+}> = ({ hover, region, virusLabel }) => {
+  const pct = typeof region.delta7d === 'number' ? region.delta7d * 100 : null;
+  const tone =
+    pct === null
+      ? 'flat'
+      : pct > 15
+        ? 'strong-rise'
+        : pct > 2
+          ? 'rise'
+          : pct < -15
+            ? 'strong-fall'
+            : pct < -2
+              ? 'fall'
+              : 'flat';
+  const verdict = (() => {
+    if (region.decisionLabel === 'TrainingPending') {
+      return `Für dieses Bundesland ist das Regional-Modell noch nicht trainiert — der Turm steht hier nur als Platzhalter, ohne Prognose.`;
+    }
+    if (pct === null) {
+      return `Keine verwertbare Δ-Messung in 7 Tagen — der Turm bleibt flach.`;
+    }
+    const sign = pct >= 0 ? '+' : '';
+    const abs = Math.abs(pct).toFixed(0);
+    if (tone === 'strong-rise') {
+      return `Wir erwarten in den nächsten 7 Tagen einen deutlichen Anstieg der ${virusLabel}-Aktivität — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region aktivieren, Budget hochziehen.`;
+    }
+    if (tone === 'rise') {
+      return `Das Modell sieht einen moderaten Anstieg von etwa ${sign}${abs} % in 7 Tagen — Welle noch nicht klar, aber Tendenz nach oben. In Marketing-Sprache: genauer beobachten, nicht überreagieren.`;
+    }
+    if (tone === 'strong-fall') {
+      return `Die ${virusLabel}-Aktivität geht in den nächsten 7 Tagen deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Budget schrittweise abziehen, auf wirksamere Regionen umshiften.`;
+    }
+    if (tone === 'fall') {
+      return `Leichter Rückgang von rund ${sign}${abs} % in 7 Tagen. Keine Welle hier; in Marketing-Sprache: kein aktiver Trigger, aber auch kein Anlass zum Aktivieren.`;
+    }
+    return `Plateau — die Aktivität bleibt in 7 Tagen nahezu unverändert (${sign}${abs} %). Weder Alarm noch Chance.`;
+  })();
+
+  return (
+    <div
+      className={`atlas-tooltip atlas-tooltip-${tone}`}
+      style={{ left: hover.screenX, top: hover.screenY }}
+      role="tooltip"
+    >
+      <div className="atlas-tooltip-head">
+        <span className="atlas-tooltip-name">{region.name}</span>
+        {pct !== null ? (
+          <span className="atlas-tooltip-delta">
+            {pct >= 0 ? '+' : ''}
+            {pct.toFixed(0)}% · 7d
+          </span>
+        ) : null}
+      </div>
+      <p className="atlas-tooltip-body">{verdict}</p>
+      {region.decisionLabel && region.decisionLabel !== 'TrainingPending' ? (
+        <div className="atlas-tooltip-meta">
+          Entscheidungs-Label · <b>{region.decisionLabel}</b>
+        </div>
+      ) : null}
+    </div>
+  );
 };
 
 // -----------------------------------------------------------------
@@ -673,6 +833,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           topRiserCodes={topRiserCodes}
           shiftFromCode={shiftFromCode as Bundesland | null}
           shiftToCode={shiftToCode as Bundesland | null}
+          virusLabel={snapshot.virusLabel ?? snapshot.virusTyp}
         />
 
         {/* Grain overlay — subtile Papier-Struktur */}

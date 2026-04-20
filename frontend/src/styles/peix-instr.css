@@ -596,6 +596,81 @@
   opacity: .85;
 }
 
+/* Atlas hover tooltip — HTML overlay at the pointer position when a
+   tower is raycast-hit. Uses position:fixed with the raw pointer
+   coordinates; small offset so it does not cover the tower itself. */
+.atlas-tooltip {
+  position: fixed;
+  transform: translate(16px, -50%);
+  max-width: 340px;
+  background: #0D0F12;
+  color: #F4F1EA;
+  border: 1px solid rgba(244, 241, 234, 0.2);
+  padding: 12px 16px 14px;
+  pointer-events: none;
+  z-index: 200;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font-family: 'General Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.atlas-tooltip-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-bottom: 0.5px solid rgba(244, 241, 234, 0.15);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+.atlas-tooltip-name {
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.atlas-tooltip-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(244, 241, 234, 0.7);
+  margin-left: auto;
+}
+.atlas-tooltip-strong-rise .atlas-tooltip-delta,
+.atlas-tooltip-rise .atlas-tooltip-delta {
+  color: #D8632F;
+}
+.atlas-tooltip-strong-fall .atlas-tooltip-delta,
+.atlas-tooltip-fall .atlas-tooltip-delta {
+  color: #8B9788;
+}
+.atlas-tooltip-body {
+  margin: 0;
+  color: rgba(244, 241, 234, 0.85);
+}
+.atlas-tooltip-meta {
+  margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(244, 241, 234, 0.5);
+}
+.atlas-tooltip-meta b {
+  color: #F4F1EA;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 12px;
+}
+/* Strong-rise accent: left border */
+.atlas-tooltip-strong-rise {
+  border-left: 3px solid #D8632F;
+}
+.atlas-tooltip-strong-fall {
+  border-left: 3px solid #8B9788;
+}
+
 /* Forecast-trajectory honesty kicker — rendered inside the § III subtitle.
    Distinct from the primary label so readers notice it without it
    dominating the header. */

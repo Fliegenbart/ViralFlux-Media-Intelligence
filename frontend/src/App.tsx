@@ -32,6 +32,12 @@ import './index.css';
 
 const CockpitShell = lazy(() => import('./pages/cockpit/CockpitShell'));
 const DataOfficePage = lazy(() => import('./pages/cockpit/data/DataOfficePage'));
+const VarianteExecutivePage = lazy(
+  () => import('./pages/cockpit/variants/VarianteExecutivePage'),
+);
+const VarianteTerminalPage = lazy(
+  () => import('./pages/cockpit/variants/VarianteTerminalPage'),
+);
 
 const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -97,6 +103,8 @@ const App: React.FC = () => {
                 <Route path="/" element={<Navigate to="/cockpit" replace />} />
                 <Route path="/cockpit" element={<CockpitShell />} />
                 <Route path="/cockpit/data" element={<DataOfficePage />} />
+                <Route path="/cockpit/variante-1" element={<VarianteExecutivePage />} />
+                <Route path="/cockpit/variante-2" element={<VarianteTerminalPage />} />
                 {RETIRED_ROUTES.map((path) => (
                   <Route
                     key={path}

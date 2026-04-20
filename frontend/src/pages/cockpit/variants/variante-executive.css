@@ -1,0 +1,585 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Variante 1 — Executive One-Pager
+   Cream / Editorial / Instrument Serif
+   Ein Satz trägt die Seite.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+
+.vex-root {
+  --vex-paper: #fbf8f3;
+  --vex-paper-deep: #f2ede3;
+  --vex-ink: #1a1815;
+  --vex-ink-60: rgba(26, 24, 21, 0.62);
+  --vex-ink-40: rgba(26, 24, 21, 0.42);
+  --vex-ink-20: rgba(26, 24, 21, 0.18);
+  --vex-ink-08: rgba(26, 24, 21, 0.08);
+  --vex-gold: #8b6f2a;
+  --vex-terracotta: #a5583a;
+  --vex-moss: #3e6a4a;
+  --vex-hairline: rgba(26, 24, 21, 0.12);
+
+  min-height: 100vh;
+  background: var(--vex-paper);
+  color: var(--vex-ink);
+  font-family: 'Instrument Sans', 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: 0;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.vex-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+      ellipse at top left,
+      rgba(139, 111, 42, 0.04) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at bottom right,
+      rgba(62, 106, 74, 0.04) 0%,
+      transparent 50%
+    );
+  z-index: 0;
+}
+
+/* ─── Top bar ─────────────────────────────────────────────────────── */
+
+.vex-topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 28px 64px;
+  border-bottom: 1px solid var(--vex-hairline);
+}
+
+.vex-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vex-mark {
+  font-size: 14px;
+  color: var(--vex-gold);
+}
+
+.vex-brand-name {
+  font-family: 'Instrument Serif', serif;
+  font-size: 22px;
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+
+.vex-brand-tag {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--vex-ink-60);
+  padding-left: 12px;
+  border-left: 1px solid var(--vex-hairline);
+  margin-left: 4px;
+}
+
+.vex-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.vex-virus-switch {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: var(--vex-paper-deep);
+  border-radius: 999px;
+  border: 1px solid var(--vex-hairline);
+}
+
+.vex-virus-btn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 6px 14px;
+  border: none;
+  background: transparent;
+  color: var(--vex-ink-60);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.vex-virus-btn:hover {
+  color: var(--vex-ink);
+}
+
+.vex-virus-btn.active {
+  background: var(--vex-ink);
+  color: var(--vex-paper);
+}
+
+.vex-meta {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 15px;
+  color: var(--vex-ink-60);
+}
+
+/* ─── Hero ────────────────────────────────────────────────────────── */
+
+.vex-hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 80px;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 96px 64px 64px;
+  min-height: calc(100vh - 220px);
+  align-items: center;
+}
+
+.vex-hero-content {
+  max-width: 720px;
+}
+
+.vex-kicker {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--vex-gold);
+  margin-bottom: 36px;
+}
+
+.vex-headline {
+  font-family: 'Instrument Serif', serif;
+  font-weight: 400;
+  font-size: clamp(44px, 5.5vw, 78px);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 0 0 40px;
+  color: var(--vex-ink);
+}
+
+.vex-headline-quiet {
+  font-style: italic;
+  color: var(--vex-ink-60);
+}
+
+.vex-budget {
+  font-family: 'Instrument Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.82em;
+  letter-spacing: -0.02em;
+  vertical-align: baseline;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 64%,
+    rgba(139, 111, 42, 0.18) 64%,
+    rgba(139, 111, 42, 0.18) 88%,
+    transparent 88%
+  );
+  padding: 0 4px;
+}
+
+.vex-from {
+  color: var(--vex-terracotta);
+  font-style: italic;
+}
+
+.vex-to {
+  color: var(--vex-moss);
+  font-style: italic;
+  position: relative;
+}
+
+.vex-to::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.08em;
+  height: 2px;
+  background: var(--vex-moss);
+  opacity: 0.4;
+}
+
+.vex-why {
+  font-family: 'Instrument Serif', serif;
+  font-size: 19px;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--vex-ink-60);
+  max-width: 62ch;
+  margin: 0 0 56px;
+  padding-left: 20px;
+  border-left: 2px solid var(--vex-ink-20);
+}
+
+.vex-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--vex-hairline);
+}
+
+.vex-stat-label {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--vex-ink-60);
+  margin-bottom: 10px;
+}
+
+.vex-stat-value {
+  font-family: 'Instrument Serif', serif;
+  font-size: 38px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--vex-ink);
+  margin-bottom: 8px;
+}
+
+.vex-stat-value-small {
+  font-size: 24px;
+  padding-top: 6px;
+  font-style: italic;
+  color: var(--vex-ink-60);
+}
+
+.vex-stat-note {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 12px;
+  color: var(--vex-ink-40);
+  line-height: 1.4;
+}
+
+/* ─── Map column ──────────────────────────────────────────────────── */
+
+.vex-map-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.vex-map {
+  width: 100%;
+  max-width: 460px;
+  height: auto;
+  filter: drop-shadow(0 20px 48px rgba(26, 24, 21, 0.08));
+}
+
+.vex-bl {
+  fill: var(--vex-paper-deep);
+  stroke: rgba(26, 24, 21, 0.14);
+  stroke-width: 1.2;
+  transition: all 280ms ease;
+}
+
+.vex-bl-from {
+  fill: rgba(165, 88, 58, 0.18);
+  stroke: var(--vex-terracotta);
+  stroke-width: 1.5;
+}
+
+.vex-bl-to {
+  fill: rgba(62, 106, 74, 0.24);
+  stroke: var(--vex-moss);
+  stroke-width: 1.8;
+  animation: vex-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes vex-pulse {
+  0%,
+  100% {
+    fill: rgba(62, 106, 74, 0.24);
+  }
+  50% {
+    fill: rgba(62, 106, 74, 0.42);
+  }
+}
+
+.vex-arrow {
+  stroke: var(--vex-ink);
+  stroke-width: 1.6;
+  fill: none;
+  opacity: 0.5;
+}
+
+.vex-arrow-tip {
+  fill: var(--vex-moss);
+}
+
+.vex-map-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--vex-ink-60);
+  max-width: 420px;
+}
+
+.vex-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vex-map-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vex-map-dot-from {
+  background: var(--vex-terracotta);
+}
+
+.vex-map-dot-to {
+  background: var(--vex-moss);
+  box-shadow: 0 0 0 4px rgba(62, 106, 74, 0.2);
+}
+
+.vex-map-legend-text {
+  font-family: 'Instrument Sans', sans-serif;
+}
+
+.vex-map-legend-text b {
+  color: var(--vex-ink);
+  font-weight: 600;
+}
+
+/* ─── Foot / details ──────────────────────────────────────────────── */
+
+.vex-foot {
+  position: relative;
+  z-index: 1;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 64px 80px;
+  border-top: 1px solid var(--vex-hairline);
+}
+
+.vex-details-toggle {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid var(--vex-ink-20);
+  color: var(--vex-ink);
+  padding: 10px 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.vex-details-toggle:hover {
+  background: var(--vex-ink);
+  color: var(--vex-paper);
+  border-color: var(--vex-ink);
+}
+
+.vex-details {
+  margin-top: 48px;
+  padding-top: 48px;
+  border-top: 1px solid var(--vex-hairline);
+}
+
+.vex-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 48px;
+  margin-bottom: 48px;
+}
+
+.vex-details-label {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vex-ink-60);
+  margin-bottom: 12px;
+}
+
+.vex-details-value {
+  font-family: 'Instrument Serif', serif;
+  font-size: 32px;
+  line-height: 1.1;
+  color: var(--vex-ink);
+  margin-bottom: 6px;
+}
+
+.vex-details-value-small {
+  font-size: 22px;
+  font-style: italic;
+  color: var(--vex-moss);
+}
+
+.vex-details-sub {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 12px;
+  color: var(--vex-ink-40);
+  line-height: 1.5;
+}
+
+.vex-sources {
+  padding: 32px;
+  background: var(--vex-paper-deep);
+  border-radius: 8px;
+  margin-bottom: 32px;
+}
+
+.vex-sources-label {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--vex-ink-60);
+  margin-bottom: 20px;
+}
+
+.vex-sources-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px 32px;
+}
+
+.vex-source-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.vex-source-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vex-source-good {
+  background: var(--vex-moss);
+}
+
+.vex-source-warn {
+  background: var(--vex-gold);
+}
+
+.vex-source-stale {
+  background: var(--vex-terracotta);
+}
+
+.vex-source-name {
+  flex: 1;
+  color: var(--vex-ink);
+}
+
+.vex-source-latency {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 11px;
+  color: var(--vex-ink-40);
+}
+
+.vex-deepdive-link {
+  display: inline-block;
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 18px;
+  color: var(--vex-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--vex-ink-20);
+  padding-bottom: 2px;
+  transition: border-color 180ms ease;
+}
+
+.vex-deepdive-link:hover {
+  border-color: var(--vex-ink);
+}
+
+.vex-fine-print {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--vex-hairline);
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--vex-ink-40);
+  max-width: 72ch;
+}
+
+/* ─── Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 1100px) {
+  .vex-hero {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding: 64px 32px 48px;
+  }
+
+  .vex-map-column {
+    order: -1;
+  }
+
+  .vex-map {
+    max-width: 320px;
+  }
+
+  .vex-topbar {
+    padding: 20px 32px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .vex-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 32px;
+  }
+
+  .vex-sources-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .vex-foot {
+    padding: 32px 32px 64px;
+  }
+}
+
+@media (max-width: 640px) {
+  .vex-stats {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .vex-details-grid,
+  .vex-sources-list {
+    grid-template-columns: 1fr;
+  }
+
+  .vex-topbar-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+}

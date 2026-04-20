@@ -264,6 +264,53 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           <div className="barcode-title">Wöchentlicher Hit-Barcode</div>
           <div className="instr-kicker">Hover für Kalenderwoche</div>
         </div>
+        <p className="barcode-reader-note">
+          <b>So liest du den Barcode:</b> Jeder Balken = eine Woche im
+          Walk-forward-Backtest. <b style={{ color: 'var(--signal, #c2542a)' }}>Orange</b>{' '}
+          = das Modell hatte die Welle in der Top-3.{' '}
+          <b>Dunkel</b> = Top-3 verfehlt. <b>Grau</b> = <b>noch nicht
+          bewertet</b> — die Backtest-Artefakte enden mit dem letzten
+          Retraining-Zyklus. SURVSTAT-Ground-Truth ist aktuell, aber
+          Wochen nach dem letzten Training-Stichtag warten auf den
+          nächsten Monats-Retrain, um eingerechnet zu werden. Grau ist{' '}
+          <b>kein Miss</b>.
+        </p>
+        {(() => {
+          const hits = barcodeEntries.filter((e) => e.state === 'hit').length;
+          const misses = barcodeEntries.filter((e) => e.state === 'miss').length;
+          const nodata = barcodeEntries.filter((e) => e.state === 'nodata').length;
+          const evaluable = hits + misses;
+          const hitPct = evaluable > 0 ? Math.round((hits / evaluable) * 100) : null;
+          return (
+            <div className="barcode-scoreboard">
+              <div className="score-cell hit-rate">
+                <div className="score-label">Trefferquote · wo Ground Truth existiert</div>
+                <div className="score-value">
+                  {hitPct !== null ? `${hitPct} %` : '—'}
+                  <span className="score-denom">
+                    {' '}({hits} von {evaluable})
+                  </span>
+                </div>
+              </div>
+              <div className="score-cell">
+                <div className="score-label">Misses</div>
+                <div className="score-value">
+                  {misses}
+                  {misses === 0 ? <span className="score-denom"> · keine</span> : null}
+                </div>
+              </div>
+              <div className="score-cell gap">
+                <div className="score-label">
+                  Noch nicht bewertet · {nodata} Wochen
+                </div>
+                <div className="score-value small">
+                  Retraining ausstehend
+                  <span className="score-denom"> · nicht „Miss"</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         <div className="barcode-wrap">
           {barcodeEntries.length === 0 && (
             <div
@@ -295,7 +342,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
             <span className="sw miss" />Miss · Top-3 verfehlt
           </span>
           <span>
-            <span className="sw nodata" />Keine Ground Truth
+            <span className="sw nodata" />Noch nicht bewertet · wartet auf Retraining
           </span>
         </div>
       </div>

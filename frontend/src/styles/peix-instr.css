@@ -2019,13 +2019,92 @@
 }
 .peix-instr .barcode-head {
   display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .peix-instr .barcode-title {
   font-family: 'Supreme';
   font-weight: 500;
   font-size: 20px;
   letter-spacing: -0.02em;
+}
+
+/* Reader-Note: erklärt Farblogik in plain German. Direkt über dem
+   Scoreboard, damit niemand den grauen Balken als "Miss" missliest. */
+.peix-instr .barcode-reader-note {
+  font-family: 'General Sans', sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-60);
+  margin: 0 0 20px;
+  max-width: 92ch;
+}
+.peix-instr .barcode-reader-note b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Scoreboard: Hit-Rate + Misses + Daten-Lücke auf einen Blick.
+   Große Trefferquote prominent (15/15 = 100 %), Misses daneben
+   (idealerweise 0), Ground-Truth-Lücke als eigene Kachel mit
+   'nicht Miss'-Disclaimer. */
+.peix-instr .barcode-scoreboard {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.3fr;
+  gap: 0;
+  margin: 0 0 24px;
+  border: 0.5px solid var(--ink-20);
+  background: var(--paper);
+}
+.peix-instr .barcode-scoreboard .score-cell {
+  padding: 16px 20px;
+  border-right: 0.5px solid var(--ink-20);
+}
+.peix-instr .barcode-scoreboard .score-cell:last-child { border-right: none; }
+.peix-instr .barcode-scoreboard .score-cell.hit-rate {
+  border-left: 3px solid var(--signal, #c2542a);
+  background: color-mix(in srgb, var(--signal, #c2542a) 4%, transparent);
+}
+.peix-instr .barcode-scoreboard .score-cell.gap {
+  border-left: 3px solid var(--ink-40);
+}
+.peix-instr .barcode-scoreboard .score-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+  margin-bottom: 8px;
+}
+.peix-instr .barcode-scoreboard .score-value {
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-weight: 500;
+  font-size: 28px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.peix-instr .barcode-scoreboard .score-value.small {
+  font-size: 16px;
+  font-weight: 400;
+}
+.peix-instr .barcode-scoreboard .score-denom {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-60);
+  letter-spacing: 0.02em;
+}
+@media (max-width: 900px) {
+  .peix-instr .barcode-scoreboard {
+    grid-template-columns: 1fr;
+  }
+  .peix-instr .barcode-scoreboard .score-cell {
+    border-right: none;
+    border-bottom: 0.5px solid var(--ink-20);
+  }
+  .peix-instr .barcode-scoreboard .score-cell:last-child {
+    border-bottom: none;
+  }
 }
 .peix-instr .barcode-wrap {
   display: flex;

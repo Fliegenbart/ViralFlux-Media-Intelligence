@@ -170,6 +170,12 @@ class MediaV2Service:
             batch_id=batch_id,
         )
 
+    def delete_outcome_import_batch(self, *, batch_id: str) -> dict[str, Any] | None:
+        return outcomes_module.delete_outcome_import_batch(
+            self,
+            batch_id=batch_id,
+        )
+
     def outcome_template_csv(self) -> str:
         return outcomes_module.outcome_template_csv(self)
 

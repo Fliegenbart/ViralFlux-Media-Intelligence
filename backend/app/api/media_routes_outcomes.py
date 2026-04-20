@@ -144,6 +144,32 @@ async def download_media_outcome_template(
     )
 
 
+@router.delete(
+    "/outcomes/import-batches/{batch_id}",
+    dependencies=[Depends(get_current_admin)],
+)
+async def delete_media_outcome_import_batch(
+    batch_id: str,
+    db: Session = Depends(get_db),
+):
+    """Löscht einen Import-Batch inklusive aller attributierten
+    MediaOutcomeRecords.
+
+    Admin-only — das Gate-Cookie reicht nicht, weil dies ein schreibender
+    Eingriff in die Truth-Daten ist. Der Batch-Eintrag bleibt mit
+    ``status='deleted'`` erhalten (Audit-Trail), die Outcome-Zeilen werden
+    hart entfernt, sodass Truth-Coverage und § IV Feedback-Loop die
+    korrigierte Datenlage widerspiegeln.
+    """
+    result = MediaV2Service(db).delete_outcome_import_batch(batch_id=batch_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Outcome-Import-Batch {batch_id} nicht gefunden",
+        )
+    return json_safe_response(result)
+
+
 @router.post("/outcomes/import", dependencies=[Depends(get_current_admin)])
 async def import_media_outcomes(
     payload: OutcomeImportRequest,

@@ -393,6 +393,52 @@ def get_outcome_import_batch_detail(
     }
 
 
+def delete_outcome_import_batch(
+    service: Any,
+    *,
+    batch_id: str,
+) -> dict[str, Any] | None:
+    """Admin-only: remove all MediaOutcomeRecords attributed to a batch and
+    mark the batch itself as deleted.
+
+    Rationale: Data Office users need to clean up a mistaken import (wrong
+    week, wrong product, unit mismatch) without having to touch SQL. The
+    batch row stays in history with ``status='deleted'`` so the audit trail
+    is preserved; the underlying outcome records are actually removed so
+    Truth-Coverage (§ IV in the cockpit) reflects the corrected state.
+
+    Returns ``None`` if the batch is unknown, otherwise a small summary
+    payload documenting the side effects of the delete.
+    """
+    batch = (
+        service.db.query(MediaOutcomeImportBatch)
+        .filter(MediaOutcomeImportBatch.batch_id == batch_id)
+        .first()
+    )
+    if not batch:
+        return None
+
+    rows_deleted = (
+        service.db.query(MediaOutcomeRecord)
+        .filter(MediaOutcomeRecord.import_batch_id == batch_id)
+        .delete(synchronize_session=False)
+    )
+
+    batch.status = "deleted"
+    batch.rows_imported = 0
+    batch.rows_valid = 0
+    if hasattr(batch, "deleted_at"):
+        batch.deleted_at = utc_now()
+    service.db.add(batch)
+    service.db.commit()
+
+    return {
+        "batch_id": batch_id,
+        "status": "deleted",
+        "rows_deleted": int(rows_deleted or 0),
+    }
+
+
 def outcome_template_csv(service: Any) -> str:
     return OUTCOME_TEMPLATE_HEADERS
 

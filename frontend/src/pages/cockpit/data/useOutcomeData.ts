@@ -232,3 +232,45 @@ export async function uploadOutcomeCsv(
   const result = (await r.json()) as OutcomeImportResult;
   return { ok: true, result };
 }
+
+// ----------------------------------------------------------------
+// Delete batch — admin-only. The batch row stays in history with
+// status='deleted'; the underlying MediaOutcomeRecords attributed to
+// the batch are removed so Truth-Coverage and § IV reflect the
+// corrected data set.
+// ----------------------------------------------------------------
+
+export interface DeleteBatchResult {
+  batch_id: string;
+  status: string;
+  rows_deleted: number;
+}
+
+export async function deleteOutcomeBatch(
+  batchId: string,
+): Promise<
+  | { ok: true; result: DeleteBatchResult }
+  | { ok: false; status: number; message: string }
+> {
+  const r = await fetch(
+    `/api/v1/media/outcomes/import-batches/${encodeURIComponent(batchId)}`,
+    {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+    },
+  );
+  if (!r.ok) {
+    const txt = await r.text().catch(() => '');
+    let message = txt;
+    try {
+      const parsed = JSON.parse(txt);
+      message = parsed.detail ?? parsed.message ?? txt;
+    } catch {
+      // keep raw text
+    }
+    return { ok: false, status: r.status, message: String(message).slice(0, 500) };
+  }
+  const result = (await r.json()) as DeleteBatchResult;
+  return { ok: true, result };
+}

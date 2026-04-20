@@ -1,471 +1,271 @@
 import React from 'react';
-import type { CockpitSnapshot, ShiftRecommendation } from '../types';
-import {
-  fmtEurCompactOrDash,
-  fmtPctOrDash,
-  fmtSignalStrength,
-} from '../format';
-import {
-  CaptionStrip,
-  Dash,
-  KEur,
-  MethodBadge,
-  RosterRow,
-  Thermometer,
-} from '../exhibit/primitives';
+import type { CockpitSnapshot } from '../types';
+import { fmtEurCompactOrDash, fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
+import type { GateTone } from './SectionHeader';
 
 /**
- * § I — Entscheidung.
+ * § I — Entscheidung der Woche.
  *
- * The first and most important section of the broadside. Composition:
- *   - Hero block on the warm-black stage: the one-sentence
- *     recommendation ("Verschiebe €82k aus Bayern nach Brandenburg.")
- *     plus confidence monument + thermometer row.
- *   - Rationale block on paper: rec.why + 3 stats (lead / horizon /
- *     alternatives).
- *   - Candidates roster: secondary recommendations.
+ * Instrumentation-Redesign 2026-04-18 (Handoff KRdoxTmbT3xAVAhYEP211Q).
  *
- * No drawer, no click-to-reveal — everything is visible on scroll.
+ * Layout:
+ *   [Linker Block — 1.2fr]             [Rechter Block — 1fr]
+ *   Empfehlung-Satz mit farbigem       Vernier-Skala mit
+ *   amt/from/to-Markup                 Haarlinien-Ticks + Nadel
+ *     + Transfer-Flow-Visual
+ *     + Begründung (rationale)
+ *
+ * Die 78 % sind kein Zahlenblock, sondern eine mechanische Skala mit
+ * Major/Minor-Ticks und einer Nadel bei dem genauen Wert. Das ist
+ * der Haupt-Move dieses Redesigns: Konfidenz wird haptisch.
  */
 
 interface Props {
   snapshot: CockpitSnapshot;
 }
 
-// ---------- Hero block (dark stage) -------------------------------------
-const HeroBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
-  const rec = snapshot.primaryRecommendation;
-  const calibrated = snapshot.modelStatus?.calibrationMode === 'calibrated';
-  const mediaConnected = snapshot.mediaPlan?.connected === true;
-  const horizonWeeks = Math.max(
-    1,
-    Math.round((snapshot.modelStatus?.horizonDays ?? 7) / 7),
-  );
-  const horizonLabel = `${horizonWeeks}-Wochen-Horizont`;
+// -----------------------------------------------------------------
+// VernierScale — mechanische Skala
+// -----------------------------------------------------------------
+const VernierScale: React.FC<{
+  pct: number;              // 0..1
+  calibrated: boolean;
+  leadDays: number | null;
+  horizonWeeks: number;
+  cov80: number | null;
+  cov95: number | null;
+}> = ({ pct, calibrated, leadDays, horizonWeeks, cov80, cov95 }) => {
+  const clamped = Math.max(0, Math.min(1, pct));
+  const display = Math.round(clamped * 100);
 
-  const calibValue = rec?.confidence ?? 0.5;
-  const planValue = (() => {
-    const total = snapshot.regions.length || 1;
-    const withPlan = snapshot.regions.filter(
-      (r) => typeof r.currentSpendEur === 'number' && r.currentSpendEur > 0,
-    ).length;
-    return withPlan / total;
-  })();
-  const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? null;
-  const leadValue =
-    bestLag !== null ? Math.max(0, Math.min(1, bestLag / 10)) : 0;
-  const leadIsCalibrated = bestLag !== null && bestLag > 0;
-  const leadDaysLabel =
-    bestLag !== null && bestLag >= 0
-      ? `Lead-Time +${bestLag} d`
-      : bestLag !== null
-        ? `Lag ${bestLag} d`
-        : 'Lead-Time';
-
-  const cov80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
+  // Ticks: major at 0/25/50/75/100, minor at 10/20/30/40/60/70/80/90
+  const majorTicks = [0, 25, 50, 75, 100];
+  const minorTicks = [10, 20, 30, 40, 60, 70, 80, 90];
 
   return (
-    <div
-      style={{
-        background: 'var(--ex-stage)',
-        color: 'var(--ex-cream)',
-        padding: '104px 88px 128px',
-        // Pull up so there's no gap between the section-head strip
-        // and this hero strip — one continuous dark block. Matches
-        // the section-head's margin-bottom (120 px).
-        margin: '-120px -88px 0',
-      }}
-    >
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        {/* Kicker — single mono line, no dots */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 32,
-            alignItems: 'baseline',
-            marginBottom: 72,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span className="ex-mono" style={{ color: 'var(--ex-stage-45)' }}>
-            Empfehlung der Woche
-          </span>
-          <span className="ex-mono" style={{ color: 'var(--ex-stage-45)' }}>
-            {horizonLabel}
-          </span>
-          <MethodBadge calibrated={calibrated} />
-        </div>
+    <aside className="vernier">
+      <span className="corner-mark tl" />
+      <span className="corner-mark tr" />
+      <span className="corner-mark bl" />
+      <span className="corner-mark br" />
 
-        {/* Lede + monument side by side */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: 96,
-            alignItems: 'end',
-          }}
-        >
-          <div>
-            {rec ? (
-              <h1
-                style={{
-                  fontFamily: 'var(--ex-serif)',
-                  fontWeight: 300,
-                  fontSize: 'clamp(44px, 5vw, 80px)',
-                  lineHeight: 1.06,
-                  letterSpacing: '-0.025em',
-                  margin: '0 0 40px',
-                  maxWidth: '14ch',
-                }}
-              >
-                Verschiebe{' '}
-                <em
-                  style={{
-                    fontStyle: 'italic',
-                    color: 'var(--ex-cream)',
-                    fontWeight: 300,
-                  }}
-                >
-                  {fmtEurCompactOrDash(rec.amountEur)}
-                </em>
-                <br />
-                aus{' '}
-                <em
-                  style={{
-                    fontStyle: 'italic',
-                    color: 'var(--ex-cream)',
-                    fontWeight: 300,
-                  }}
-                >
-                  {rec.fromName}
-                </em>{' '}
-                nach{' '}
-                <em
-                  style={{
-                    fontStyle: 'italic',
-                    color: 'var(--ex-fired)',
-                    fontWeight: 300,
-                  }}
-                >
-                  {rec.toName}
-                </em>
-                .
-              </h1>
-            ) : (
-              <h1
-                style={{
-                  fontFamily: 'var(--ex-serif)',
-                  fontWeight: 300,
-                  fontSize: 'clamp(44px, 5vw, 80px)',
-                  lineHeight: 1.06,
-                  letterSpacing: '-0.025em',
-                  margin: '0 0 40px',
-                }}
-              >
-                Aktuell{' '}
-                <em
-                  style={{
-                    fontStyle: 'italic',
-                    color: 'var(--ex-fired)',
-                    fontWeight: 300,
-                  }}
-                >
-                  kein Shift-Vorschlag
-                </em>
-                .
-              </h1>
-            )}
-
-            <p
-              style={{
-                fontFamily: 'var(--ex-sans)',
-                fontWeight: 400,
-                fontSize: 18,
-                lineHeight: 1.7,
-                color: 'var(--ex-stage-60)',
-                maxWidth: '58ch',
-                margin: 0,
-              }}
-            >
-              {rec
-                ? rec.why
-                : 'Entweder meldet das Modell kein starkes Signal, oder es fehlt ein verbundener Media-Plan. Diese Wochenausgabe nimmt bewusst keine Platzhalter-Zahlen.'}
-            </p>
-          </div>
-
-          {/* Monument + thermometers */}
-          <div>
-            <div
-              className="ex-mono"
-              style={{
-                color: 'var(--ex-stage-45)',
-                marginBottom: 32,
-              }}
-            >
-              Konfidenz · {calibrated ? 'kalibriert' : 'heuristisch'}
-            </div>
-            <div
-              className="ex-punk-monument"
-              style={{ color: 'var(--ex-cream)' }}
-            >
-              {rec && calibrated
-                ? Math.round(rec.confidence * 100)
-                : rec
-                  ? fmtSignalStrength(rec.confidence)
-                  : '—'}
-              {rec && calibrated && (
-                <span className="ex-punk-monument__unit">%</span>
-              )}
-            </div>
-
-            <div style={{ marginTop: 64, maxWidth: 420 }}>
-              <Thermometer
-                value={calibValue}
-                label="Signalstärke"
-                onStage={true}
-                calibrated={calibrated}
-              />
-              <Thermometer
-                value={planValue}
-                label={mediaConnected ? 'Planverfügbark.' : 'Plan fehlt'}
-                onStage={true}
-                calibrated={true}
-              />
-              <Thermometer
-                value={leadValue}
-                label={leadDaysLabel}
-                onStage={true}
-                calibrated={leadIsCalibrated}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 40 }}>
-          <CaptionStrip
-            label={`Konfidenz · ${calibrated ? 'kalibriert' : 'heuristisch'} · ${snapshot.isoWeek}`}
-            pinAt={rec ? rec.confidence : 0.5}
-            value={
-              cov80 !== null ? `Abdeckung ${cov80.toFixed(0)} %` : '—'
-            }
-          />
-        </div>
+      <div className="vernier-head">
+        <span>Konfidenz</span>
+        {calibrated ? (
+          <span className="badge-cal">Kalibriert</span>
+        ) : (
+          <span className="badge-heur">Heuristisch</span>
+        )}
       </div>
-    </div>
+
+      <div className="vernier-readout">
+        {display}
+        <span className="pct">%</span>
+      </div>
+
+      <div className="vernier-scale">
+        <div className="axis" />
+        {majorTicks.map((t) => (
+          <React.Fragment key={`maj-${t}`}>
+            <div className="tick major" style={{ left: `${t}%` }} />
+            <div className="tick-label" style={{ left: `${t}%` }}>{t}</div>
+          </React.Fragment>
+        ))}
+        {minorTicks.map((t) => (
+          <div key={`min-${t}`} className="tick" style={{ left: `${t}%` }} />
+        ))}
+        <div
+          className="needle"
+          style={{ left: `${clamped * 100}%` }}
+          data-value={`▼ ${clamped.toFixed(2)}`}
+        />
+      </div>
+
+      <dl className="vernier-meta">
+        <div>
+          <dt>Lead-Time</dt>
+          <dd>
+            {leadDays !== null
+              ? `${leadDays >= 0 ? '+' : ''}${leadDays} `
+              : '— '}
+            <span className="unit">Tage</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Horizont</dt>
+          <dd>
+            {horizonWeeks * 7} <span className="unit">Tage</span>
+          </dd>
+        </div>
+        <div>
+          <dt>Kalibrierung</dt>
+          <dd>
+            {calibrated ? 'isotonic' : '—'}{' '}
+            <span className="unit">
+              {calibrated ? '' : 'nicht kalibriert'}
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>Coverage</dt>
+          <dd>
+            {cov80 !== null ? cov80.toFixed(1) : '—'}{' '}
+            <span className="unit">% Q80</span>
+          </dd>
+        </div>
+      </dl>
+    </aside>
   );
 };
 
-// ---------- Rationale block (paper) -------------------------------------
-const RationaleBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
-  const rec = snapshot.primaryRecommendation;
-  const horizonWeeks = Math.max(
-    1,
-    Math.round((snapshot.modelStatus?.horizonDays ?? 7) / 7),
-  );
-  const leadDays = snapshot.modelStatus?.lead?.bestLagDays ?? null;
-  const altCount = snapshot.secondaryRecommendations?.length ?? 0;
-
-  return (
-    <div style={{ marginTop: 160 }}>
-      <div
-        style={{
-          marginBottom: 40,
-        }}
-      >
-        <span className="ex-mono" style={{ color: 'var(--ex-ink-45)' }}>
-          Begründung
-        </span>
-      </div>
-      <div className="ex-reading-column">
-        <p
-          style={{
-            fontFamily: 'var(--ex-serif)',
-            fontWeight: 300,
-            fontSize: 26,
-            lineHeight: 1.5,
-            margin: 0,
-            color: 'var(--ex-ink)',
-            letterSpacing: '-0.015em',
-          }}
-        >
-          {rec
-            ? rec.why
-            : 'In dieser Woche ergibt die Modellarbeit keinen eindeutig gerichteten Shift-Vorschlag. Statt einer erfundenen Zahl steht hier die Leere, die das Produkt-Axiom verlangt.'}
-        </p>
-      </div>
-
-      {rec && (
-        <div
-          style={{
-            marginTop: 96,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 64,
-            maxWidth: 880,
-          }}
-        >
-          <StatCell
-            label="Lead-Time"
-            value={
-              leadDays !== null
-                ? leadDays >= 0
-                  ? `+${leadDays} d`
-                  : `${leadDays} d`
-                : '—'
-            }
-            caption={
-              leadDays !== null && leadDays >= 0
-                ? 'Notaufnahme vor Meldewesen'
-                : leadDays !== null
-                  ? 'hinter Notaufnahme'
-                  : 'Lag-Messung liegt nicht vor'
-            }
-          />
-          <StatCell
-            label="Horizont"
-            value={`${horizonWeeks} W.`}
-            caption={`kommende ${horizonWeeks} Wochen`}
-          />
-          <StatCell
-            label="Alternativen"
-            value={String(altCount)}
-            caption="schwächer, aber gerichtet"
-          />
-        </div>
-      )}
-    </div>
-  );
-};
-
-const StatCell: React.FC<{
-  label: string;
-  value: React.ReactNode;
-  caption: string;
-}> = ({ label, value, caption }) => (
-  <div>
-    <div className="ex-mono" style={{ color: 'var(--ex-ink-45)', marginBottom: 16 }}>
-      {label}
-    </div>
-    <div
-      className="ex-num"
-      style={{
-        fontFamily: 'var(--ex-serif)',
-        fontWeight: 200,
-        fontSize: 56,
-        letterSpacing: '-0.03em',
-        lineHeight: 1,
-      }}
-    >
-      {value}
-    </div>
-    <div
-      style={{
-        fontSize: 14,
-        color: 'var(--ex-ink-60)',
-        marginTop: 14,
-        fontFamily: 'var(--ex-sans)',
-        lineHeight: 1.55,
-      }}
-    >
-      {caption}
-    </div>
-  </div>
-);
-
-// ---------- Candidates block (paper, alt-tinted strip) ------------------
-const CandidatesBlock: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
-  const calibrated = snapshot.modelStatus?.calibrationMode === 'calibrated';
-  const candidates = snapshot.secondaryRecommendations ?? [];
-  if (candidates.length === 0) return null;
-  return (
-    <div style={{ marginTop: 160 }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'baseline',
-          gap: 28,
-          marginBottom: 40,
-        }}
-      >
-        <span className="ex-mono" style={{ color: 'var(--ex-ink-45)' }}>
-          Weitere Kandidaten
-        </span>
-        <span
-          style={{
-            fontSize: 14,
-            color: 'var(--ex-ink-60)',
-            fontFamily: 'var(--ex-sans)',
-          }}
-        >
-          nach {calibrated ? 'Konfidenz' : 'Signalstärke'}, absteigend
-        </span>
-      </div>
-      <ul className="ex-roster" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {candidates.map((c: ShiftRecommendation, i: number) => {
-          const confText = calibrated
-            ? `${Math.round(c.confidence * 100)} %`
-            : fmtSignalStrength(c.confidence);
-          return (
-            <RosterRow
-              key={c.id}
-              idx={`0${i + 1}`.slice(-2)}
-              name={`${c.fromName} → ${c.toName}`}
-              sub={c.why}
-              value={<KEur eur={c.amountEur ?? ('—' as const)} />}
-              direction={confText}
-              dirClass={calibrated ? 'up' : 'flat'}
-            />
-          );
-        })}
-      </ul>
-    </div>
-  );
-};
-
-// ---------- Root --------------------------------------------------------
+// -----------------------------------------------------------------
+// Root — Decision Section
+// -----------------------------------------------------------------
 export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const rec = snapshot.primaryRecommendation;
   const calibrated = snapshot.modelStatus?.calibrationMode === 'calibrated';
   const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? null;
+  const horizonWeeks = Math.max(
+    1,
+    Math.round((snapshot.modelStatus?.horizonDays ?? 7) / 7),
+  );
+  const cov80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
+  const cov95 = snapshot.modelStatus?.intervalCoverage95Pct ?? null;
 
-  const badges: Array<{ label: string; tone: 'go' | 'watch' | 'neutral' | 'solid' }> = [];
-  if (rec) {
-    badges.push({ label: 'Hauptakt', tone: 'solid' });
-  } else {
-    badges.push({ label: 'Kein Shift', tone: 'watch' });
-  }
-  badges.push({
-    label: calibrated ? 'Kalibriert' : 'Heuristisch',
-    tone: calibrated ? 'go' : 'neutral',
-  });
-  if (bestLag !== null) {
-    badges.push({
-      label:
-        bestLag >= 0
-          ? `Lead +${bestLag} d`
-          : `Lag ${bestLag} d`,
-      tone: bestLag >= 0 ? 'go' : 'watch',
-    });
-  }
+  const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
+  const gateTone: GateTone =
+    readiness === 'GO_RANKING' || readiness === 'RANKING_OK'
+      ? 'go'
+      : readiness === 'WATCH' || readiness === 'LEAD_ONLY'
+        ? 'watch'
+        : 'unknown';
+  const gateLabel =
+    readiness === 'GO_RANKING'
+      ? 'Gate · GO'
+      : readiness === 'RANKING_OK'
+        ? 'Gate · GO (Ranking)'
+        : readiness === 'LEAD_ONLY'
+          ? 'Gate · WATCH (Lead)'
+          : readiness === 'WATCH'
+            ? 'Gate · WATCH'
+            : 'Gate · UNKNOWN';
+
+  // Rec-Delta-Signalstärke: use region's delta7d if we can find it
+  const toRegion = rec
+    ? snapshot.regions.find((r) => r.code === rec.toCode)
+    : null;
+  const fromRegion = rec
+    ? snapshot.regions.find((r) => r.code === rec.fromCode)
+    : null;
+  const toDeltaLabel =
+    toRegion && typeof toRegion.delta7d === 'number'
+      ? fmtSignedPct(toRegion.delta7d)
+      : '—';
+  const fromDeltaLabel =
+    fromRegion && typeof fromRegion.delta7d === 'number'
+      ? fmtSignedPct(fromRegion.delta7d)
+      : '—';
+
+  const virusLabel = snapshot.virusLabel || snapshot.virusTyp;
 
   return (
-    <>
+    <section className="instr-section" id="sec-decision">
       <SectionHeader
-        numeral="§ I"
-        kicker="Empfehlung der Woche"
-        title={
+        numeral="I"
+        title="Entscheidung der Woche"
+        subtitle={
           <>
-            Die <em>Entscheidung</em>
+            {snapshot.isoWeek} · {virusLabel} · Ein Signal, eine Empfehlung.
           </>
         }
-        stamp={snapshot.isoWeek}
-        badges={badges}
+        gate={{ label: gateLabel, tone: gateTone }}
       />
-      <HeroBlock snapshot={snapshot} />
-      <RationaleBlock snapshot={snapshot} />
-      <CandidatesBlock snapshot={snapshot} />
-    </>
+
+      <div className="decision-grid">
+        <div>
+          <p className="instr-kicker" style={{ marginBottom: 24 }}>
+            Empfehlung · {snapshot.isoWeek}
+          </p>
+
+          {rec ? (
+            <>
+              <p className="decision-statement">
+                Verschiebe{' '}
+                <span className="amt">
+                  {fmtEurCompactOrDash(rec.amountEur)}
+                </span>{' '}
+                aus <span className="from">{rec.fromName}</span>{' '}
+                nach <span className="to">{rec.toName}</span>
+                {rec.why ? ' — ' : '.'}
+                {rec.why}
+              </p>
+
+              <div className="transfer">
+                <div className="transfer-node from">
+                  <div className="label">Abfluss</div>
+                  <div className="place">{rec.fromName}</div>
+                  <div className="delta down">
+                    Welle schwächer · {fromDeltaLabel}
+                  </div>
+                </div>
+                <div className="transfer-arrow">
+                  <span className="amt">
+                    {fmtEurCompactOrDash(rec.amountEur)}
+                  </span>
+                </div>
+                <div className="transfer-node to">
+                  <div className="label">Zufluss</div>
+                  <div className="place">{rec.toName}</div>
+                  <div className="delta up">
+                    Anstieg erwartet · {toDeltaLabel}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rationale">
+                <span className="instr-kicker">Begründung</span>
+                <p>
+                  {rec.why || 'Begründung nicht hinterlegt.'}
+                  {bestLag !== null && bestLag >= 0 && (
+                    <>
+                      {' '}
+                      Lead-Zeit gegen Meldewesen:{' '}
+                      <b>+{bestLag} Tage</b>.
+                    </>
+                  )}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="decision-statement">
+                <span className="from">Kein</span> klar gerichteter{' '}
+                <span className="amt">Shift-Vorschlag</span> diese Woche.
+              </p>
+
+              <div className="rationale">
+                <span className="instr-kicker">Begründung</span>
+                <p>
+                  Entweder meldet das Modell kein starkes Signal, oder es
+                  fehlt ein verbundener Media-Plan. Diese Wochenausgabe
+                  nimmt bewusst keine Platzhalter-Zahlen — Honest-by-default.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <VernierScale
+          pct={rec ? rec.confidence : 0}
+          calibrated={calibrated}
+          leadDays={bestLag}
+          horizonWeeks={horizonWeeks}
+          cov80={cov80}
+          cov95={cov95}
+        />
+      </div>
+    </section>
   );
 };
 

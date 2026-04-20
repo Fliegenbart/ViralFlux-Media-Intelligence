@@ -1,14 +1,23 @@
 import React from 'react';
 import type { CockpitSnapshot } from '../types';
+import { fmtEurCompactOrDash } from '../format';
+import { useImpact } from '../useImpact';
 import SectionHeader from './SectionHeader';
-import { ImpactDrawerBody } from '../exhibit/ImpactDrawer';
+import type { GateTone } from './SectionHeader';
 
 /**
  * § IV — Wirkung & Feedback-Loop.
  *
- * Recent weeks roster + pipeline status + three monuments. Reuses the
- * drawer body unchanged; the broadside just wraps it with its own
- * section header.
+ * Instrumentation-Redesign 2026-04-18.
+ *
+ * Layout:
+ *   [Monument-Row] — 3 Zellen, hairline-getrennt, mit thin-weight-
+ *   Monument-Zahlen bei 120 px
+ *     · "Empfehlungen ausgegeben" — Anzahl aller Records
+ *     · "Real umgesetzt" — aus Outcome-Pipeline
+ *     · "Mit Outcome verknüpft" — aus Outcome-Pipeline (mit / Total)
+ *   [Impact-Log] — Tabellen-Artifact der letzten Empfehlungen
+ *   Dash (honest-by-default), wenn Pipeline nicht angebunden.
  */
 
 interface Props {
@@ -16,32 +25,146 @@ interface Props {
 }
 
 export const ImpactSection: React.FC<Props> = ({ snapshot }) => {
+  const { data: impact } = useImpact({ virusTyp: snapshot.virusTyp });
+
+  const pipeline = impact?.outcomePipeline ?? null;
+  const connected = pipeline?.connected ?? false;
+
+  const recsIssued = pipeline?.mediaOutcomeRecords ?? null;
+  const actuallyImplemented = pipeline?.outcomeObservations ?? null;
+  const outcomesLinked = pipeline?.holdoutGroupsDefined ?? null;
+
   const mediaConnected = snapshot.mediaPlan?.connected === true;
-  const badges: Array<{ label: string; tone: 'go' | 'watch' | 'neutral' | 'solid' | 'ochre' }> = [
-    {
-      label: mediaConnected ? 'Plan verbunden' : 'Plan fehlt',
-      tone: mediaConnected ? 'go' : 'watch',
-    },
-    { label: 'Honest-by-default', tone: 'neutral' },
-  ];
+
+  const gateLabel = mediaConnected ? 'Gate · GO' : 'Gate · WATCH';
+  const gateTone: GateTone = mediaConnected ? 'go' : 'watch';
+
+  // Build log rows — synthesised from recent secondary recommendations.
+  // Real data path would come from pipeline records; for the pitch we
+  // show the primary + secondaries with honest-by-default dashes for
+  // outcome columns when there is no outcome feed.
+  type LogRow = {
+    week: string;
+    rec: string;
+    impl: 'ok' | 'partial' | 'na';
+    implLabel: string;
+    outcome: 'ok' | 'partial' | 'na';
+    outcomeLabel: string;
+    note: string;
+  };
+
+  const logRows: LogRow[] = [];
+  if (snapshot.primaryRecommendation) {
+    const rec = snapshot.primaryRecommendation;
+    logRows.push({
+      week: snapshot.isoWeek.replace('KW', '').trim(),
+      rec: `${fmtEurCompactOrDash(rec.amountEur)} ${rec.fromName} → ${rec.toName}`,
+      impl: mediaConnected ? 'partial' : 'na',
+      implLabel: mediaConnected ? 'Teilweise' : '—',
+      outcome: 'na',
+      outcomeLabel: '—',
+      note: mediaConnected ? 'Plan-Anbindung vorhanden' : 'kein Media-Plan verbunden',
+    });
+  }
+  (snapshot.secondaryRecommendations ?? []).slice(0, 3).forEach((rec) => {
+    logRows.push({
+      week: snapshot.isoWeek.replace('KW', '').trim(),
+      rec: `${fmtEurCompactOrDash(rec.amountEur)} ${rec.fromName} → ${rec.toName}`,
+      impl: 'na',
+      implLabel: '—',
+      outcome: 'na',
+      outcomeLabel: '—',
+      note: connected
+        ? 'Outcome-Feed aggregiert'
+        : 'Plan noch nicht angebunden',
+    });
+  });
 
   return (
-    <>
+    <section className="instr-section" id="sec-impact">
       <SectionHeader
-        numeral="§ IV"
-        kicker="Outcome-Loop · was wurde empfohlen, was geschah"
-        title={
+        numeral="IV"
+        title="Wirkung & Feedback-Loop"
+        subtitle={
           <>
-            <em>Wirkung</em> &amp; Rückkopplung
+            Rückblick · Honest-by-default · Wo nichts, da Strich.
           </>
         }
-        stamp={snapshot.isoWeek}
-        badges={badges}
+        gate={{ label: gateLabel, tone: gateTone }}
       />
-      <div className="ex-section-body">
-        <ImpactDrawerBody snapshot={snapshot} />
+
+      <div className="impact-row">
+        <div className="impact-cell">
+          <div className="label">Empfehlungen ausgegeben</div>
+          <div className="monument">
+            {recsIssued !== null ? recsIssued : <span className="dash">—</span>}
+          </div>
+          <div className="sub">
+            {connected
+              ? `über ${pipeline?.importBatches ?? 0} Import-Batches`
+              : 'Outcome-Pipeline nicht verbunden'}
+          </div>
+        </div>
+
+        <div className="impact-cell">
+          <div className="label">Real umgesetzt</div>
+          <div className="monument">
+            {actuallyImplemented !== null ? (
+              actuallyImplemented
+            ) : (
+              <span className="dash">—</span>
+            )}
+          </div>
+          <div className="sub">
+            {connected
+              ? 'bestätigte Umsetzung durch den Media-Plan'
+              : 'GELO-Attribution fehlt'}
+          </div>
+        </div>
+
+        <div className="impact-cell">
+          <div className="label">Mit Outcome verknüpft</div>
+          <div className="monument">
+            {outcomesLinked !== null ? (
+              <>
+                {outcomesLinked}
+                {recsIssued !== null && (
+                  <span className="dash"> / {recsIssued}</span>
+                )}
+              </>
+            ) : (
+              <span className="dash">—</span>
+            )}
+          </div>
+          <div className="sub">
+            {connected
+              ? 'Holdout-Gruppen mit Attribution'
+              : 'Plan-Anbindung ausstehend'}
+          </div>
+        </div>
       </div>
-    </>
+
+      {logRows.length > 0 && (
+        <div className="impact-log">
+          <div className="impact-log-row head">
+            <span className="wk">KW</span>
+            <span className="rec">Empfehlung</span>
+            <span className="status">Umsetzung</span>
+            <span className="status">Outcome</span>
+            <span>Notiz</span>
+          </div>
+          {logRows.map((row, i) => (
+            <div className="impact-log-row" key={i}>
+              <span className="wk">{row.week}</span>
+              <span className="rec">{row.rec}</span>
+              <span className={`status ${row.impl}`}>{row.implLabel}</span>
+              <span className={`status ${row.outcome}`}>{row.outcomeLabel}</span>
+              <span className="dash-note">{row.note}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 };
 

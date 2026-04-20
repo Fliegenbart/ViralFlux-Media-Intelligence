@@ -2,6 +2,7 @@ import React from 'react';
 import '../../styles/peix.css';
 import '../../styles/peix-gate.css';
 import '../../styles/peix-exhibit.css';
+import '../../styles/peix-instr.css';
 
 import CockpitGate from './CockpitGate';
 import { useCockpitSnapshot } from './useCockpitSnapshot';

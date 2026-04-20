@@ -1,68 +1,49 @@
 import React from 'react';
 
 /**
- * SectionHeader — full-width dark stage strip that announces each
- * Broadside chapter like a sport-magazine cover spread.
+ * SectionHeader — Instrumentation-Variante.
  *
- * Layout:
- *   [§ I ◼]        MONO-KICKER                  [BADGE] [BADGE]
- *                  TITLE · CAPS · DISPLAY
- *                                                 MONO STAMP
+ * Drei-Spalten-Grid wie im Design-Handoff (KRdoxTmbT3xAVAhYEP211Q):
+ *   [ROMAN]   [TITLE + SUBTITLE]                 [GATE · GO]
  *
- * The numeral sits left at 96 px display-serif with a terracotta
- * block punched into its baseline. The title fills the middle in
- * uppercase Fraunces (loud, not editorial). Status badges and the
- * week-stamp cluster at the right.
+ * Das römische Numeral steht links bei 48 px Supreme Regular, der
+ * Titel in der Mitte bei 32 px Supreme Medium mit Untertitel bei
+ * 18 px General Sans, und rechts ein Gate-Badge (GO / WATCH /
+ * UNKNOWN) als typographische Mark mit 1px-Rahmen.
+ *
+ * Kein Kicker mehr, keine badges[]-Liste — die vorige Punk-Variante
+ * war ein Badge-Cluster; hier genau ein Gate, das den Produkt-Gate
+ * (forecastReadiness) direkt spiegelt.
  */
 
-export type StatusBadgeTone = 'go' | 'watch' | 'neutral' | 'ochre' | 'solid';
-
-export interface StatusBadge {
-  label: string;
-  tone?: StatusBadgeTone;
-}
+export type GateTone = 'go' | 'watch' | 'unknown';
 
 export interface SectionHeaderProps {
-  numeral: string;        // "§ I"
-  kicker?: string;        // small mono kicker line
-  title: React.ReactNode; // "DIE ENTSCHEIDUNG" (italic <em> in terracotta allowed)
-  stamp?: React.ReactNode;
-  badges?: StatusBadge[];
+  numeral: string;                  // "I", "II", …
+  title: React.ReactNode;           // "Entscheidung der Woche"
+  subtitle?: React.ReactNode;       // "KW 16 / 2026 · Influenza A"
+  gate?: { label: string; tone: GateTone };
 }
-
-const toneClass: Record<StatusBadgeTone, string> = {
-  go: 'ex-status-badge ex-status-badge--go',
-  watch: 'ex-status-badge ex-status-badge--watch',
-  neutral: 'ex-status-badge ex-status-badge--neutral',
-  ochre: 'ex-status-badge ex-status-badge--ochre',
-  solid: 'ex-status-badge ex-status-badge--solid',
-};
 
 export const SectionHeader: React.FC<SectionHeaderProps> = ({
   numeral,
-  kicker,
   title,
-  stamp,
-  badges,
+  subtitle,
+  gate,
 }) => (
-  <header className="ex-section-head">
-    <div className="ex-section-num">{numeral}</div>
-    <div className="ex-section-title-stack">
-      {kicker && <span className="ex-section-kicker">{kicker}</span>}
-      <h2 className="ex-section-title">{title}</h2>
+  <header className="sec-head">
+    <div className="sec-numeral">{numeral}</div>
+    <div>
+      <h2 className="sec-title">
+        {title}
+        {subtitle && <span className="sub">{subtitle}</span>}
+      </h2>
     </div>
-    <div className="ex-section-stamp">
-      {badges && badges.length > 0 && (
-        <div className="ex-section-badges">
-          {badges.map((b, i) => (
-            <span key={`${b.label}-${i}`} className={toneClass[b.tone ?? 'neutral']}>
-              {b.label}
-            </span>
-          ))}
-        </div>
-      )}
-      {stamp && <span>{stamp}</span>}
-    </div>
+    {gate ? (
+      <span className={`gate ${gate.tone}`}>{gate.label}</span>
+    ) : (
+      <span />
+    )}
   </header>
 );
 

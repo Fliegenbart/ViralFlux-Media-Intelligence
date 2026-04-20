@@ -127,6 +127,18 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
 
+    # Observability / Alerting
+    # Empty string = feature disabled. The init helpers in
+    # app.core.observability treat missing values as a clean no-op so
+    # local dev runs never hit a networked error.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+    SLACK_ALERT_WEBHOOK_URL: str = ""
+    # Comma-separated list of task names that should page via Slack on
+    # failure. Leave empty to alert on every failed Celery task. Names must
+    # match the Celery `task.name` exactly.
+    SLACK_ALERT_TASK_ALLOWLIST: str = ""
+
     # Operations / Startup Safety
     DB_AUTO_CREATE_SCHEMA: bool | None = None
     DB_ALLOW_RUNTIME_SCHEMA_UPDATES: bool | None = None

@@ -8,6 +8,12 @@ from celery.signals import task_failure, task_success, task_prerun, task_postrun
 
 from app.core.config import get_settings
 from app.core.logging_config import setup_logging, log_event
+from app.core.observability import (
+    capture_exception,
+    init_sentry,
+    post_slack_alert,
+    slack_task_allowlist,
+)
 
 settings = get_settings()
 setup_logging(
@@ -18,6 +24,10 @@ setup_logging(
     app_version=settings.APP_VERSION,
 )
 logger = logging.getLogger(__name__)
+
+# Fire-and-forget observability init. init_sentry is a no-op when
+# SENTRY_DSN is unset, so local/dev runs stay quiet.
+init_sentry(service_name="viralflux-celery")
 
 # Hole die Redis-URL aus den Environment-Variablen (Fallback auf localhost für lokale Tests)
 BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
@@ -96,21 +106,45 @@ def _on_task_postrun(task_id, task, *args, **kwargs):
 @task_failure.connect
 def _on_task_failure(task_id, exception, traceback, sender, *args, **kwargs):
     _task_start_times.pop(task_id, None)
+    task_name = sender.name if sender else "unknown"
     log_event(
         logger,
         "celery_task_failed",
         level=logging.ERROR,
-        task_name=sender.name if sender else "unknown",
+        task_name=task_name,
         task_id=task_id,
-        error_type=type(exception).__name__,
-        error_message=str(exception),
+        error_type=type(exception).__name__ if exception else "unknown",
+        error_message=str(exception) if exception else "",
     )
     try:
         from app.core.metrics import celery_tasks_total
-        task_name = sender.name if sender else "unknown"
         celery_tasks_total.labels(task_name, "failure").inc()
     except Exception:
         pass
+
+    # Sentry + Slack alert — both are quiet no-ops when the integrations are
+    # not configured, so these calls stay safe for local runs.
+    if exception is not None:
+        capture_exception(exception)
+
+    allowlist = slack_task_allowlist()
+    if allowlist and task_name not in allowlist:
+        return
+    try:
+        post_slack_alert(
+            title=f":rotating_light: Celery-Task fehlgeschlagen · {task_name}",
+            text=(
+                f"*{type(exception).__name__ if exception else 'Unknown'}*: "
+                f"{str(exception) if exception else '—'}"
+            ),
+            level="error",
+            fields={
+                "task_id": task_id or "—",
+                "env": settings.ENVIRONMENT,
+            },
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Slack alert post raised — swallowed to avoid masking failure")
 
 
 @task_success.connect

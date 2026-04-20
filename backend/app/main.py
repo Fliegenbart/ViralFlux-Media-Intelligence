@@ -310,6 +310,15 @@ def _enforce_metrics_access(
     raise HTTPException(status_code=404, detail="Not found")
 
 
+_observability_ready = False
+try:
+    from app.core.observability import init_sentry as _init_sentry_backend
+
+    _observability_ready = _init_sentry_backend(service_name="viralflux-backend")
+except Exception:  # noqa: BLE001
+    logger.exception("observability.init_sentry failed — continuing without Sentry")
+
+
 # FastAPI App
 app = FastAPI(
     title=settings.APP_NAME,

@@ -35,6 +35,9 @@ apscheduler==3.10.4
 celery[redis]>=5.3.6
 redis>=5.0.1
 
+# Observability (opt-in via SENTRY_DSN / SLACK_ALERT_WEBHOOK_URL)
+sentry-sdk[fastapi]>=2.0
+
 # Security
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4

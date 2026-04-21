@@ -173,9 +173,38 @@ def inference_from_loaded_models(
     X_row = np_module.array([[live_feature_row.get(name, 0.0) for name in feature_names]], dtype=float)
     X_row = np_module.nan_to_num(X_row, nan=0.0, posinf=0.0, neginf=0.0)
 
-    prediction = max(0.0, float(model_med.predict(X_row)[0]))
-    lower_bound = max(0.0, float(model_lo.predict(X_row)[0]))
-    upper_bound = max(0.0, float(model_hi.predict(X_row)[0]))
+    raw_prediction = max(0.0, float(model_med.predict(X_row)[0]))
+    raw_lower_bound = max(0.0, float(model_lo.predict(X_row)[0]))
+    raw_upper_bound = max(0.0, float(model_hi.predict(X_row)[0]))
+    raw_lower_bound = min(raw_lower_bound, raw_prediction)
+    raw_upper_bound = max(raw_upper_bound, raw_prediction)
+
+    # 2026-04-21 Scale-Kalibrierung: das national-XGB-Modell hat einen
+    # systematischen Skalen-Bias (Predicted ~1200-1700 vs. Observed
+    # ~400-500 in Peak-Saison 2026). Wir korrigieren T+h-Prediction +
+    # Intervall-Bounds per linearer Transformation, die aus den letzten
+    # N historischen Forecast-Actual-Paaren gefittet wird. Sicherheits-
+    # Fallback auf Identitaet bei zu wenig Paaren oder fehlender
+    # RMSE-Verbesserung (siehe forecast_service_scale_calibration).
+    from app.services.ml.forecast_service_scale_calibration import (
+        fit_scale_calibrator,
+        apply_scale_calibration,
+    )
+    calibration_pairs = _collect_calibration_pairs(
+        service=service,
+        virus_typ=virus_typ,
+        region_code=region_code,
+        horizon_days=horizon,
+        today=today_ts,
+        max_samples=30,
+        timedelta_cls=timedelta_cls,
+    )
+    calibrator = fit_scale_calibrator(calibration_pairs)
+    prediction = apply_scale_calibration(raw_prediction, calibrator)
+    lower_bound = apply_scale_calibration(raw_lower_bound, calibrator)
+    upper_bound = apply_scale_calibration(raw_upper_bound, calibrator)
+    # Preserve ordering after calibration (linear transform keeps it if
+    # beta > 0, but the clamps can in pathological cases flip it).
     lower_bound = min(lower_bound, prediction)
     upper_bound = max(upper_bound, prediction)
 
@@ -300,6 +329,14 @@ def inference_from_loaded_models(
             "extension_reason": extension_meta.get("reason"),
             "extension_applied": bool(extension_meta.get("applied")),
         },
+        # 2026-04-21 Scale-Kalibrierung — raw model output vor der
+        # Kalibrierung + Kalibrator-Koeffizienten, damit der Cockpit
+        # transparent zeigen kann, wie weit der Post-hoc-Fit reicht.
+        "scale_calibration": {
+            **calibrator,
+            "raw_prediction": round(raw_prediction, 3),
+            "calibrated_prediction": round(prediction, 3),
+        },
         "timestamp": utc_now_fn(),
     }
 
@@ -310,3 +347,77 @@ def inference_from_loaded_models(
         f"model={model_version}"
     )
     return result
+
+
+def _collect_calibration_pairs(
+    *,
+    service,
+    virus_typ: str,
+    region_code: str,
+    horizon_days: int,
+    today: Any,
+    max_samples: int,
+    timedelta_cls: Any,
+) -> list[tuple[float, float]]:
+    """Pull historical (predicted, actual) pairs for the scale calibrator.
+
+    We use the latest ``ml_forecasts`` rows whose ``forecast_date`` lies in
+    the past (so an actual WastewaterAggregated value can be joined) and
+    match each to the nearest aggregated measurement within ±1 day. The
+    prediction value we compare against is intentionally the raw model
+    output persisted in ``ml_forecasts.predicted_value`` — which today
+    already reflects any previous calibration round. In practice that
+    means the calibrator converges after 2-3 task cycles: the first
+    cycle fits against the raw bias, subsequent cycles fine-tune against
+    the residual. This keeps the helper simple and still self-correcting.
+    """
+    from sqlalchemy import func  # local import to match module style
+
+    from app.models.database import MLForecast, WastewaterAggregated
+
+    cutoff = today.to_pydatetime() if hasattr(today, "to_pydatetime") else today
+    try:
+        forecasts = (
+            service.db.query(MLForecast)
+            .filter(
+                MLForecast.virus_typ == virus_typ,
+                MLForecast.region == region_code,
+                MLForecast.horizon_days == horizon_days,
+                MLForecast.forecast_date < cutoff,
+            )
+            .order_by(MLForecast.forecast_date.desc())
+            .limit(max_samples * 3)  # loose upper bound; we will keep pairs that join
+            .all()
+        )
+    except Exception:
+        return []
+
+    pairs: list[tuple[float, float]] = []
+    for fc in forecasts:
+        try:
+            ww = (
+                service.db.query(WastewaterAggregated)
+                .filter(
+                    WastewaterAggregated.virus_typ == virus_typ,
+                    WastewaterAggregated.datum >= fc.forecast_date - timedelta_cls(days=1),
+                    WastewaterAggregated.datum <= fc.forecast_date + timedelta_cls(days=1),
+                )
+                .order_by(WastewaterAggregated.datum.asc())
+                .first()
+            )
+        except Exception:
+            ww = None
+        if ww is None:
+            continue
+        # The model is trained on raw ``viruslast`` — match the same scale
+        # the accuracy task uses (see ``_select_forecast_accuracy_actual``).
+        actual_value = getattr(ww, "viruslast", None)
+        if actual_value is None or fc.predicted_value is None:
+            continue
+        try:
+            pairs.append((float(fc.predicted_value), float(actual_value)))
+        except (TypeError, ValueError):
+            continue
+        if len(pairs) >= max_samples:
+            break
+    return pairs

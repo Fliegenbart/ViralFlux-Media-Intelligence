@@ -91,6 +91,7 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
   const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
   const freshness = snapshot.modelStatus?.forecastFreshness ?? null;
   const accuracy = snapshot.modelStatus?.accuracyLatest ?? null;
+  const calibration = snapshot.modelStatus?.scaleCalibration ?? null;
   const integrityWarning = (() => {
     if (readiness === 'DATA_STALE') {
       const latest = freshness?.latestForecastDate ?? '—';
@@ -164,6 +165,21 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
         <div className={`exec-integrity-banner exec-integrity-${integrityWarning.tone}`} role="alert">
           <div className="exec-integrity-title">{integrityWarning.title}</div>
           <div className="exec-integrity-body">{integrityWarning.body}</div>
+        </div>
+      ) : null}
+      {/* 2026-04-21 Scale-Kalibrator-Badge — eigene Zeile, damit der
+          Post-hoc-Transform sichtbar bleibt. Schmaler als integrity-banner,
+          rein informativ: zeigt alpha/beta + RMSE-Improvement. */}
+      {calibration?.applied ? (
+        <div className="exec-calibrator-badge" role="note">
+          <b>Skalen-Kalibrator aktiv</b>
+          {' · '}
+          β = {typeof calibration.beta === 'number' ? calibration.beta.toFixed(2) : '—'}
+          {typeof calibration.alpha === 'number' ? `, α = ${calibration.alpha.toFixed(1)}` : ''}
+          {typeof calibration.rmseImprovementPct === 'number'
+            ? ` · RMSE ${calibration.rmseImprovementPct >= 0 ? '−' : '+'}${Math.abs(calibration.rmseImprovementPct).toFixed(0)} %`
+            : ''}
+          {typeof calibration.samples === 'number' ? ` · Fit auf N=${calibration.samples}` : ''}
         </div>
       ) : null}
       <div className="exec-hero-inner">

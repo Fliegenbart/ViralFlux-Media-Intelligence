@@ -180,6 +180,23 @@
   background: rgba(128, 150, 95, 0.10);
   border-left-color: #7a9154;
 }
+/* 2026-04-21 Scale-Kalibrator-Badge — schmale info-zeile, neutraler Ton.
+   Signalisiert "es gibt einen Post-hoc-Transform, hier sind die Koeffizienten",
+   ohne wie ein Alarm auszusehen. */
+.peix-instr .exec-calibrator-badge {
+  margin: 0 0 12px;
+  padding: 8px 14px;
+  background: rgba(26, 30, 36, 0.04);
+  border-left: 2px solid rgba(26, 30, 36, 0.25);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(26, 30, 36, 0.72);
+}
+.peix-instr .exec-calibrator-badge b {
+  color: rgba(26, 30, 36, 0.92);
+  font-weight: 500;
+}
 .peix-instr .exec-integrity-title {
   font-weight: 600;
   font-size: 13px;

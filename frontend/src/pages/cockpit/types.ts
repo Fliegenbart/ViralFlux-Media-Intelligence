@@ -61,6 +61,23 @@ export interface AccuracyBucket {
   driftDetected?: boolean | null;
 }
 
+/** 2026-04-21 Scale-Kalibrierung: post-hoc linear transform applied to
+ * the raw model output. ``applied=false`` means the cockpit is showing
+ * the raw forecast (either no calibrator fitted yet, or fit did not
+ * improve RMSE). */
+export interface ScaleCalibration {
+  applied: boolean;
+  alpha: number | null;
+  beta: number | null;
+  samples: number | null;
+  rmseBefore: number | null;
+  rmseAfter: number | null;
+  rmseImprovementPct: number | null;
+  rawPrediction: number | null;
+  calibratedPrediction: number | null;
+  fallbackReason: string | null;
+}
+
 /** Latest row from the daily forecast_accuracy_log monitor. */
 export interface AccuracyLatest {
   /** Pearson correlation between forecast and observed wastewater signal. */
@@ -286,6 +303,11 @@ export interface ModelStatus {
    * or 'DRIFT_WARN'. */
   accuracyLatest?: AccuracyLatest;
   forecastFreshness?: ForecastFreshness;
+  /** 2026-04-21 Scale-Kalibrierung: post-hoc linear transform on the raw
+   * national forecast output. When ``applied=true`` the cockpit should
+   * show a "Kalibrator aktiv · RMSE −X %" badge so the transform is
+   * never hidden from the reader. */
+  scaleCalibration?: ScaleCalibration;
 
   note?: string | null;
 }

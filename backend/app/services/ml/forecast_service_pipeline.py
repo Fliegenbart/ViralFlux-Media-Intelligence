@@ -290,6 +290,11 @@ def save_forecast(
                 # forecast row so the cockpit can render "Features as of …"
                 # and the freshness-gate can reason about extension_applied.
                 "feature_freshness": forecast_data.get("feature_freshness") or {},
+                # 2026-04-21 Scale-Kalibrierung — post-hoc alpha/beta plus
+                # raw vs. calibrated T+h predictions. Cockpit surfaces the
+                # applied flag + RMSE improvement as a "Scale-Calibrator
+                # active" badge, so the transform is never invisible.
+                "scale_calibration": forecast_data.get("scale_calibration") or {},
             },
             "trend_momentum_7d": item.get("trend_momentum_7d"),
             "outbreak_risk_score": item.get("outbreak_risk_score"),

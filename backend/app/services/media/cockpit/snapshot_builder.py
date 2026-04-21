@@ -530,6 +530,63 @@ def _read_latest_accuracy(
     }
 
 
+def _read_scale_calibration(
+    db: Session, virus_typ: str
+) -> dict[str, Any]:
+    """Pull the latest ``scale_calibration`` block from ``ml_forecasts``.
+
+    The inference pipeline writes the post-hoc linear calibrator's
+    coefficients into ``features_used.scale_calibration`` on every run.
+    Surfacing them in the cockpit snapshot keeps the transform auditable —
+    users can always see whether the model's raw output is being scaled,
+    how far (``alpha``/``beta``), and how much RMSE improved.
+    """
+    row: MLForecast | None = (
+        db.query(MLForecast)
+        .filter(MLForecast.virus_typ == virus_typ)
+        .order_by(desc(MLForecast.created_at))
+        .first()
+    )
+    empty = {
+        "applied": False,
+        "alpha": None,
+        "beta": None,
+        "samples": None,
+        "rmseBefore": None,
+        "rmseAfter": None,
+        "rmseImprovementPct": None,
+        "rawPrediction": None,
+        "calibratedPrediction": None,
+        "fallbackReason": None,
+    }
+    if row is None or not isinstance(row.features_used, dict):
+        return empty
+    block = row.features_used.get("scale_calibration") or {}
+    if not isinstance(block, dict) or not block:
+        return empty
+    rmse_before = _optional_float(block.get("rmse_before"))
+    rmse_after = _optional_float(block.get("rmse_after"))
+    improvement_pct: float | None = None
+    if (
+        isinstance(rmse_before, (int, float))
+        and rmse_before > 0
+        and isinstance(rmse_after, (int, float))
+    ):
+        improvement_pct = round((rmse_before - rmse_after) / rmse_before * 100.0, 1)
+    return {
+        "applied": bool(block.get("applied")),
+        "alpha": _optional_float(block.get("alpha")),
+        "beta": _optional_float(block.get("beta")),
+        "samples": _optional_int(block.get("samples")),
+        "rmseBefore": rmse_before,
+        "rmseAfter": rmse_after,
+        "rmseImprovementPct": improvement_pct,
+        "rawPrediction": _optional_float(block.get("raw_prediction")),
+        "calibratedPrediction": _optional_float(block.get("calibrated_prediction")),
+        "fallbackReason": block.get("fallback_reason"),
+    }
+
+
 def _compute_forecast_freshness(
     db: Session, virus_typ: str
 ) -> dict[str, Any]:
@@ -740,6 +797,7 @@ def _extract_model_status(
     # headline story should not be trusted.
     accuracy_latest = _read_latest_accuracy(db, virus_typ)
     forecast_freshness = _compute_forecast_freshness(db, virus_typ)
+    scale_calibration = _read_scale_calibration(db, virus_typ)
     forecast_readiness = _synthesize_readiness(
         ranking=ranking_metrics,
         lead=lead,
@@ -868,6 +926,11 @@ def _extract_model_status(
         # (DATA_STALE, DRIFT_WARN) — the notes field carries the human copy.
         "accuracyLatest": accuracy_latest,
         "forecastFreshness": forecast_freshness,
+        # 2026-04-21 Scale-Kalibrierung: Post-hoc alpha/beta + RMSE-Delta
+        # aus der neuesten ml_forecasts-Zeile. UI kann daraus ein
+        # "Kalibrator aktiv"-Badge rendern mit echter Transparenz über
+        # die Transformation.
+        "scaleCalibration": scale_calibration,
         "note": " ".join(note_parts) if note_parts else None,
     }
 

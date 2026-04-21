@@ -203,9 +203,17 @@ export interface ShiftRecommendation {
   /** EUR shift amount. Null when no media plan is connected. */
   amountEur: number | null;
   /**
-   * Event signal on [0,1] that triggered this recommendation. Legacy name
-   * `confidence` kept for backwards compatibility. Treat as probability ONLY
-   * if `modelStatus.calibrationMode === 'calibrated'`.
+   * 2026-04-21 B1-Fix: ranking-separation score on [0.15, 0.85]. Linear in
+   * |top_delta| with a hard floor and ceiling. NOT a statistical confidence
+   * — we renamed the field away from ``confidence`` so UI copy stops
+   * implying model uncertainty. Legacy ``confidence`` alias kept for
+   * backwards compatibility.
+   */
+  signalScore?: number;
+  /**
+   * Legacy alias for ``signalScore``. New UI should prefer ``signalScore``
+   * and call the value what it is: a ranking-separation score, not a
+   * calibrated probability.
    */
   confidence: number;
   /** Expected reach uplift. Null when there is no media-effect model. */
@@ -223,6 +231,13 @@ export interface ShiftRecommendation {
 
 export interface TimelinePoint {
   date: string;
+  /**
+   * Primary observed series — since 2026-04-21 on the
+   * ``wastewater_aggregated.viruslast`` scale (the same scale the forecast
+   * model outputs). Before the Chart-Skalen-Fix this used to be SURVSTAT
+   * weekly incidence, which is on a completely different scale and made
+   * the fan-chart look like a 2-3x over-prediction artefact.
+   */
   observed: number | null;
   nowcast: number | null;
   /**
@@ -233,6 +248,12 @@ export interface TimelinePoint {
    * line.
    */
   edActivity: number | null;
+  /**
+   * SURVSTAT weekly incidence (per 100k), linear-interpolated to daily.
+   * Different scale than ``observed`` — kept as a separate series so the
+   * frontend can render a "Meldewesen"-overlay on a secondary y-axis.
+   */
+  survstatIncidence?: number | null;
   q10: number | null;
   q50: number | null;
   q90: number | null;

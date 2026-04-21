@@ -689,18 +689,18 @@ const AtlasTooltip: React.FC<{
     const sign = pct >= 0 ? '+' : '';
     const abs = Math.abs(pct).toFixed(0);
     if (tone === 'strong-rise') {
-      return `Wir erwarten in den nächsten 7 Tagen einen deutlichen Anstieg der ${virusLabel}-Aktivität — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region aktivieren, Budget hochziehen.`;
+      return `Frühsignal: deutlicher Anstieg der ${virusLabel}-Aktivität in 7 Tagen — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region aktivieren, Budget hochziehen.`;
     }
     if (tone === 'rise') {
-      return `Das Modell sieht einen moderaten Anstieg von etwa ${sign}${abs} % in 7 Tagen — Welle noch nicht klar, aber Tendenz nach oben. In Marketing-Sprache: genauer beobachten, nicht überreagieren.`;
+      return `Frühsignal: moderater Anstieg um etwa ${sign}${abs} % in 7 Tagen — Welle noch nicht klar, aber Tendenz nach oben. In Marketing-Sprache: genauer beobachten, nicht überreagieren.`;
     }
     if (tone === 'strong-fall') {
-      return `Die ${virusLabel}-Aktivität geht in den nächsten 7 Tagen deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Budget schrittweise abziehen, auf wirksamere Regionen umshiften.`;
+      return `Frühsignal: ${virusLabel}-Aktivität geht in 7 Tagen deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Budget schrittweise abziehen, auf wirksamere Regionen umshiften.`;
     }
     if (tone === 'fall') {
-      return `Leichter Rückgang von rund ${sign}${abs} % in 7 Tagen. Keine Welle hier; in Marketing-Sprache: kein aktiver Trigger, aber auch kein Anlass zum Aktivieren.`;
+      return `Frühsignal: leichter Rückgang von rund ${sign}${abs} % in 7 Tagen. Keine Welle hier; in Marketing-Sprache: kein aktiver Trigger, aber auch kein Anlass zum Aktivieren.`;
     }
-    return `Plateau — die Aktivität bleibt in 7 Tagen nahezu unverändert (${sign}${abs} %). Weder Alarm noch Chance.`;
+    return `Plateau — das Signal in 7 Tagen bleibt nahezu unverändert (${sign}${abs} %). Weder Alarm noch Chance.`;
   })();
 
   return (
@@ -818,24 +818,25 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
     <section className="instr-section" id="sec-atlas">
       <SectionHeader
         numeral="I"
-        title="Wellen-Atlas"
+        title="Wellen-Atlas · Frühsignal-Ranking"
         subtitle={
           <>
             {activeRegionCount} / 16 Bundesländer
             {pendingRegionCount > 0 ? ` (${pendingRegionCount} Training pending)` : ''}{' '}
-            · Höhe = {RANKING_HORIZON_LABEL}-Welle · Farbe = Richtung
+            · Höhe = {RANKING_HORIZON_LABEL}-Richtung · Farbe = Wellen-Signal
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Deutschland in 16 Türmen. <b>Höhe</b> = erwartete Welle in
-            7 Tagen. <b>Farbe</b>: rot = Welle kommt (Region aktivieren),
-            grün = flach oder rückläufig (<b>Sparmodus</b> — Budget
-            nicht verbrennen, wo keine Welle ist). <b>Hover</b> über
-            einen Turm → Klartext-Erklärung pro Bundesland. Kern-Move:
-            das Tool aktiviert nur, wenn das Signal wirklich da ist
-            — Disziplin statt Dauerfeuer.
+            Deutschland in 16 Türmen. <b>Höhe</b> = erwartete Wellen-
+            Bewegung in 7 Tagen. <b>Farbe</b>: rot = Früh-Signal
+            (Region aktivieren), grün = flach oder rückläufig
+            (<b>Sparmodus</b> — Budget nicht verbrennen, wo keine Welle
+            ist). <b>Hover</b> über einen Turm → Klartext-Erklärung
+            pro Bundesland. Das Tool ist ein <b>Früherkennungs-System</b>
+            gegen das RKI-Meldewesen (typisch 7–10 Tage voraus), keine
+            absolute Fallzahl-Prognose.
           </>
         }
       />
@@ -862,7 +863,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         <div className="atlas-hud">
           <div className="atlas-hud-corner tl">
             <div>Projektion · Perspektive 30°</div>
-            <div>Ranking · <b>+7 TAGE</b></div>
+            <div>Frühsignal · <b>+7 TAGE</b></div>
             <div>Skalierung · <b>LINEAR</b></div>
           </div>
           <div className="atlas-hud-corner tr">

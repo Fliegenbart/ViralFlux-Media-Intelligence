@@ -40,6 +40,7 @@ from app.models.database import (
     MLForecast,
     NotaufnahmeSyndromData,
     SurvstatWeeklyData,
+    WastewaterAggregated,
 )
 from app.services.media.cockpit.freshness import (
     build_data_freshness,
@@ -1305,14 +1306,60 @@ def _build_timeline_from_national(
     timeline_start = today.fromordinal(today.toordinal() - 14)
     timeline_end = today.fromordinal(today.toordinal() + int(horizon_days))
 
-    # --- Observed past from SURVSTAT-Gesamt ---------------------------------
+    # --- Observed past from AMELAG Abwasser ---------------------------------
+    # 2026-04-21 Chart-Skalen-Fix: das nationale XGB-Modell ist auf
+    # ``wastewater_aggregated.viruslast`` trainiert. Die bisherige
+    # observed-Linie kam aber aus SURVSTAT (wöchentliche Inzidenz
+    # pro 100k) — eine komplett andere Skala. Das liess den Chart
+    # wie einen 2-3x-Bias aussehen, obwohl Model und Abwasser-Truth
+    # auf ihrer eigenen Skala gar nicht so weit auseinander liegen.
+    # Wir lesen jetzt AMELAG direkt, damit Forecast-Fan und observed
+    # -Linie vergleichbar sind. SURVSTAT-Inzidenz bleibt als
+    # ``edActivity`` / ``survstatIncidence`` für den sekundären
+    # Health-Kontext erhalten.
     observed_by_day: dict[str, float] = {}
+    query_start = timeline_start - timedelta(days=21)
+    ww_rows: list[WastewaterAggregated] = (
+        db.query(WastewaterAggregated)
+        .filter(
+            WastewaterAggregated.virus_typ == virus_typ,
+            WastewaterAggregated.datum >= query_start,
+            WastewaterAggregated.datum <= today,
+            WastewaterAggregated.viruslast.isnot(None),
+        )
+        .order_by(WastewaterAggregated.datum.asc())
+        .all()
+    )
+    ww_weekly: list[tuple[pd_date, float]] = [
+        (row.datum.date(), float(row.viruslast))
+        for row in ww_rows
+        if row.datum is not None and row.viruslast is not None
+    ]
+    # Linear interpolation between consecutive wastewater anchors —
+    # same semantics as the previous SURVSTAT path, just on the
+    # correct scale.
+    if len(ww_weekly) >= 2:
+        for i in range(len(ww_weekly) - 1):
+            d0, v0 = ww_weekly[i]
+            d1, v1 = ww_weekly[i + 1]
+            span_days = max((d1 - d0).days, 1)
+            for offset_days in range((d1 - d0).days + 1):
+                day = d0.fromordinal(d0.toordinal() + offset_days)
+                if day < timeline_start or day > today:
+                    continue
+                t = offset_days / span_days
+                observed_by_day[day.isoformat()] = v0 + (v1 - v0) * t
+    elif len(ww_weekly) == 1:
+        d, v = ww_weekly[0]
+        if timeline_start <= d <= today:
+            observed_by_day[d.isoformat()] = v
+
+    # --- Secondary: SURVSTAT weekly incidence (different scale, kept as
+    # a second series so the user can read "Meldewesen-Aktivität" independently).
+    survstat_by_day: dict[str, float] = {}
     diseases = _SURVSTAT_DISEASES_FOR_VIRUS.get(virus_typ)
     if diseases:
-        # Pull a bit more history than we strictly need so linear interpolation
-        # has at least two anchors inside the range.
-        query_start = timeline_start - timedelta(days=21)
-        rows: list[SurvstatWeeklyData] = (
+        surv_rows: list[SurvstatWeeklyData] = (
             db.query(SurvstatWeeklyData)
             .filter(
                 SurvstatWeeklyData.disease.in_(diseases),
@@ -1323,27 +1370,26 @@ def _build_timeline_from_national(
             .order_by(SurvstatWeeklyData.week_start.asc())
             .all()
         )
-        weekly: list[tuple[pd_date, float]] = [
+        surv_weekly: list[tuple[pd_date, float]] = [
             (row.week_start.date(), float(row.incidence))
-            for row in rows
+            for row in surv_rows
             if row.week_start is not None and row.incidence is not None
         ]
-        # Linear interpolation between consecutive weekly anchors.
-        if len(weekly) >= 2:
-            for i in range(len(weekly) - 1):
-                d0, v0 = weekly[i]
-                d1, v1 = weekly[i + 1]
+        if len(surv_weekly) >= 2:
+            for i in range(len(surv_weekly) - 1):
+                d0, v0 = surv_weekly[i]
+                d1, v1 = surv_weekly[i + 1]
                 span_days = max((d1 - d0).days, 1)
                 for offset_days in range((d1 - d0).days + 1):
                     day = d0.fromordinal(d0.toordinal() + offset_days)
                     if day < timeline_start or day > today:
                         continue
                     t = offset_days / span_days
-                    observed_by_day[day.isoformat()] = v0 + (v1 - v0) * t
-        elif len(weekly) == 1:
-            d, v = weekly[0]
+                    survstat_by_day[day.isoformat()] = v0 + (v1 - v0) * t
+        elif len(surv_weekly) == 1:
+            d, v = surv_weekly[0]
             if timeline_start <= d <= today:
-                observed_by_day[d.isoformat()] = v
+                survstat_by_day[d.isoformat()] = v
 
     # --- Forecast points (with a ±N-day tolerance match) --------------------
     forecast_rows: list[MLForecast] = (
@@ -1487,6 +1533,11 @@ def _build_timeline_from_national(
         # the past, so we just mirror the observed value.
         nowcast = observed if -14 <= offset <= 0 else None
         ed_value = ed_by_day.get(iso) if offset <= 0 else None
+        # 2026-04-21 Chart-Skalen-Fix: SURVSTAT-Inzidenz wird als zweite
+        # (andere-Skala) Series mitgegeben, damit Frontend auf Wunsch
+        # einen "Meldewesen-Aktivität"-Overlay zeichnen kann, ohne
+        # die primäre Forecast-vs-Abwasser-Linie skalenmäßig zu stören.
+        survstat_value = survstat_by_day.get(iso) if offset <= 0 else None
 
         q10, q50, q90, interpolated = _interp_forecast(target_day)
 
@@ -1496,6 +1547,7 @@ def _build_timeline_from_national(
                 "observed": observed,
                 "nowcast": nowcast,
                 "edActivity": ed_value,
+                "survstatIncidence": survstat_value,
                 "q10": q10,
                 "q50": q50,
                 "q90": q90,
@@ -1630,26 +1682,43 @@ def build_cockpit_snapshot(
         # Spread zwischen Top und Bottom groß genug.
         spread = top_delta - bottom_delta
         if top_delta > 0.08 or spread > 0.20:
-            # Confidence als kontextsensitive Skala 0..1:
-            # stärkeres Delta → höhere Konfidenz, aber mit hartem
-            # Maximum 0.85 damit kein "95 %-Pill" suggeriert wird.
-            confidence = max(0.15, min(0.85, abs(top_delta) * 1.6 + 0.10))
+            # 2026-04-21 B1-Fix: Das frühere Feld ``confidence`` suggerierte
+            # statistische Modell-Unsicherheit, ist in Wahrheit aber eine
+            # lineare Funktion von |top_delta|. Wir benennen den Wert
+            # in ``signalScore`` um (keine Konfidenz, sondern ein
+            # kontinuierlicher Ranking-Trennungs-Score 0..1). ``confidence``
+            # wird als Alias behalten, damit bestehende UI-Renderings
+            # nicht brechen.
+            signal_score = max(0.15, min(0.85, abs(top_delta) * 1.6 + 0.10))
             top_pct = round(top_delta * 100)
             bot_pct = round(bottom_delta * 100)
+            # 2026-04-21 C2-Fix: "Top-Riser" war linguistisch falsch, wenn
+            # das Top selbst negativ ist (z.B. Saarland mit -4% als
+            # "Top-Riser" bei einem Feld lauter Faller). Wir wählen jetzt
+            # den Lead-Text situativ — Riser bei positivem Top, "am
+            # robustesten" bei negativem Top.
+            top_is_rising = top_delta > 0.0
+            top_label = "Top-Riser" if top_is_rising else "am robustesten"
+            bot_label = "am unteren Ende" if top_is_rising else "mit dem stärksten Rückgang"
             why_parts = [
                 f"{top.get('name')} zeigt {'+' if top_pct >= 0 else ''}{top_pct} % Wellen-Veränderung in 7 Tagen "
-                f"(Top-Riser), während {bottom.get('name')} mit {'+' if bot_pct >= 0 else ''}{bot_pct} % "
-                "am unteren Ende steht.",
+                f"({top_label}), während {bottom.get('name')} mit {'+' if bot_pct >= 0 else ''}{bot_pct} % "
+                f"{bot_label} steht.",
             ]
             if top_delta > 0.15:
                 why_parts.append(
                     "Das Ranking ist eindeutig genug für einen gerichteten Media-Shift — "
                     "Budget folgt der steigenden Welle."
                 )
-            else:
+            elif top_is_rising:
                 why_parts.append(
                     "Kein klassischer Wellen-Peak, aber ein klares Gefälle zwischen Ländern; "
                     "selbst in ruhigeren Wochen lohnt sich die Umschichtung entlang des Signals."
+                )
+            else:
+                why_parts.append(
+                    "Kein Anstieg irgendwo — aber ein klares Gefälle. "
+                    "Wenn Budget laufen muss, folgt es dem geringsten Rückgang."
                 )
             primary_recommendation = {
                 "id": f"signal_auto_{top.get('code')}_{bottom.get('code')}",
@@ -1662,7 +1731,10 @@ def build_cockpit_snapshot(
                 # Demo-Szene in § II rechnet eine hypothetische Zahl
                 # aus, wenn der Nutzer einen Budget-Slider zieht.
                 "amountEur": None,
-                "confidence": round(confidence, 3),
+                # B1-Fix: primärer Ranking-Trennungs-Score, zweideutige
+                # ``confidence`` nur noch als Alias.
+                "signalScore": round(signal_score, 3),
+                "confidence": round(signal_score, 3),
                 "expectedReachUplift": None,
                 "why": " ".join(why_parts),
                 "primary": True,

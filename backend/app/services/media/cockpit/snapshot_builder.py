@@ -505,14 +505,41 @@ def _compute_forecast_freshness(
             "daysFromToday": None,
             "isStale": True,
             "isFuture": False,
+            "featureAsOf": None,
+            "daysForwardFilled": None,
+            "featureLagDays": None,
         }
     fc_day = newest_fc.forecast_date.date() if hasattr(newest_fc.forecast_date, "date") else newest_fc.forecast_date
     delta_days = (fc_day - today).days
+
+    # A1 Root-Cause-Fix (2026-04-21): pull the feature_freshness block that
+    # the inference pipeline writes into ml_forecasts.features_used on every
+    # run. Surfaces the AMELAG-Cutoff as ``featureAsOf`` and how many days
+    # of forward-fill the model applied to reach today. This is the honest
+    # answer to "is the fan truly a future forecast, or just re-labelled
+    # lag?" — the extension only runs when the gap ≤ 21d, otherwise the
+    # cockpit falls back to the old retrospective behaviour.
+    freshness_block: dict[str, Any] = {}
+    features_used = newest_fc.features_used or {}
+    if isinstance(features_used, dict):
+        freshness_block = features_used.get("feature_freshness") or {}
+    feature_as_of = freshness_block.get("feature_as_of")
+    days_forward_filled = freshness_block.get("days_forward_filled")
+    feature_lag_days: int | None = None
+    if feature_as_of:
+        try:
+            feature_lag_days = (today - pd_date.fromisoformat(feature_as_of)).days
+        except (TypeError, ValueError):
+            feature_lag_days = None
+
     return {
         "latestForecastDate": fc_day.isoformat(),
         "daysFromToday": delta_days,
         "isStale": delta_days < -FORECAST_MAX_STALE_DAYS,
         "isFuture": delta_days > 0,
+        "featureAsOf": feature_as_of,
+        "daysForwardFilled": days_forward_filled,
+        "featureLagDays": feature_lag_days,
     }
 
 
@@ -629,6 +656,24 @@ def _extract_model_status(
     )
 
     note_parts: list[str] = []
+    # A1 Root-Cause-Fix (2026-04-21): also show a soft "Feature-Lag"-Note
+    # when the forecast IS forward-looking (isFuture=True) but the underlying
+    # AMELAG-Cutoff is older than 7 days. That's the honest middle ground:
+    # no DATA_STALE banner (we have real future points), but users learn
+    # that the model's view-of-the-world is N days old.
+    feature_lag_days = forecast_freshness.get("featureLagDays")
+    feature_as_of = forecast_freshness.get("featureAsOf")
+    if (
+        forecast_readiness != "DATA_STALE"
+        and isinstance(feature_lag_days, int)
+        and feature_lag_days > 7
+        and feature_as_of
+    ):
+        note_parts.append(
+            f"Feature-Cutoff {feature_as_of} (AMELAG {feature_lag_days} Tage alt) — "
+            "Forecast extrapoliert über eine Feature-Lücke; die Trajektorie "
+            "ist zukunftsgerichtet, aber die jüngsten Ist-Signale fehlen noch."
+        )
     if forecast_readiness == "DATA_STALE":
         days = forecast_freshness.get("daysFromToday")
         latest = forecast_freshness.get("latestForecastDate") or "—"

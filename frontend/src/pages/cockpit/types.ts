@@ -73,6 +73,13 @@ export interface ForecastFreshness {
   isStale: boolean;
   /** True when the newest forecast lies in the future. */
   isFuture: boolean;
+  /** 2026-04-21 A1 Root-Cause-Fix: AMELAG-cutoff of the last real feature.
+   * ``null`` when no forecast row carries the freshness block (pre-fix rows). */
+  featureAsOf?: string | null;
+  /** How many days of forward-fill the nowcast-extension applied to reach today. */
+  daysForwardFilled?: number | null;
+  /** today - featureAsOf, in days. Useful for "AMELAG 13 Tage alt"-style labels. */
+  featureLagDays?: number | null;
 }
 export type CalibrationMode = 'calibrated' | 'heuristic' | 'skipped' | 'unknown';
 

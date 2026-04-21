@@ -286,6 +286,10 @@ def save_forecast(
                 "backtest_metrics": forecast_data.get("backtest_metrics"),
                 "event_forecast": normalized_event_forecast,
                 "forecast_quality": ((forecast_data.get("contracts") or {}).get("forecast_quality") or {}),
+                # A1 Root-Cause-Fix — feature-freshness block. Persisted per
+                # forecast row so the cockpit can render "Features as of …"
+                # and the freshness-gate can reason about extension_applied.
+                "feature_freshness": forecast_data.get("feature_freshness") or {},
             },
             "trend_momentum_7d": item.get("trend_momentum_7d"),
             "outbreak_risk_score": item.get("outbreak_risk_score"),

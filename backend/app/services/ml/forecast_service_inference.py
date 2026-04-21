@@ -123,6 +123,33 @@ def inference_from_loaded_models(
             "horizon_days": horizon,
         }
 
+    # 2026-04-21 A1 Root-Cause-Fix: AMELAG ist ~13 Tage hinterher, dadurch
+    # lag ``df["ds"].max()`` vor dem Fix immer 13 Tage in der Vergangenheit.
+    # Die resultierende Forecast-Trajektorie endete dann bei ``today - 6``
+    # (retrospektiver Fan). Wir extendieren das Feature-Frame jetzt per
+    # Forward-Fill bis ``today`` und setzen ``issue_date = today``, so dass
+    # die Trajektorie echte Zukunftspunkte ``today+1 .. today+horizon``
+    # abdeckt. Die Metadaten (feature_as_of, days_forward_filled) wandern
+    # in die gespeicherte ml_forecasts-Zeile, damit der Cockpit-Snapshot
+    # das Feature-Alter ehrlich anzeigen kann.
+    from app.services.ml.forecast_service_nowcast_extension import (
+        extend_training_frame_to_today,
+    )
+    today_ts = pd_module.Timestamp(utc_now_fn()).normalize()
+    df, extension_meta = extend_training_frame_to_today(
+        df,
+        today=today_ts,
+        is_holiday_fn=(
+            (lambda d: service._is_holiday(d, region=region_code))
+            if hasattr(service, "_is_holiday")
+            else None
+        ),
+        pd_module=pd_module,
+        np_module=np_module,
+        timedelta_cls=timedelta_cls,
+        logger=logger,
+    )
+
     y = df["y"].values
     live_feature_row = service._build_live_direct_feature_row(
         df,
@@ -152,7 +179,12 @@ def inference_from_loaded_models(
     lower_bound = min(lower_bound, prediction)
     upper_bound = max(upper_bound, prediction)
 
-    issue_date = pd_module.Timestamp(df["ds"].max()).to_pydatetime()
+    # A1 Root-Cause-Fix: ``issue_date`` ist jetzt today, nicht mehr das letzte
+    # AMELAG-Datum — die Trajektorie deckt echte Zukunftspunkte ab. Das letzte
+    # bekannte Truth-Datum wird separat als ``feature_as_of`` persistiert.
+    issue_date = today_ts.to_pydatetime()
+    feature_as_of = extension_meta.get("feature_as_of")
+    days_forward_filled = int(extension_meta.get("days_forward_filled") or 0)
     last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
     risk = service._compute_outbreak_risk(prediction, y)
     current_y = float(y[-1]) if len(y) > 0 else prediction
@@ -258,6 +290,16 @@ def inference_from_loaded_models(
         "training_window": metadata.get("training_window"),
         "backtest_metrics": backtest_metrics,
         "contracts": contracts,
+        # A1 Root-Cause-Fix — feature-freshness transparency. ``save_forecast``
+        # merges this dict into ``ml_forecasts.features_used`` so the cockpit
+        # snapshot can render "Features as of …" without a second DB hop.
+        "feature_freshness": {
+            "feature_as_of": feature_as_of,
+            "issue_date": issue_date.date().isoformat() if hasattr(issue_date, "date") else None,
+            "days_forward_filled": days_forward_filled,
+            "extension_reason": extension_meta.get("reason"),
+            "extension_applied": bool(extension_meta.get("applied")),
+        },
         "timestamp": utc_now_fn(),
     }
 

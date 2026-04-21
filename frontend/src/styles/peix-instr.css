@@ -167,6 +167,12 @@
   color: #8a3f20;
   background: rgba(194, 84, 42, 0.12);
 }
+/* A1 Root-Cause-Fix: softer amber variant for the "Feature-Lag" note —
+   the forecast is forward-looking, but AMELAG cutoff is behind today. */
+.peix-instr .exec-integrity-banner.exec-integrity-lag {
+  color: #7a5b1c;
+  background: rgba(217, 158, 48, 0.10);
+}
 .peix-instr .exec-integrity-title {
   font-weight: 600;
   font-size: 13px;

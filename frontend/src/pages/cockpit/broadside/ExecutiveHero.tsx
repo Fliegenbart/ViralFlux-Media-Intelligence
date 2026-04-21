@@ -118,6 +118,24 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
         body: `Live-Monitor: ${parts.join(' · ') || 'Accuracy-Signal unter Threshold'}. Die Bundesländer-Empfehlungen sind in dieser Phase nicht als Grundlage für Budget-Shifts geeignet.`,
       };
     }
+    // 2026-04-21 A1 Root-Cause-Fix: soft note when forecast IS forward-
+    // looking but AMELAG feature-cutoff is > 7 days behind today. Surface
+    // the gap so readers see "the model's view-of-the-world is N days old"
+    // without raising a red DATA_STALE banner.
+    const lagDays = freshness?.featureLagDays;
+    const featureAsOf = freshness?.featureAsOf;
+    if (
+      typeof lagDays === 'number' &&
+      lagDays > 7 &&
+      featureAsOf &&
+      freshness?.isFuture
+    ) {
+      return {
+        tone: 'lag' as const,
+        title: 'Forecast läuft mit Feature-Lücke',
+        body: `AMELAG-Cutoff ${featureAsOf} (${lagDays} Tage alt). Die Trajektorie ist zukunftsgerichtet, aber das Modell extrapoliert über die Lücke, bis die nächsten Abwasser-Messungen eintreffen.`,
+      };
+    }
     return null;
   })();
 

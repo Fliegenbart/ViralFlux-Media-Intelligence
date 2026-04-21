@@ -169,7 +169,10 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
       ) : null}
       {/* 2026-04-21 Scale-Kalibrator-Badge — eigene Zeile, damit der
           Post-hoc-Transform sichtbar bleibt. Schmaler als integrity-banner,
-          rein informativ: zeigt alpha/beta + RMSE-Improvement. */}
+          rein informativ: zeigt alpha/beta + RMSE-Improvement. Falls der
+          Accuracy-Monitor bereits einen calibratedMape-Impact geschätzt
+          hat, hängen wir den als zusätzliches Label mit an ("erwartet ab
+          KW +1"). */}
       {calibration?.applied ? (
         <div className="exec-calibrator-badge" role="note">
           <b>Skalen-Kalibrator aktiv</b>
@@ -180,6 +183,17 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
             ? ` · RMSE ${calibration.rmseImprovementPct >= 0 ? '−' : '+'}${Math.abs(calibration.rmseImprovementPct).toFixed(0)} %`
             : ''}
           {typeof calibration.samples === 'number' ? ` · Fit auf N=${calibration.samples}` : ''}
+          {accuracy?.calibrationImpact?.evaluated
+            && typeof accuracy.calibrationImpact.rawMape === 'number'
+            && typeof accuracy.calibrationImpact.calibratedMape === 'number' ? (
+              <span className="exec-calibrator-projection">
+                {' · '}
+                MAPE {accuracy.calibrationImpact.rawMape.toFixed(0)} %
+                {' → '}
+                <b>{accuracy.calibrationImpact.calibratedMape.toFixed(0)} %</b>
+                {' (erwartet ab KW+1)'}
+              </span>
+            ) : null}
         </div>
       ) : null}
       <div className="exec-hero-inner">

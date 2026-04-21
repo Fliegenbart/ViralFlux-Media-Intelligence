@@ -514,14 +514,17 @@ const StripChart: React.FC<ChartProps> = ({ timeline, vintageRuns = [], showVint
           </g>
         )}
 
-        {/* -------- CHANNEL 2: SURVSTAT -------- */}
+        {/* -------- CHANNEL 2: AMELAG ABWASSER --------
+           2026-04-21 Chart-Skalen-Fix: observed ist jetzt AMELAG
+           viruslast (gleiche Skala wie Forecast), nicht mehr SURVSTAT
+           incidence. Die Channel-Beschriftung folgt. */}
         <ChannelFrame
           top={ch2Top} bottom={ch2Base}
           left={PAD_L} right={W - PAD_R}
           chNo="CH·02"
-          title="SURVSTAT"
-          subtitle="MELDEWESEN"
-          hint="Referenz-Pegel · verzögert"
+          title="AMELAG"
+          subtitle="ABWASSER"
+          hint="Virus-Last · wöchentlich, ~13 d Latenz"
           peakLabel={survSeries.peakValue > 0
             ? `Peak ${Math.round(survSeries.peakValue)}` : 'keine Daten'}
         />
@@ -593,9 +596,9 @@ const StripChart: React.FC<ChartProps> = ({ timeline, vintageRuns = [], showVint
           chNo="CH·03"
           title="MODELL"
           subtitle="Q-QUANTILE"
-          hint={q90Plateau ? '⚠ Q90 plateau · Modell-Warnung' : 'Forecast · Index = 100 @ HEUTE'}
+          hint={q90Plateau ? '⚠ Q90 plateau · Modell-Warnung' : 'Forecast · Abwasser-Index (HEUTE=100)'}
           hintTone={q90Plateau ? 'warn' : 'normal'}
-          peakLabel="HEUTE = 100"
+          peakLabel="AMELAG-Index · 100"
         />
         {/* 100-Linie in Kanal 3 */}
         <line
@@ -1403,13 +1406,14 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         primer={
           <>
             Drei Streifen wie ein Lab-Messschreiber: <b>Notaufnahmen</b>,{' '}
-            <b>Meldewesen</b> und <b>Q-Quantile</b> des Forecasts. Links
-            die letzten Wochen als Ist-Wert, ab <b>HEUTE</b> der Fächer
-            aus Q10 / Q50 / Q90. Enger Fächer = Modell ist sich sicher,
-            breiter Fächer = mehr Unsicherheit, typisch kurz vor einem
-            Wellenwechsel. Darunter die „Lead-Time" gegen das Meldewesen:
-            wie viele Tage früher hätten Abwasser-Signale die Welle
-            angekündigt als die offizielle Inzidenz-Meldung.
+            <b>Abwasser-Viruslast</b> (AMELAG) und <b>Q-Quantile</b> des
+            Forecasts. Links die letzten Wochen als Ist-Wert, ab <b>HEUTE</b>{' '}
+            der Fächer aus Q10 / Q50 / Q90 — alle auf derselben AMELAG-Skala.
+            Enger Fächer = Modell ist sich sicher, breiter Fächer = mehr
+            Unsicherheit, typisch kurz vor einem Wellenwechsel. Darunter die
+            „Lead-Time" gegen das RKI-Meldewesen: wie viele Tage früher
+            hätten Abwasser-Signale die Welle angekündigt als die offizielle
+            Inzidenz-Meldung.
             {' '}
             <b>Glossar:</b> Die <b>Ephemeride</b> oben ist die Zeitachse
             mit den Peaks beider Truth-Quellen und dem HEUTE-Marker (der

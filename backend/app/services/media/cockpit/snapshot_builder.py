@@ -493,6 +493,7 @@ def _read_latest_accuracy(
 
     details = row.details or {}
     season_block = (details or {}).get("season_stratified") if isinstance(details, dict) else None
+    calibration_impact = (details or {}).get("calibration_impact") if isinstance(details, dict) else None
     peak_block = None
     post_block = None
     current_season: str | None = None
@@ -519,6 +520,30 @@ def _read_latest_accuracy(
         post_block = _pack(post_raw) if isinstance(post_raw, dict) else None
         current_season = season_block.get("current_season")
 
+    # 2026-04-21 Accuracy-Log Calibration-Impact: the monitor task writes an
+    # in-sample estimate of what MAPE would be with today's calibrator. UI
+    # renders it as "mit Kalibrator: X % (erwartet ab KW +1)" so the user
+    # sees the projected improvement before the out-of-sample data arrives.
+    calibration_impact_out: dict[str, Any] | None = None
+    if isinstance(calibration_impact, dict):
+        calibration_impact_out = {
+            "evaluated": bool(calibration_impact.get("evaluated")),
+            "rawMape": _optional_float(calibration_impact.get("raw_mape")),
+            "calibratedMape": _optional_float(calibration_impact.get("calibrated_mape")),
+            "expectedMapeImprovementPp": _optional_float(
+                calibration_impact.get("expected_mape_improvement_pp")
+            ),
+            "calibratedDriftDetected": (
+                None
+                if calibration_impact.get("calibrated_drift_detected") is None
+                else bool(calibration_impact.get("calibrated_drift_detected"))
+            ),
+            "alpha": _optional_float(calibration_impact.get("alpha")),
+            "beta": _optional_float(calibration_impact.get("beta")),
+            "reason": calibration_impact.get("reason"),
+            "note": calibration_impact.get("note"),
+        }
+
     return {
         "correlation": _optional_float(row.correlation),
         "mape": _optional_float(row.mape),
@@ -528,6 +553,7 @@ def _read_latest_accuracy(
         "currentSeason": current_season,
         "peak": peak_block,
         "post": post_block,
+        "calibrationImpact": calibration_impact_out,
     }
 
 

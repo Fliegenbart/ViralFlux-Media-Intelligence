@@ -1008,6 +1008,67 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 else "post"
             )
 
+            # 2026-04-21 Calibration-Impact Block: der Scale-Kalibrator
+            # wurde ab heute deployed. Die ``predicted``-Werte in dieser
+            # Task-Auswertung stammen aber aus älteren, unkalibrierten
+            # ml_forecasts-Zeilen — der nächste echte MAPE-Drop kommt erst
+            # in 7 Tagen, wenn die heutigen kalibrierten Forecasts
+            # evaluierbar sind. Bis dahin zeigen wir einen ehrlich markierten
+            # "in-sample Kalibrator-Impact": wir fitten alpha/beta auf
+            # derselben Paar-Menge, wenden sie an, berechnen MAPE nochmal.
+            # Der resultierende Wert ist KEIN out-of-sample-MAPE, sondern
+            # der Best-Case für den aktuellen Kalibrator — das Delta zum
+            # raw MAPE ist der "erwartete Impact" auf zukünftige Runs.
+            calibration_impact: dict[str, Any] = {
+                "evaluated": False,
+                "reason": None,
+                "raw_mape": round(mape, 1),
+                "raw_correlation": round(corr, 4),
+                "raw_rmse": round(rmse, 3),
+                "calibrated_mape": None,
+                "calibrated_correlation": None,
+                "calibrated_rmse": None,
+                "calibrated_drift_detected": None,
+                "expected_mape_improvement_pp": None,
+                "alpha": None,
+                "beta": None,
+                "note": (
+                    "in-sample estimate — the actual accuracy improvement "
+                    "materialises when the first post-deploy calibrated "
+                    "forecasts enter the monitoring window (~7 days)."
+                ),
+            }
+            try:
+                from app.services.ml.forecast_service_scale_calibration import (
+                    fit_scale_calibrator,
+                    apply_scale_calibration,
+                )
+                fit_pairs = list(zip(predicted, actual))
+                cal = fit_scale_calibrator(fit_pairs)
+                calibration_impact["alpha"] = cal.get("alpha")
+                calibration_impact["beta"] = cal.get("beta")
+                if cal.get("applied"):
+                    calibrated_pred = [
+                        apply_scale_calibration(p, cal) for p in predicted
+                    ]
+                    cal_metrics = _compute_accuracy_metrics(calibrated_pred, actual)
+                    calibration_impact["calibrated_mape"] = round(cal_metrics["mape"], 1)
+                    calibration_impact["calibrated_correlation"] = round(
+                        cal_metrics["correlation"], 4
+                    )
+                    calibration_impact["calibrated_rmse"] = round(cal_metrics["rmse"], 3)
+                    calibration_impact["calibrated_drift_detected"] = bool(
+                        cal_metrics["mape"] > 35.0
+                    )
+                    calibration_impact["expected_mape_improvement_pp"] = round(
+                        mape - cal_metrics["mape"], 1
+                    )
+                    calibration_impact["evaluated"] = True
+                else:
+                    calibration_impact["reason"] = cal.get("fallback_reason")
+            except Exception as exc:  # pragma: no cover — defensive
+                calibration_impact["reason"] = f"error:{type(exc).__name__}"
+
             log_entry = ForecastAccuracyLog(
                 virus_typ=virus,
                 window_days=max(int((cutoff - window_start).days), 1),
@@ -1020,6 +1081,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 details={
                     "pairs": pairs[:14],
                     "season_stratified": season_block,
+                    "calibration_impact": calibration_impact,
                 },
             )
             db.add(log_entry)
@@ -1034,6 +1096,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 "drift_detected": drift,
                 "target_scale": "viruslast",
                 "season_stratified": season_block,
+                "calibration_impact": calibration_impact,
             }
 
             # Trend-Analyse: letzte 3 Logs vergleichen

@@ -61,6 +61,22 @@ export interface AccuracyBucket {
   driftDetected?: boolean | null;
 }
 
+/** 2026-04-21 Calibration-Impact: in-sample estimate of what today's
+ * calibrator would do to the monitor metrics. Marked clearly — the
+ * real out-of-sample improvement lands when the first post-deploy
+ * calibrated forecasts enter the eval window (~7 days). */
+export interface AccuracyCalibrationImpact {
+  evaluated: boolean;
+  rawMape: number | null;
+  calibratedMape: number | null;
+  expectedMapeImprovementPp: number | null;
+  calibratedDriftDetected: boolean | null;
+  alpha: number | null;
+  beta: number | null;
+  reason: string | null;
+  note: string | null;
+}
+
 /** 2026-04-21 Scale-Kalibrierung: post-hoc linear transform applied to
  * the raw model output. ``applied=false`` means the cockpit is showing
  * the raw forecast (either no calibrator fitted yet, or fit did not
@@ -94,6 +110,10 @@ export interface AccuracyLatest {
   currentSeason?: 'peak' | 'post' | null;
   peak?: AccuracyBucket | null;
   post?: AccuracyBucket | null;
+  /** 2026-04-21 Calibration-Impact block. ``evaluated=false`` when there
+   * was no fit, otherwise ``calibratedMape`` + ``expectedMapeImprovementPp``
+   * tell the user how much today's calibrator would move the needle. */
+  calibrationImpact?: AccuracyCalibrationImpact | null;
 }
 
 /** How stale the newest persisted forecast is (ml_forecasts.max(forecast_date)). */

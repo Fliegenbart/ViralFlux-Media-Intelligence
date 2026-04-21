@@ -150,6 +150,7 @@ export const CockpitShell: React.FC = () => {
       virusTyp={virusTyp}
       onVirusChange={setVirusTyp}
       supportedViruses={SUPPORTED_VIRUSES}
+      onReload={reload}
     />
   );
 };

@@ -97,6 +97,7 @@ interface Props {
   virusTyp: string;
   onVirusChange: (v: string) => void;
   supportedViruses: readonly string[];
+  onReload?: () => void;
 }
 
 const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
@@ -158,6 +159,7 @@ export const Broadside: React.FC<Props> = ({
   virusTyp,
   onVirusChange,
   supportedViruses,
+  onReload,
 }) => {
   const kwMatch = snapshot.isoWeek.match(/\d+/);
   const currentKw = kwMatch ? parseInt(kwMatch[0], 10) : 1;
@@ -173,7 +175,7 @@ export const Broadside: React.FC<Props> = ({
       />
       <StatusStrip snapshot={snapshot} supportedViruses={supportedViruses} />
       <main className="page">
-        <ExecutiveHero snapshot={snapshot} />
+        <ExecutiveHero snapshot={snapshot} onReload={onReload} />
         {/* 2026-04-20: Atlas promoted to § I — the 3D wave map is the
             consistent aha-moment for first-time readers (confirmed during
             persona walkthrough). Decision follows as § II because the

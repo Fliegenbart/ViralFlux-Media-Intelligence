@@ -832,3 +832,30 @@ class WeeklyBrief(Base):
     __table_args__ = (
         Index('idx_weekly_brief_week_brand', 'calendar_week', 'brand'),
     )
+
+
+class MediaPlanEntry(Base):
+    """CSV-upload'd weekly budget line for the cockpit EUR integration.
+
+    Before this table existed the cockpit rendered ``mediaPlan.connected =
+    false`` and all EUR fields were null. Now a PM can upload a CSV per
+    ``POST /api/v1/media/cockpit/media-plan/upload`` and the snapshot
+    builder starts filling currentSpendEur / recommendedShiftEur /
+    primaryRecommendation.amountEur straight from these rows.
+    """
+    __tablename__ = "media_plan_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client = Column(String(64), nullable=False, index=True)
+    iso_week_year = Column(Integer, nullable=False, index=True)
+    iso_week = Column(Integer, nullable=False, index=True)
+    bundesland_code = Column(String(4), nullable=True, index=True)
+    channel = Column(String(40), nullable=True)
+    eur_amount = Column(Float, nullable=False)
+    upload_id = Column(String(64), nullable=False, index=True)
+    uploaded_at = Column(DateTime, default=_utc_now, nullable=False)
+    notes = Column(String(240), nullable=True)
+
+    __table_args__ = (
+        Index("idx_media_plan_client_week", "client", "iso_week_year", "iso_week"),
+    )

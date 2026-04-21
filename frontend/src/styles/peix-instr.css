@@ -197,6 +197,198 @@
   color: rgba(26, 30, 36, 0.92);
   font-weight: 500;
 }
+
+/* 2026-04-21 Media-Plan-Upload — Button + Modal. */
+.peix-instr .exec-upload-btn {
+  margin-left: 10px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--ink-60);
+  border: 0.5px solid var(--ink-20);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.12s ease-out;
+}
+.peix-instr .exec-upload-btn:hover {
+  color: var(--signal, #c2542a);
+  border-color: var(--signal, #c2542a);
+}
+
+.mpu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(10, 12, 15, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+.mpu-modal {
+  width: min(720px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #F4F1EA;
+  border: 0.5px solid rgba(26, 30, 36, 0.3);
+  padding: 28px 32px 32px;
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  color: #1A1E24;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+}
+.mpu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.mpu-head h2 {
+  margin: 0;
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.mpu-close {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  color: rgba(26, 30, 36, 0.6);
+}
+.mpu-close:hover { color: #1A1E24; }
+.mpu-intro p {
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 6px 0;
+  color: rgba(26, 30, 36, 0.82);
+}
+.mpu-sample {
+  background: rgba(26, 30, 36, 0.05);
+  padding: 10px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 8px 0 8px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.mpu-hint {
+  font-size: 11px;
+  color: rgba(26, 30, 36, 0.6);
+}
+.mpu-current {
+  margin: 18px 0 12px;
+  padding: 10px 14px;
+  background: rgba(194, 84, 42, 0.07);
+  border-left: 2px solid var(--signal, #c2542a);
+  font-size: 12px;
+  color: rgba(26, 30, 36, 0.82);
+}
+.mpu-current-empty {
+  background: rgba(26, 30, 36, 0.04);
+  border-left-color: rgba(26, 30, 36, 0.2);
+  font-style: italic;
+}
+.mpu-drop {
+  margin: 14px 0 10px;
+  padding: 32px 16px;
+  border: 1px dashed rgba(26, 30, 36, 0.3);
+  text-align: center;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: rgba(26, 30, 36, 0.6);
+  transition: all 0.12s ease-out;
+}
+.mpu-drop:hover,
+.mpu-drop-active {
+  border-color: var(--signal, #c2542a);
+  background: rgba(194, 84, 42, 0.05);
+  color: #1A1E24;
+}
+.mpu-filename {
+  margin-top: 10px;
+  font-family: 'Supreme', sans-serif;
+  font-size: 12px;
+  color: #1A1E24;
+  font-weight: 500;
+}
+.mpu-error {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(180, 40, 40, 0.08);
+  color: #8a3020;
+  font-size: 12px;
+  border-left: 2px solid #8a3020;
+}
+.mpu-preview {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 0.5px solid rgba(26, 30, 36, 0.25);
+}
+.mpu-preview-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 12px;
+  color: rgba(26, 30, 36, 0.82);
+  margin-bottom: 10px;
+}
+.mpu-preview-head b { color: #1A1E24; font-weight: 500; }
+.mpu-ok { color: #3a6b3c; }
+.mpu-warn { color: #8a3020; font-weight: 500; }
+.mpu-errors {
+  font-size: 11px;
+  margin: 8px 0;
+  background: rgba(26, 30, 36, 0.04);
+  padding: 8px 12px;
+}
+.mpu-errors summary {
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8a3020;
+}
+.mpu-errors ul { margin: 6px 0 0 18px; padding: 0; }
+.mpu-errors li { margin: 2px 0; }
+.mpu-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+.mpu-btn {
+  padding: 9px 18px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 0.5px solid #1A1E24;
+  cursor: pointer;
+  transition: all 0.12s ease-out;
+}
+.mpu-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.mpu-btn-primary {
+  background: #1A1E24;
+  color: #F4F1EA;
+}
+.mpu-btn-primary:hover:not(:disabled) {
+  background: var(--signal, #c2542a);
+  border-color: var(--signal, #c2542a);
+}
+.mpu-btn-ghost {
+  background: transparent;
+  color: #1A1E24;
+}
+.mpu-btn-ghost:hover:not(:disabled) {
+  background: rgba(26, 30, 36, 0.06);
+}
 .peix-instr .exec-integrity-title {
   font-weight: 600;
   font-size: 13px;

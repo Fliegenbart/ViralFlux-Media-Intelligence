@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { CockpitSnapshot } from '../types';
+import MediaPlanUploadModal from './MediaPlanUploadModal';
 
 /**
  * ExecutiveHero — 30-Sekunden-Überblick ganz oben, zwischen Status-Strip
@@ -9,12 +10,14 @@ import type { CockpitSnapshot } from '../types';
  *
  * Kein Fake-Budget: die Demo-Zahl kommt aus einer klar als "Demo"
  * markierten Formel auf Basis der echten Top-Risers. Sobald der
- * Media-Plan verbunden ist, ersetzen echte EUR-Werte die Demo-Zahlen
- * und der "Demo"-Tag verschwindet.
+ * Media-Plan verbunden ist (2026-04-21 CSV-Upload-Bridge), ersetzen
+ * echte EUR-Werte aus ``snapshot.mediaPlan`` + ``primaryRecommendation
+ * .amountEur`` die Demo-Zahlen und der "Demo"-Tag verschwindet.
  */
 
 interface Props {
   snapshot: CockpitSnapshot;
+  onReload?: () => void;
 }
 
 const STRONG_RISER_THRESHOLD = 0.15;
@@ -50,7 +53,8 @@ function detectSeasonPhase(isoWeek: string): {
   };
 }
 
-export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
+export const ExecutiveHero: React.FC<Props> = ({ snapshot, onReload }) => {
+  const [mediaPlanModalOpen, setMediaPlanModalOpen] = useState(false);
   const phase = useMemo(() => detectSeasonPhase(snapshot.isoWeek), [snapshot.isoWeek]);
 
   const topRiser = useMemo(() => {
@@ -77,11 +81,23 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
     topRiser && typeof topRiser.delta7d === 'number' && topRiser.delta7d > STRONG_RISER_THRESHOLD;
 
   const mediaConnected = snapshot.mediaPlan?.connected === true;
+  const liveTotalEur =
+    typeof snapshot.mediaPlan?.totalWeeklySpendEur === 'number'
+      ? snapshot.mediaPlan.totalWeeklySpendEur
+      : null;
+  const liveShiftEur =
+    typeof snapshot.primaryRecommendation?.amountEur === 'number'
+      ? snapshot.primaryRecommendation.amountEur
+      : null;
 
   const demoShiftEur =
     topRiser && topFaller && typeof topRiser.delta7d === 'number'
       ? Math.round((DEMO_ASSUMED_WEEKLY_BUDGET * Math.min(0.35, topRiser.delta7d * 0.4)) / 1_000) * 1_000
       : null;
+  // 2026-04-21 Media-Plan-Integration: wenn ein echter Plan hochgeladen
+  // wurde, nehmen wir die amountEur aus primaryRecommendation; fallback
+  // bleibt der Demo-Wert.
+  const shiftEur = mediaConnected ? liveShiftEur : demoShiftEur;
 
   const virusLabel = snapshot.virusLabel || snapshot.virusTyp;
 
@@ -232,19 +248,29 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
 
         <div className={`exec-cell budget-${mediaConnected ? 'connected' : 'demo'}`}>
           <div className="exec-cell-kicker">
-            {mediaConnected ? 'Empfohlener Shift' : 'Demo-Szene · 100k € Wochenbudget'}
+            {mediaConnected
+              ? `Empfohlener Shift · ${liveTotalEur ? `${liveTotalEur.toLocaleString('de-DE')} € Wochenbudget` : 'Live-Plan verbunden'}`
+              : 'Demo-Szene · 100k € Wochenbudget'}
+            <button
+              type="button"
+              className="exec-upload-btn"
+              onClick={() => setMediaPlanModalOpen(true)}
+              title="Media-Plan via CSV hochladen"
+            >
+              {mediaConnected ? 'Plan bearbeiten' : '⬆ CSV hochladen'}
+            </button>
           </div>
-          {demoShiftEur && hasStrongSignal ? (
+          {shiftEur && hasStrongSignal ? (
             <>
               <div className="exec-cell-value exec-eur">
-                {demoShiftEur.toLocaleString('de-DE')} €
+                {shiftEur.toLocaleString('de-DE')} €
                 <span className="exec-direction">
                   {' '}{topFaller?.code} → {topRiser?.code}
                 </span>
               </div>
               <div className="exec-cell-note">
                 {mediaConnected
-                  ? `Shift-Vorschlag des Modells für diese Woche.`
+                  ? `Shift-Vorschlag des Modells für diese Woche — aus deinem Media-Plan (${liveTotalEur ? `${liveTotalEur.toLocaleString('de-DE')} €` : '—'}) und Signal-Score ${snapshot.primaryRecommendation?.signalScore?.toFixed(2) ?? snapshot.primaryRecommendation?.confidence?.toFixed(2) ?? '—'}.`
                   : `So würde das Tool bei 100 k € Wochenbudget shiften. Echte EUR sobald GELO-Media-Plan angebunden.`}
               </div>
             </>
@@ -260,6 +286,15 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
           )}
         </div>
       </div>
+      <MediaPlanUploadModal
+        open={mediaPlanModalOpen}
+        onClose={() => setMediaPlanModalOpen(false)}
+        onCommitted={() => {
+          setMediaPlanModalOpen(false);
+          onReload?.();
+        }}
+        client={snapshot.client || 'GELO'}
+      />
     </section>
   );
 };

@@ -1772,13 +1772,68 @@ def build_cockpit_snapshot(
     sources = _build_sources(db)
     top_drivers = _top_drivers_from_sources(sources)
 
+    # 2026-04-21 Media-Plan-Integration: wenn der Kunde einen CSV-Budget-
+    # Plan für die aktuelle ISO-Woche hochgeladen hat, filled wir
+    # currentSpendEur pro Region, recommendedShiftEur je nach
+    # primary_recommendation, amountEur für die Primary-Rec, und den
+    # mediaPlan-Block im Payload. Alles nullt sauber, wenn kein Plan
+    # verbunden ist — der alte Zustand (connected=false) bleibt das
+    # Default-Verhalten.
+    from app.services.media.media_plan_service import (
+        aggregate_by_bundesland as _media_plan_agg,
+        current_iso_week as _current_iso_week,
+        current_plan_rows as _current_plan_rows,
+    )
+    cur_year, cur_week = _current_iso_week(generated_at.date())
+    plan_rows = _current_plan_rows(
+        db, client=client, iso_year=cur_year, iso_week=cur_week
+    )
+    plan_connected = bool(plan_rows)
+    per_bundesland_eur: dict[str, float] = (
+        _media_plan_agg(plan_rows) if plan_connected else {}
+    )
+    total_weekly_spend = round(
+        sum(float(r.eur_amount) for r in plan_rows), 2
+    ) if plan_connected else None
+
+    # Patch regions[].currentSpendEur from the plan. Default 0 for
+    # regions not covered by the CSV — but only when a plan exists; when
+    # no plan is connected, currentSpendEur stays null (legacy behaviour).
+    if plan_connected:
+        for region in regions:
+            code = region.get("code")
+            if not code:
+                continue
+            region["currentSpendEur"] = round(
+                per_bundesland_eur.get(code, 0.0), 2
+            )
+
+    # Compute the recommended shift from the primary_recommendation signal.
+    # Formula: shift = currentSpendEur[from] * min(0.15, signalScore).
+    # The 0.15 ceiling keeps the single-week move below the threshold at
+    # which a PM would lose trust; signalScore < 0.15 scales down further.
+    if plan_connected and primary_recommendation is not None:
+        from_code = primary_recommendation.get("fromCode")
+        to_code = primary_recommendation.get("toCode")
+        signal = float(primary_recommendation.get("signalScore") or 0.0)
+        from_eur = per_bundesland_eur.get(from_code or "", 0.0)
+        shift_eur = round(from_eur * min(0.15, max(0.0, signal)), 2) if from_eur > 0 else 0.0
+        primary_recommendation["amountEur"] = shift_eur or None
+        # Mirror into regions[].recommendedShiftEur for the from/to pair.
+        for region in regions:
+            code = region.get("code")
+            if code == from_code:
+                region["recommendedShiftEur"] = -shift_eur if shift_eur else None
+            elif code == to_code:
+                region["recommendedShiftEur"] = shift_eur if shift_eur else None
+
     return {
         "client": client,
         "virusTyp": virus_typ,
         "virusLabel": _parse_virus_label(virus_typ),
         "isoWeek": _iso_week_label(generated_at),
         "generatedAt": generated_at.isoformat(),
-        "totalSpendEur": None,
+        "totalSpendEur": total_weekly_spend,
         # Umbenannt: averageConfidence → averageWaveProbability. Der
         # alte Name suggerierte "Modell-Konfidenz", was ein Pharma-
         # Entscheider als "nur 2 % Vertrauen" fehlliest. Der Wert ist
@@ -1795,11 +1850,24 @@ def build_cockpit_snapshot(
         "topDrivers": top_drivers,
         "modelStatus": model_status,
         "mediaPlan": {
-            "connected": False,
-            "totalWeeklySpendEur": None,
+            "connected": plan_connected,
+            "totalWeeklySpendEur": total_weekly_spend,
+            "isoWeek": f"{cur_year}-W{cur_week:02d}" if plan_connected else None,
+            "byBundesland": (
+                {k: round(v, 2) for k, v in per_bundesland_eur.items()}
+                if plan_connected
+                else {}
+            ),
             "note": (
                 "Kein Media-Plan verbunden. EUR-Werte werden als \"—\" dargestellt, "
                 "bis der Plan eingelesen wird."
+                if not plan_connected
+                else (
+                    f"Plan verbunden · KW {cur_week:02d}/{cur_year} · "
+                    f"{len(per_bundesland_eur)} Bundesländer · "
+                    f"{int(round(total_weekly_spend or 0)):,} € Wochenbudget."
+                    .replace(",", ".")
+                )
             ),
         },
         "notes": notes,

@@ -36,6 +36,7 @@ from app.core.time import utc_now
 from app.models.database import (
     AuditLog,
     BacktestRun,
+    ForecastAccuracyLog,
     MLForecast,
     NotaufnahmeSyndromData,
     SurvstatWeeklyData,
@@ -139,6 +140,20 @@ RANKING_PRECISION_GO_THRESHOLD = 0.65
 # best_lag_days >= 0 means the forecast does not lag behind the selected
 # truth target. That's a structural condition — no calibration needed.
 LEAD_LAG_GO_MIN_DAYS = 0
+
+# 2026-04-21 Integrity-Fix: Additional gates derived from the daily accuracy
+# monitor (`forecast_accuracy_log`). These are defensive — when the live
+# Pearson correlation drops below `ACCURACY_CORRELATION_MIN` or the drift
+# flag trips, the cockpit banner reads DRIFT_WARN instead of the usual
+# GO_RANKING / RANKING_OK — even if the (older) ranking backtest says
+# precision is fine. That stops "ranking looks great" stories while the
+# national point-forecast is diverging from reality.
+ACCURACY_CORRELATION_MIN = 0.30
+# How stale the newest ml_forecasts row is allowed to be before the banner
+# shows DATA_STALE. The daily cron writes forecasts at 07:30 local, so any
+# value > 1 day old means either the job failed or the feature pipeline
+# is too far behind to issue a new trajectory.
+FORECAST_MAX_STALE_DAYS = 1
 
 
 def _normalize_freshness_timestamp(
@@ -426,19 +441,123 @@ def _lead_block_from_backtest(
     }
 
 
+def _read_latest_accuracy(
+    db: Session, virus_typ: str
+) -> dict[str, Any]:
+    """Read the most recent `forecast_accuracy_log` row for a virus.
+
+    The daily `compute_forecast_accuracy_task` writes one row per virus per
+    day (window ~55 days, ~10 samples). We surface correlation, MAPE and the
+    drift flag as explicit modelStatus fields so the cockpit banner can react
+    when either goes bad — not just when the older ranking backtest gates.
+
+    Returns a dict with:
+      * `correlation`: float | None (Pearson against observed)
+      * `mape`: float | None (in percent)
+      * `driftDetected`: bool | None
+      * `samples`: int | None
+      * `computedAt`: ISO string | None
+    Absent row → all None.
+    """
+    row: ForecastAccuracyLog | None = (
+        db.query(ForecastAccuracyLog)
+        .filter(ForecastAccuracyLog.virus_typ == virus_typ)
+        .order_by(desc(ForecastAccuracyLog.computed_at))
+        .first()
+    )
+    if row is None:
+        return {
+            "correlation": None,
+            "mape": None,
+            "driftDetected": None,
+            "samples": None,
+            "computedAt": None,
+        }
+    return {
+        "correlation": _optional_float(row.correlation),
+        "mape": _optional_float(row.mape),
+        "driftDetected": bool(row.drift_detected) if row.drift_detected is not None else None,
+        "samples": _optional_int(row.samples),
+        "computedAt": row.computed_at.isoformat() if row.computed_at else None,
+    }
+
+
+def _compute_forecast_freshness(
+    db: Session, virus_typ: str
+) -> dict[str, Any]:
+    """How stale is the newest persisted forecast for this virus?
+
+    Reads the maximum `forecast_date` from `ml_forecasts` and compares it
+    against today. If the newest point already lies in the past, the
+    cockpit is showing a retrospective trajectory, not a forward forecast
+    — the banner must reflect that.
+    """
+    newest_fc: MLForecast | None = (
+        db.query(MLForecast)
+        .filter(MLForecast.virus_typ == virus_typ)
+        .order_by(desc(MLForecast.forecast_date))
+        .first()
+    )
+    today = utc_now().date()
+    if newest_fc is None or newest_fc.forecast_date is None:
+        return {
+            "latestForecastDate": None,
+            "daysFromToday": None,
+            "isStale": True,
+            "isFuture": False,
+        }
+    fc_day = newest_fc.forecast_date.date() if hasattr(newest_fc.forecast_date, "date") else newest_fc.forecast_date
+    delta_days = (fc_day - today).days
+    return {
+        "latestForecastDate": fc_day.isoformat(),
+        "daysFromToday": delta_days,
+        "isStale": delta_days < -FORECAST_MAX_STALE_DAYS,
+        "isFuture": delta_days > 0,
+    }
+
+
 def _synthesize_readiness(
     *,
     ranking: dict[str, Any],
     lead: dict[str, Any],
+    accuracy: dict[str, Any] | None = None,
+    freshness: dict[str, Any] | None = None,
 ) -> str:
     """Synthesize a top-level headline readiness state.
 
+    Precedence (most severe wins):
+    * DATA_STALE  — the newest forecast is older than FORECAST_MAX_STALE_DAYS.
+                    The cockpit is showing a retrospective fan; no future
+                    trajectory exists. Banner must flag this first, because
+                    every downstream "story" is moot if the data is stale.
+    * DRIFT_WARN  — live accuracy monitor reports drift=True OR correlation
+                    below ACCURACY_CORRELATION_MIN. Even if the (older)
+                    ranking backtest says precision is fine, the national
+                    point-forecast is no longer tracking reality — ranking
+                    cannot be trusted on top of that.
     * GO_RANKING  — BL-ranking is usable AND lead-time story holds up.
     * RANKING_OK  — BL-ranking is usable but lead-time is weak/absent.
     * LEAD_ONLY   — lead-time is solid but we don't have trustworthy ranking.
     * WATCH       — neither is currently defensible; the cockpit surfaces a
                     banner explaining why.
     """
+    # --- 1. Freshness Gate (data stale → override everything) ---------------
+    if freshness and freshness.get("isStale"):
+        return "DATA_STALE"
+
+    # --- 2. Drift / live-accuracy Gate (drift or dead correlation) ----------
+    if accuracy:
+        drift = accuracy.get("driftDetected")
+        corr = accuracy.get("correlation")
+        drift_trip = bool(drift)
+        corr_trip = (
+            isinstance(corr, (int, float))
+            and corr < ACCURACY_CORRELATION_MIN
+        )
+        if drift_trip or corr_trip:
+            return "DRIFT_WARN"
+
+    # --- 3. Original ranking / lead logic -----------------------------------
     precision = ranking.get("precisionAtTop3")
     lag = lead.get("bestLagDays")
     ranking_ok = (
@@ -496,9 +615,46 @@ def _extract_model_status(
     # have one, otherwise unknown.
     calibration_mode = lead.get("backtestCalibrationMode") or "unknown"
     regional_available = virus_typ in _REGIONAL_VIRUSES
-    forecast_readiness = _synthesize_readiness(ranking=ranking_metrics, lead=lead)
+    # 2026-04-21 Integrity-Fix: feed live accuracy + forecast-freshness into
+    # the readiness synthesis so the banner flips to DATA_STALE or DRIFT_WARN
+    # whenever the daily monitor or the persistence check says the cockpit's
+    # headline story should not be trusted.
+    accuracy_latest = _read_latest_accuracy(db, virus_typ)
+    forecast_freshness = _compute_forecast_freshness(db, virus_typ)
+    forecast_readiness = _synthesize_readiness(
+        ranking=ranking_metrics,
+        lead=lead,
+        accuracy=accuracy_latest,
+        freshness=forecast_freshness,
+    )
 
     note_parts: list[str] = []
+    if forecast_readiness == "DATA_STALE":
+        days = forecast_freshness.get("daysFromToday")
+        latest = forecast_freshness.get("latestForecastDate") or "—"
+        if isinstance(days, int) and days < 0:
+            note_parts.append(
+                f"Forecast-Horizont endet am {latest} ({abs(days)} Tage in der Vergangenheit). "
+                "Das Cockpit zeigt einen retrospektiven Fan — keine echte Zukunfts-Trajektorie; "
+                "Feature-Pipeline oder täglicher Forecast-Cron sind hinterher."
+            )
+        else:
+            note_parts.append(
+                "Keine aktuellen Forecasts in ml_forecasts — Zukunfts-Trajektorie nicht verfügbar."
+            )
+    if forecast_readiness == "DRIFT_WARN":
+        corr = accuracy_latest.get("correlation")
+        drift = accuracy_latest.get("driftDetected")
+        reason_bits: list[str] = []
+        if isinstance(corr, (int, float)) and corr < ACCURACY_CORRELATION_MIN:
+            reason_bits.append(f"Pearson-Korrelation {corr:.2f} < {ACCURACY_CORRELATION_MIN:.2f}")
+        if drift:
+            reason_bits.append("Drift-Detector ausgelöst")
+        if reason_bits:
+            note_parts.append(
+                "Live-Accuracy-Monitor warnt: " + "; ".join(reason_bits) + ". "
+                "Das Ranking darf in dieser Phase nicht als Handlungsgrundlage genutzt werden."
+            )
     if calibration_mode in {"heuristic", "skipped"}:
         note_parts.append(
             "Signalstärke ist ein Ranking-Score (0–1), keine kalibrierte Wahrscheinlichkeit."
@@ -547,6 +703,11 @@ def _extract_model_status(
         # docstring. UI uses this to label the forecast chart so the 7-point
         # line is not read as seven native model inferences.
         "trajectorySource": dict(FORECAST_TRAJECTORY_SOURCE),
+        # 2026-04-21 Integrity-Fix: explicit live-accuracy + freshness blocks.
+        # Frontend must render these as red badges when the gate trips
+        # (DATA_STALE, DRIFT_WARN) — the notes field carries the human copy.
+        "accuracyLatest": accuracy_latest,
+        "forecastFreshness": forecast_freshness,
         "note": " ".join(note_parts) if note_parts else None,
     }
 

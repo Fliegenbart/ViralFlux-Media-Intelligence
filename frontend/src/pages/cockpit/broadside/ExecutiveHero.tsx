@@ -85,8 +85,50 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
 
   const virusLabel = snapshot.virusLabel || snapshot.virusTyp;
 
+  // 2026-04-21 Integrity-Fix: dedicated health banner at the top of the hero
+  // whenever the backend reports DATA_STALE or DRIFT_WARN. Mirrors the
+  // `modelStatus.note` copy so the user sees *why* the banner tripped.
+  const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
+  const freshness = snapshot.modelStatus?.forecastFreshness ?? null;
+  const accuracy = snapshot.modelStatus?.accuracyLatest ?? null;
+  const integrityWarning = (() => {
+    if (readiness === 'DATA_STALE') {
+      const latest = freshness?.latestForecastDate ?? '—';
+      const days = freshness?.daysFromToday;
+      const daysBack =
+        typeof days === 'number' && days < 0 ? `${Math.abs(days)} Tage` : '—';
+      return {
+        tone: 'stale' as const,
+        title: 'Forecast ist retrospektiv — keine Zukunft',
+        body: `Letzter Forecast-Punkt ${latest} (${daysBack} in der Vergangenheit). Der Fan-Chart ist ein Rückblick, keine Prognose. Daten-Pipeline oder täglicher Forecast-Cron stehen.`,
+      };
+    }
+    if (readiness === 'DRIFT_WARN') {
+      const parts: string[] = [];
+      if (
+        typeof accuracy?.correlation === 'number' &&
+        accuracy.correlation < 0.3
+      ) {
+        parts.push(`Korrelation ${accuracy.correlation.toFixed(2)}`);
+      }
+      if (accuracy?.driftDetected) parts.push('Drift-Detector aktiv');
+      return {
+        tone: 'drift' as const,
+        title: 'Modell driftet — Ranking nicht handlungsrelevant',
+        body: `Live-Monitor: ${parts.join(' · ') || 'Accuracy-Signal unter Threshold'}. Die Bundesländer-Empfehlungen sind in dieser Phase nicht als Grundlage für Budget-Shifts geeignet.`,
+      };
+    }
+    return null;
+  })();
+
   return (
     <section className="exec-hero" id="sec-exec-hero">
+      {integrityWarning ? (
+        <div className={`exec-integrity-banner exec-integrity-${integrityWarning.tone}`} role="alert">
+          <div className="exec-integrity-title">{integrityWarning.title}</div>
+          <div className="exec-integrity-body">{integrityWarning.body}</div>
+        </div>
+      ) : null}
       <div className="exec-hero-inner">
         <div className={`exec-cell phase-${phase.tone}`}>
           <div className="exec-cell-kicker">Saison-Phase</div>

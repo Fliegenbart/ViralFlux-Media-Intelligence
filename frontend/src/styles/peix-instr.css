@@ -148,6 +148,35 @@
   margin: 0 0 48px;
   padding: 0;
 }
+/* 2026-04-21 Integrity-Fix: dedicated red banner that overrides the hero
+   whenever the backend reports DATA_STALE or DRIFT_WARN. Shown above the
+   3-cell grid so it cannot be missed. */
+.peix-instr .exec-integrity-banner {
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 0.5px solid currentColor;
+  border-left-width: 3px;
+  font-family: 'Supreme', 'General Sans', sans-serif;
+  line-height: 1.35;
+}
+.peix-instr .exec-integrity-banner.exec-integrity-stale {
+  color: #8a3f20;
+  background: rgba(194, 84, 42, 0.08);
+}
+.peix-instr .exec-integrity-banner.exec-integrity-drift {
+  color: #8a3f20;
+  background: rgba(194, 84, 42, 0.12);
+}
+.peix-instr .exec-integrity-title {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  margin-bottom: 4px;
+}
+.peix-instr .exec-integrity-body {
+  font-size: 12px;
+  color: rgba(26, 30, 36, 0.78);
+}
 .peix-instr .exec-hero-inner {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

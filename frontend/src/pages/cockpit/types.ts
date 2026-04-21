@@ -32,13 +32,48 @@ export type Bundesland =
  *     too low to trust.
  *   - WATCH: neither currently defensible.
  *   - UNKNOWN: no backtest data at all.
+ *
+ * 2026-04-21 Integrity-Fix: two new severe states that override the banner
+ * regardless of ranking/lead; both map to `gateTone === 'watch'` in UI code.
+ *   - DATA_STALE: newest ml_forecasts row is older than FORECAST_MAX_STALE_DAYS.
+ *     The cockpit is rendering a retrospective fan, not a forward forecast.
+ *   - DRIFT_WARN: the daily `forecast_accuracy_log` reports drift=true or
+ *     live Pearson correlation below ACCURACY_CORRELATION_MIN. Ranking must
+ *     not be trusted even when the older ranking backtest looks fine.
  */
 export type ForecastReadiness =
   | 'GO_RANKING'
   | 'RANKING_OK'
   | 'LEAD_ONLY'
   | 'WATCH'
+  | 'DATA_STALE'
+  | 'DRIFT_WARN'
   | 'UNKNOWN';
+
+/** Latest row from the daily forecast_accuracy_log monitor. */
+export interface AccuracyLatest {
+  /** Pearson correlation between forecast and observed wastewater signal. */
+  correlation: number | null;
+  /** Mean Absolute Percentage Error in percent. */
+  mape: number | null;
+  /** Drift-detector flag. */
+  driftDetected: boolean | null;
+  samples: number | null;
+  /** ISO timestamp of the monitor run that produced this row. */
+  computedAt: string | null;
+}
+
+/** How stale the newest persisted forecast is (ml_forecasts.max(forecast_date)). */
+export interface ForecastFreshness {
+  /** ISO date of the newest persisted forecast point. */
+  latestForecastDate: string | null;
+  /** Negative = in the past (retrospective fan); positive = real future point. */
+  daysFromToday: number | null;
+  /** True when newest forecast is older than FORECAST_MAX_STALE_DAYS. */
+  isStale: boolean;
+  /** True when the newest forecast lies in the future. */
+  isFuture: boolean;
+}
 export type CalibrationMode = 'calibrated' | 'heuristic' | 'skipped' | 'unknown';
 
 /**
@@ -221,6 +256,13 @@ export interface ModelStatus {
    * native per-day inferences while the direct-stacking model only delivers
    * a T+7 endpoint. */
   trajectorySource: ForecastTrajectorySource;
+
+  /** 2026-04-21 Integrity-Fix: live accuracy + freshness blocks. Both are
+   * always populated (fields may be null when no row exists). UI must render
+   * a red badge and surface the `note` copy when readiness === 'DATA_STALE'
+   * or 'DRIFT_WARN'. */
+  accuracyLatest?: AccuracyLatest;
+  forecastFreshness?: ForecastFreshness;
 
   note?: string | null;
 }

@@ -760,9 +760,12 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   const shiftFromCode = snapshot.primaryRecommendation?.fromCode ?? null;
   const shiftToCode = snapshot.primaryRecommendation?.toCode ?? null;
 
+  // 2026-04-21 Integrity-Fix: dropped the hardcoded "H3N2" subtype tag —
+  // the backend does not actually classify Influenza A subtypes (no NRZ
+  // sequencing feed), so rendering "H3N2" here is a claim without evidence.
   const virusShort =
     snapshot.virusTyp === 'Influenza A'
-      ? 'Flu-A · H3N2'
+      ? 'Flu-A'
       : snapshot.virusTyp === 'Influenza B'
         ? 'Flu-B'
         : snapshot.virusTyp === 'RSV A' || snapshot.virusTyp === 'RSV'
@@ -772,18 +775,29 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   const horizonDays = snapshot.modelStatus?.horizonDays ?? 21;
 
   const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
+  // 2026-04-21 Integrity-Fix: new readiness states DATA_STALE and DRIFT_WARN
+  // from the backend live-accuracy/freshness gate. Both map to 'watch' so
+  // the top banner stops reading "GO" while the underlying forecast is
+  // retrospective or drifting. The BacktestSection gate follows suit.
   const gateTone: GateTone =
     readiness === 'GO_RANKING' || readiness === 'RANKING_OK'
       ? 'go'
-      : readiness === 'WATCH' || readiness === 'LEAD_ONLY'
+      : readiness === 'WATCH'
+        || readiness === 'LEAD_ONLY'
+        || readiness === 'DATA_STALE'
+        || readiness === 'DRIFT_WARN'
         ? 'watch'
         : 'unknown';
   const gateLabel =
-    gateTone === 'go'
-      ? 'Gate · GO'
-      : gateTone === 'watch'
-        ? 'Gate · WATCH'
-        : 'Gate · UNKNOWN';
+    readiness === 'DATA_STALE'
+      ? 'Gate · DATA STALE'
+      : readiness === 'DRIFT_WARN'
+        ? 'Gate · DRIFT WARN'
+        : gateTone === 'go'
+          ? 'Gate · GO'
+          : gateTone === 'watch'
+            ? 'Gate · WATCH'
+            : 'Gate · UNKNOWN';
 
   // For HUD: show the shift line "BY → BB" when we have it.
   const shiftHudLine =

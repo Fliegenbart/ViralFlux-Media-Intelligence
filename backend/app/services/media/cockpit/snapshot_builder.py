@@ -377,30 +377,34 @@ def _lead_block_from_backtest(
     date_range = metrics.get("date_range") or {}
 
     # 2026-04-20 Tier-2-Fix: ATEMWEGSINDEX-Backtests haben aktuell
-    # keine interval_coverage gespeichert; RKI_ARE-Runs für dieselbe
-    # virus/horizon Kombination haben sie. Wenn coverage hier leer
-    # ist, holen wir den letzten RKI_ARE-Backtest und übernehmen
-    # NUR die Coverage-Werte (Source bleibt aber ATEMWEGSINDEX, das
-    # ist der korrekte target_source für die Lead-Time-Story).
+    # keine interval_coverage gespeichert. RKI_ARE-Runs haben es nur
+    # bei horizon=7. Wir suchen also nach dem jüngsten Backtest mit
+    # nicht-leerer interval_coverage für dieses virus_typ — egal welcher
+    # Source/Horizon — und übernehmen NUR die Coverage-Werte. Source
+    # bleibt im Lead-Block ATEMWEGSINDEX (das ist der korrekte
+    # target_source für die Lead-Time-Story); intervalCoverageSource
+    # macht den Fallback transparent.
     coverage_source: str | None = None
-    if not coverage and target_source != "RKI_ARE":
-        fallback_row = (
+    if not coverage:
+        fallback_rows = (
             db.query(BacktestRun)
             .filter(
                 BacktestRun.virus_typ == virus_typ,
-                BacktestRun.horizon_days == int(horizon_days),
                 BacktestRun.status == "success",
-                BacktestRun.target_source == "RKI_ARE",
             )
             .order_by(desc(BacktestRun.created_at))
-            .first()
+            .limit(50)
+            .all()
         )
-        if fallback_row:
-            fallback_metrics = dict((fallback_row.metrics or {}))
-            fallback_coverage = fallback_metrics.get("interval_coverage") or {}
-            if fallback_coverage:
-                coverage = fallback_coverage
-                coverage_source = "RKI_ARE-Backtest (Fallback)"
+        for fb in fallback_rows:
+            fb_metrics = dict((fb.metrics or {}))
+            fb_cov = fb_metrics.get("interval_coverage") or {}
+            if fb_cov and fb_cov.get("coverage_80_pct") is not None:
+                coverage = fb_cov
+                coverage_source = (
+                    f"{fb.target_source}-Backtest h{fb.horizon_days} (Coverage-Fallback)"
+                )
+                break
 
     return {
         "horizonDays": int(horizon_days),

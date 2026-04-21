@@ -9,24 +9,39 @@ interface Props {
   supportedViruses: readonly string[];
 }
 
-const BL_PATHS: Record<string, { d: string; cx: number; cy: number }> = {
-  SH: { d: 'M230 65 L285 55 L305 85 L275 115 L235 110 Z', cx: 265, cy: 85 },
-  HH: { d: 'M248 105 L278 100 L285 130 L255 135 Z', cx: 268, cy: 118 },
-  MV: { d: 'M295 75 L385 65 L400 115 L310 125 Z', cx: 345, cy: 95 },
-  NI: { d: 'M180 130 L295 125 L310 180 L195 185 Z', cx: 245, cy: 155 },
-  HB: { d: 'M215 140 L235 138 L240 158 L218 160 Z', cx: 227, cy: 150 },
-  BB: { d: 'M330 135 L405 128 L420 195 L345 200 Z', cx: 375, cy: 165 },
-  BE: { d: 'M370 165 L388 163 L392 183 L372 185 Z', cx: 381, cy: 174 },
-  ST: { d: 'M295 180 L360 175 L372 230 L300 235 Z', cx: 335, cy: 205 },
-  NW: { d: 'M130 180 L215 175 L225 260 L140 265 Z', cx: 175, cy: 220 },
-  HE: { d: 'M200 235 L270 230 L280 295 L210 300 Z', cx: 240, cy: 265 },
-  SN: { d: 'M330 225 L410 220 L425 275 L340 280 Z', cx: 378, cy: 250 },
-  TH: { d: 'M270 240 L340 235 L350 290 L280 295 Z', cx: 310, cy: 265 },
-  RP: { d: 'M150 290 L215 285 L225 340 L160 345 Z', cx: 188, cy: 315 },
-  SL: { d: 'M135 335 L165 332 L170 360 L140 363 Z', cx: 153, cy: 347 },
-  BW: { d: 'M190 335 L290 328 L300 410 L200 415 Z', cx: 245, cy: 370 },
-  BY: { d: 'M280 320 L420 310 L435 420 L290 425 Z', cx: 360, cy: 370 },
+/**
+ * Hex-Tile-Karte für Deutschland — abstrakt, editorial, gut lesbar.
+ * Jedes Bundesland = ein Hexagon in grob geografischer Position.
+ * Konvention aus Editorial-Infografik (FT, Zeit, Guardian).
+ *
+ * Layout-Grid (col, row) → hex center (cx, cy) mit pointy-top-Geometrie:
+ *   cx = 60 + col * 48 + (row % 2 === 1 ? 24 : 0)
+ *   cy = 60 + row * 42
+ */
+const HEX_POSITIONS: Record<
+  string,
+  { cx: number; cy: number; name: string }
+> = {
+  SH: { cx: 204, cy: 60, name: 'Schleswig-Holstein' },
+  HH: { cx: 180, cy: 102, name: 'Hamburg' },
+  MV: { cx: 276, cy: 102, name: 'Mecklenburg-Vorpommern' },
+  HB: { cx: 108, cy: 144, name: 'Bremen' },
+  NI: { cx: 156, cy: 144, name: 'Niedersachsen' },
+  BB: { cx: 252, cy: 144, name: 'Brandenburg' },
+  BE: { cx: 300, cy: 144, name: 'Berlin' },
+  NW: { cx: 180, cy: 186, name: 'Nordrhein-Westfalen' },
+  ST: { cx: 228, cy: 186, name: 'Sachsen-Anhalt' },
+  SN: { cx: 276, cy: 186, name: 'Sachsen' },
+  HE: { cx: 204, cy: 228, name: 'Hessen' },
+  TH: { cx: 252, cy: 228, name: 'Thüringen' },
+  RP: { cx: 228, cy: 270, name: 'Rheinland-Pfalz' },
+  SL: { cx: 156, cy: 312, name: 'Saarland' },
+  BW: { cx: 204, cy: 312, name: 'Baden-Württemberg' },
+  BY: { cx: 252, cy: 312, name: 'Bayern' },
 };
+
+// Pointy-top hexagon with radius r=24 (vertex-to-center)
+const HEX_POINTS = '0,-24 20.78,-12 20.78,12 0,24 -20.78,12 -20.78,-12';
 
 const fmtPct = (v: number | null | undefined, digits = 0): string =>
   v == null ? '—' : `${(v * 100).toFixed(digits)} %`;
@@ -146,49 +161,64 @@ export const VarianteExecutive: React.FC<Props> = ({
 
         <div className="vex-map-column">
           <svg
-            viewBox="0 0 500 500"
+            viewBox="0 0 360 372"
             className="vex-map"
             role="img"
-            aria-label="Deutschland-Karte mit Shift-Empfehlung"
+            aria-label="Deutschland Hex-Tile-Karte mit Shift-Empfehlung"
           >
             <defs>
-              <filter id="vex-glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
+              <filter id="vex-glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
                 <feMerge>
                   <feMergeNode in="blur" />
                   <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
+              <marker
+                id="vex-arrow-head"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="5"
+                markerHeight="5"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#3e6a4a" />
+              </marker>
             </defs>
-            {Object.entries(BL_PATHS).map(([code, { d }]) => {
+
+            {/* Hex-Tiles für alle 16 Bundesländer */}
+            {Object.entries(HEX_POSITIONS).map(([code, { cx, cy }]) => {
               const isTarget = code === toCode;
               const isFrom = code === fromCode;
+              const cls = `vex-hex ${isTarget ? 'vex-hex-to' : ''} ${
+                isFrom ? 'vex-hex-from' : ''
+              }`;
               return (
-                <path
+                <g
                   key={code}
-                  d={d}
-                  className={`vex-bl ${isTarget ? 'vex-bl-to' : ''} ${
-                    isFrom ? 'vex-bl-from' : ''
-                  }`}
-                  filter={isTarget ? 'url(#vex-glow)' : undefined}
-                />
+                  className={cls}
+                  transform={`translate(${cx},${cy})`}
+                >
+                  <polygon
+                    points={HEX_POINTS}
+                    filter={isTarget ? 'url(#vex-glow)' : undefined}
+                  />
+                  <text className="vex-hex-code">{code}</text>
+                </g>
               );
             })}
-            {fromRegion && fromCode && BL_PATHS[fromCode] && toCode && BL_PATHS[toCode] && (
+
+            {/* Verbindungslinie from → to */}
+            {fromCode && toCode && HEX_POSITIONS[fromCode] && HEX_POSITIONS[toCode] && (
               <g className="vex-arrow-group">
                 <line
-                  x1={BL_PATHS[fromCode].cx}
-                  y1={BL_PATHS[fromCode].cy}
-                  x2={BL_PATHS[toCode].cx}
-                  y2={BL_PATHS[toCode].cy}
+                  x1={HEX_POSITIONS[fromCode].cx}
+                  y1={HEX_POSITIONS[fromCode].cy}
+                  x2={HEX_POSITIONS[toCode].cx}
+                  y2={HEX_POSITIONS[toCode].cy}
                   className="vex-arrow"
-                  strokeDasharray="6 4"
-                />
-                <circle
-                  cx={BL_PATHS[toCode].cx}
-                  cy={BL_PATHS[toCode].cy}
-                  r="6"
-                  className="vex-arrow-tip"
+                  markerEnd="url(#vex-arrow-head)"
                 />
               </g>
             )}

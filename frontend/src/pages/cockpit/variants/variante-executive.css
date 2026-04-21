@@ -280,50 +280,83 @@
 
 .vex-map {
   width: 100%;
-  max-width: 460px;
+  max-width: 420px;
   height: auto;
-  filter: drop-shadow(0 20px 48px rgba(26, 24, 21, 0.08));
 }
 
-.vex-bl {
-  fill: var(--vex-paper-deep);
-  stroke: rgba(26, 24, 21, 0.14);
-  stroke-width: 1.2;
-  transition: all 280ms ease;
+/* ─── Hex-Tile-Karte ──────────────────────────────────────────────── */
+
+.vex-hex polygon {
+  fill: #f5f0e4;
+  stroke: rgba(26, 24, 21, 0.16);
+  stroke-width: 0.8;
+  transition: all 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
-.vex-bl-from {
-  fill: rgba(165, 88, 58, 0.18);
+.vex-hex-code {
+  font-family: 'Instrument Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: var(--vex-ink-40);
+  transition: fill 280ms ease;
+  pointer-events: none;
+}
+
+/* From-Hex: Top-Faller — zurückhaltend, muted terracotta */
+.vex-hex-from polygon {
+  fill: rgba(165, 88, 58, 0.10);
   stroke: var(--vex-terracotta);
-  stroke-width: 1.5;
+  stroke-width: 1.4;
 }
 
-.vex-bl-to {
+.vex-hex-from .vex-hex-code {
+  fill: var(--vex-terracotta);
+}
+
+/* To-Hex: Top-Riser — Fokus der Story, moss + glow + pulse */
+.vex-hex-to polygon {
   fill: rgba(62, 106, 74, 0.24);
   stroke: var(--vex-moss);
   stroke-width: 1.8;
-  animation: vex-pulse 2.4s ease-in-out infinite;
+  animation: vex-hex-pulse 2.6s ease-in-out infinite;
 }
 
-@keyframes vex-pulse {
+.vex-hex-to .vex-hex-code {
+  fill: var(--vex-moss);
+  font-weight: 700;
+}
+
+@keyframes vex-hex-pulse {
   0%,
   100% {
-    fill: rgba(62, 106, 74, 0.24);
+    fill: rgba(62, 106, 74, 0.22);
+    stroke-width: 1.8;
   }
   50% {
     fill: rgba(62, 106, 74, 0.42);
+    stroke-width: 2.2;
   }
 }
 
+/* ─── Arrow from → to ─────────────────────────────────────────────── */
+
 .vex-arrow {
-  stroke: var(--vex-ink);
-  stroke-width: 1.6;
+  stroke: var(--vex-moss);
+  stroke-width: 1.4;
+  stroke-linecap: round;
   fill: none;
-  opacity: 0.5;
+  opacity: 0.7;
+  stroke-dasharray: 3 4;
+  animation: vex-arrow-flow 3.2s linear infinite;
 }
 
-.vex-arrow-tip {
-  fill: var(--vex-moss);
+@keyframes vex-arrow-flow {
+  to {
+    stroke-dashoffset: -14;
+  }
 }
 
 .vex-map-legend {

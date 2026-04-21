@@ -48,7 +48,18 @@ export type ForecastReadiness =
   | 'WATCH'
   | 'DATA_STALE'
   | 'DRIFT_WARN'
+  | 'SEASON_OFF'
   | 'UNKNOWN';
+
+/** 2026-04-21 Pfad-C: season-stratified bucket (peak or post). */
+export interface AccuracyBucket {
+  samples: number;
+  mae?: number | null;
+  rmse?: number | null;
+  mape?: number | null;
+  correlation?: number | null;
+  driftDetected?: boolean | null;
+}
 
 /** Latest row from the daily forecast_accuracy_log monitor. */
 export interface AccuracyLatest {
@@ -61,6 +72,11 @@ export interface AccuracyLatest {
   samples: number | null;
   /** ISO timestamp of the monitor run that produced this row. */
   computedAt: string | null;
+  /** 2026-04-21 Pfad-C: season-aware blocks — null when the monitor row
+   * predates the stratification rollout. UI renders peak/post side-by-side. */
+  currentSeason?: 'peak' | 'post' | null;
+  peak?: AccuracyBucket | null;
+  post?: AccuracyBucket | null;
 }
 
 /** How stale the newest persisted forecast is (ml_forecasts.max(forecast_date)). */

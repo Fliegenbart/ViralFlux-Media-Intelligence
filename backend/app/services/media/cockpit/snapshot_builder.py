@@ -155,6 +155,19 @@ ACCURACY_CORRELATION_MIN = 0.30
 # is too far behind to issue a new trajectory.
 FORECAST_MAX_STALE_DAYS = 1
 
+# 2026-04-21 Pfad-C: Saison-Stratifizierung.
+# Peak = KW 40..52, 1..10 (Oktober bis Anfang März — die Wellensaison).
+# Post = KW 11..39 (Spätfrühling bis Frühherbst — Signal flach).
+# Das Drift-Gate triggert nur in der Peak-Saison scharf; in der Post-
+# Saison wechselt der Banner auf SEASON_OFF statt DRIFT_WARN, weil die
+# typische Metrik-Varianz in der flachen Phase kein belastbares Drift-
+# Signal ist — das Tool ruht dann bewusst (Narrative: "Sparmodus").
+PEAK_SEASON_ISO_WEEKS: frozenset[int] = frozenset(list(range(40, 54)) + list(range(1, 11)))
+# Minimale Paar-Menge für eine belastbare Correlation-Aussage. Unter diesem
+# Wert ignoriert der Gate den Korrelations-Schätzer (n=10 Pearson-CI ist
+# ungefähr [-0.6, +0.6], also statistisch ununterscheidbar von 0).
+DRIFT_CORRELATION_MIN_SAMPLES = 20
+
 
 def _normalize_freshness_timestamp(
     value: datetime | None,
@@ -451,13 +464,13 @@ def _read_latest_accuracy(
     drift flag as explicit modelStatus fields so the cockpit banner can react
     when either goes bad — not just when the older ranking backtest gates.
 
-    Returns a dict with:
-      * `correlation`: float | None (Pearson against observed)
-      * `mape`: float | None (in percent)
-      * `driftDetected`: bool | None
-      * `samples`: int | None
-      * `computedAt`: ISO string | None
-    Absent row → all None.
+    2026-04-21 Pfad-C: also surfaces the season-stratified block from
+    ``details.season_stratified`` when the task wrote it. Frontend renders
+    peak/post columns and the readiness-gate uses ``currentSeason`` to pick
+    the right bucket.
+
+    Returns a dict with the aggregate metrics plus, if available, peak-/
+    post-season breakdowns. Absent row → all None.
     """
     row: ForecastAccuracyLog | None = (
         db.query(ForecastAccuracyLog)
@@ -472,13 +485,48 @@ def _read_latest_accuracy(
             "driftDetected": None,
             "samples": None,
             "computedAt": None,
+            "currentSeason": None,
+            "peak": None,
+            "post": None,
         }
+
+    details = row.details or {}
+    season_block = (details or {}).get("season_stratified") if isinstance(details, dict) else None
+    peak_block = None
+    post_block = None
+    current_season: str | None = None
+    if isinstance(season_block, dict):
+        peak_raw = season_block.get("peak") or {}
+        post_raw = season_block.get("post") or {}
+
+        def _pack(b: dict[str, Any]) -> dict[str, Any]:
+            samples = _optional_int(b.get("samples"))
+            if samples is None or samples == 0:
+                return {"samples": 0}
+            return {
+                "samples": samples,
+                "mae": _optional_float(b.get("mae")),
+                "rmse": _optional_float(b.get("rmse")),
+                "mape": _optional_float(b.get("mape")),
+                "correlation": _optional_float(b.get("correlation")),
+                "driftDetected": (
+                    None if b.get("drift_detected") is None else bool(b.get("drift_detected"))
+                ),
+            }
+
+        peak_block = _pack(peak_raw) if isinstance(peak_raw, dict) else None
+        post_block = _pack(post_raw) if isinstance(post_raw, dict) else None
+        current_season = season_block.get("current_season")
+
     return {
         "correlation": _optional_float(row.correlation),
         "mape": _optional_float(row.mape),
         "driftDetected": bool(row.drift_detected) if row.drift_detected is not None else None,
         "samples": _optional_int(row.samples),
         "computedAt": row.computed_at.isoformat() if row.computed_at else None,
+        "currentSeason": current_season,
+        "peak": peak_block,
+        "post": post_block,
     }
 
 
@@ -558,10 +606,14 @@ def _synthesize_readiness(
                     trajectory exists. Banner must flag this first, because
                     every downstream "story" is moot if the data is stale.
     * DRIFT_WARN  — live accuracy monitor reports drift=True OR correlation
-                    below ACCURACY_CORRELATION_MIN. Even if the (older)
-                    ranking backtest says precision is fine, the national
-                    point-forecast is no longer tracking reality — ranking
-                    cannot be trusted on top of that.
+                    below ACCURACY_CORRELATION_MIN. Only triggers when we
+                    are currently in the peak season (or peak has enough
+                    samples to evaluate) — post-season rauscht, und wir
+                    wollen das nicht als Drift verkaufen.
+    * SEASON_OFF  — current week is post-season AND peak metrics are not
+                    evaluable yet. The drift-monitor pauses deliberately
+                    (narrative: "Tool ruht bis zum nächsten Wellen-
+                    Trigger"). Banner reads amber, not red.
     * GO_RANKING  — BL-ranking is usable AND lead-time story holds up.
     * RANKING_OK  — BL-ranking is usable but lead-time is weak/absent.
     * LEAD_ONLY   — lead-time is solid but we don't have trustworthy ranking.
@@ -572,17 +624,57 @@ def _synthesize_readiness(
     if freshness and freshness.get("isStale"):
         return "DATA_STALE"
 
-    # --- 2. Drift / live-accuracy Gate (drift or dead correlation) ----------
+    # --- 2. Saison-aware Drift / live-accuracy Gate -------------------------
+    # 2026-04-21 Pfad-C: Das Drift-Gate wählt seinen Evaluator saisonal.
+    # * In Peak-Saison (oder wenn Peak-Bucket auswertbar ist): Peak gewinnt.
+    # * In Post-Saison mit leerem Peak: Gate pausiert (SEASON_OFF),
+    #   weil die Post-Metrik alleine über "Drift" nicht gültig
+    #   entscheidet — das Modell soll bewusst ruhen.
     if accuracy:
-        drift = accuracy.get("driftDetected")
-        corr = accuracy.get("correlation")
-        drift_trip = bool(drift)
-        corr_trip = (
-            isinstance(corr, (int, float))
-            and corr < ACCURACY_CORRELATION_MIN
-        )
-        if drift_trip or corr_trip:
-            return "DRIFT_WARN"
+        current_season = accuracy.get("currentSeason")
+        peak = accuracy.get("peak") or {}
+        peak_samples = int(peak.get("samples") or 0) if isinstance(peak, dict) else 0
+
+        def _peak_drift() -> bool:
+            p = peak if isinstance(peak, dict) else {}
+            drift = p.get("driftDetected")
+            corr = p.get("correlation")
+            drift_trip = bool(drift)
+            corr_trip = (
+                peak_samples >= DRIFT_CORRELATION_MIN_SAMPLES
+                and isinstance(corr, (int, float))
+                and corr < ACCURACY_CORRELATION_MIN
+            )
+            return drift_trip or corr_trip
+
+        def _overall_drift() -> bool:
+            drift = accuracy.get("driftDetected")
+            corr = accuracy.get("correlation")
+            samples = int(accuracy.get("samples") or 0)
+            drift_trip = bool(drift)
+            corr_trip = (
+                samples >= DRIFT_CORRELATION_MIN_SAMPLES
+                and isinstance(corr, (int, float))
+                and corr < ACCURACY_CORRELATION_MIN
+            )
+            return drift_trip or corr_trip
+
+        if peak_samples > 0:
+            # Peak data available — always evaluate on peak.
+            if _peak_drift():
+                return "DRIFT_WARN"
+        else:
+            # No peak data in the current accuracy window.
+            if current_season == "peak":
+                # We're in peak now but have no validated peak points yet —
+                # fall back to overall so the user is not lied to.
+                if _overall_drift():
+                    return "DRIFT_WARN"
+            else:
+                # Post-season + no peak data → deliberately pause the
+                # drift monitor. This matches the cockpit narrative
+                # ("Sparmodus, Tool ruht").
+                return "SEASON_OFF"
 
     # --- 3. Original ranking / lead logic -----------------------------------
     precision = ranking.get("precisionAtTop3")
@@ -687,17 +779,40 @@ def _extract_model_status(
             note_parts.append(
                 "Keine aktuellen Forecasts in ml_forecasts — Zukunfts-Trajektorie nicht verfügbar."
             )
+    if forecast_readiness == "SEASON_OFF":
+        post = (accuracy_latest.get("post") or {}) if isinstance(accuracy_latest, dict) else {}
+        post_samples = int((post or {}).get("samples") or 0)
+        note_parts.append(
+            "Aktuell Post-Saison (KW 11–39). Das Drift-Gate ist bewusst pausiert — "
+            "Accuracy-Rauschen auf flachem Signal ist kein belastbares Drift-Indiz. "
+            f"Post-Saison-Auswertung über {post_samples} Paare liegt zur Einsicht bereit, "
+            "treibt aber keine Empfehlung. Der Monitor springt wieder scharf, sobald "
+            "Peak-Saison (ab KW 40) Datenpunkte liefert."
+        )
     if forecast_readiness == "DRIFT_WARN":
-        corr = accuracy_latest.get("correlation")
-        drift = accuracy_latest.get("driftDetected")
+        # 2026-04-21 Pfad-C: die Note reflektiert jetzt den gewählten Evaluator
+        # (peak bevorzugt, overall als Fallback) und die Sample-Size.
+        peak = (accuracy_latest.get("peak") or {}) if isinstance(accuracy_latest, dict) else {}
+        peak_samples = int((peak or {}).get("samples") or 0)
+        used_peak = peak_samples > 0
+        scope_label = "Peak-Saison" if used_peak else "Gesamt-Fenster"
+        src = peak if used_peak else accuracy_latest
+        corr = (src or {}).get("correlation")
+        drift = (src or {}).get("driftDetected")
+        samples = int((src or {}).get("samples") or 0)
         reason_bits: list[str] = []
-        if isinstance(corr, (int, float)) and corr < ACCURACY_CORRELATION_MIN:
+        if (
+            isinstance(corr, (int, float))
+            and corr < ACCURACY_CORRELATION_MIN
+            and samples >= DRIFT_CORRELATION_MIN_SAMPLES
+        ):
             reason_bits.append(f"Pearson-Korrelation {corr:.2f} < {ACCURACY_CORRELATION_MIN:.2f}")
         if drift:
             reason_bits.append("Drift-Detector ausgelöst")
         if reason_bits:
             note_parts.append(
-                "Live-Accuracy-Monitor warnt: " + "; ".join(reason_bits) + ". "
+                f"Live-Accuracy-Monitor ({scope_label}, N={samples}) warnt: "
+                + "; ".join(reason_bits) + ". "
                 "Das Ranking darf in dieser Phase nicht als Handlungsgrundlage genutzt werden."
             )
     if calibration_mode in {"heuristic", "skipped"}:

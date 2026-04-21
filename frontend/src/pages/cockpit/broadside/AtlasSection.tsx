@@ -775,10 +775,9 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   const horizonDays = snapshot.modelStatus?.horizonDays ?? 21;
 
   const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
-  // 2026-04-21 Integrity-Fix: new readiness states DATA_STALE and DRIFT_WARN
-  // from the backend live-accuracy/freshness gate. Both map to 'watch' so
-  // the top banner stops reading "GO" while the underlying forecast is
-  // retrospective or drifting. The BacktestSection gate follows suit.
+  // 2026-04-21 Integrity-Fix + Pfad-C: readiness states DATA_STALE,
+  // DRIFT_WARN und SEASON_OFF vom Backend-Gate. Alle drei mappen auf
+  // 'watch' (kein GO), die Labels unterscheiden den Grund.
   const gateTone: GateTone =
     readiness === 'GO_RANKING' || readiness === 'RANKING_OK'
       ? 'go'
@@ -786,6 +785,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         || readiness === 'LEAD_ONLY'
         || readiness === 'DATA_STALE'
         || readiness === 'DRIFT_WARN'
+        || readiness === 'SEASON_OFF'
         ? 'watch'
         : 'unknown';
   const gateLabel =
@@ -793,11 +793,13 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
       ? 'Gate · DATA STALE'
       : readiness === 'DRIFT_WARN'
         ? 'Gate · DRIFT WARN'
-        : gateTone === 'go'
-          ? 'Gate · GO'
-          : gateTone === 'watch'
-            ? 'Gate · WATCH'
-            : 'Gate · UNKNOWN';
+        : readiness === 'SEASON_OFF'
+          ? 'Gate · SEASON OFF'
+          : gateTone === 'go'
+            ? 'Gate · GO'
+            : gateTone === 'watch'
+              ? 'Gate · WATCH'
+              : 'Gate · UNKNOWN';
 
   // For HUD: show the shift line "BY → BB" when we have it.
   const shiftHudLine =

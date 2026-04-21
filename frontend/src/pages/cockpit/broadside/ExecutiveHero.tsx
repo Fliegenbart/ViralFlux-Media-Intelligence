@@ -103,19 +103,38 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot }) => {
         body: `Letzter Forecast-Punkt ${latest} (${daysBack} in der Vergangenheit). Der Fan-Chart ist ein Rückblick, keine Prognose. Daten-Pipeline oder täglicher Forecast-Cron stehen.`,
       };
     }
+    if (readiness === 'SEASON_OFF') {
+      // 2026-04-21 Pfad-C: Post-Saison-Pause. Bewusst sanfter Ton — das Tool
+      // ruht narrativ, die Zahlen sollen den Nutzer nicht alarmieren.
+      const postSamples = accuracy?.post?.samples ?? 0;
+      return {
+        tone: 'off' as const,
+        title: 'Post-Saison · Drift-Monitor pausiert',
+        body: `Aktuelle Woche liegt in KW 11–39. Auf flachem Signal ist Accuracy-Rauschen kein belastbares Drift-Indiz — der Monitor ruht bewusst (${postSamples} Post-Saison-Paare zur Einsicht). Das Gate springt wieder scharf, sobald Peak-Saison ab KW 40 neue Datenpunkte liefert.`,
+      };
+    }
     if (readiness === 'DRIFT_WARN') {
+      // 2026-04-21 Pfad-C: bevorzugt Peak-Bucket anzeigen wenn vorhanden,
+      // sonst overall. Sample-Size dazu, damit Nutzer die Aussagekraft
+      // einschätzen können.
+      const peak = accuracy?.peak;
+      const usePeak = (peak?.samples ?? 0) > 0;
+      const src = usePeak ? peak : accuracy;
+      const scope = usePeak ? 'Peak-Saison' : 'Gesamt-Fenster';
+      const samples = src?.samples ?? 0;
       const parts: string[] = [];
       if (
-        typeof accuracy?.correlation === 'number' &&
-        accuracy.correlation < 0.3
+        typeof src?.correlation === 'number' &&
+        src.correlation < 0.3 &&
+        samples >= 20
       ) {
-        parts.push(`Korrelation ${accuracy.correlation.toFixed(2)}`);
+        parts.push(`Korrelation ${src.correlation.toFixed(2)}`);
       }
-      if (accuracy?.driftDetected) parts.push('Drift-Detector aktiv');
+      if (src?.driftDetected) parts.push('Drift-Detector aktiv');
       return {
         tone: 'drift' as const,
         title: 'Modell driftet — Ranking nicht handlungsrelevant',
-        body: `Live-Monitor: ${parts.join(' · ') || 'Accuracy-Signal unter Threshold'}. Die Bundesländer-Empfehlungen sind in dieser Phase nicht als Grundlage für Budget-Shifts geeignet.`,
+        body: `Live-Monitor (${scope}, N=${samples}): ${parts.join(' · ') || 'Accuracy-Signal unter Threshold'}. Die Bundesländer-Empfehlungen sind in dieser Phase nicht als Grundlage für Budget-Shifts geeignet.`,
       };
     }
     // 2026-04-21 A1 Root-Cause-Fix: soft note when forecast IS forward-

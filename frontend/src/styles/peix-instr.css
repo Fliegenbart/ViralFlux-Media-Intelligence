@@ -173,6 +173,13 @@
   color: #7a5b1c;
   background: rgba(217, 158, 48, 0.10);
 }
+/* Pfad-C: Post-Saison-Pause ("SEASON_OFF"). Cool olive, not alarming —
+   the tool is ruhend by design, not broken. */
+.peix-instr .exec-integrity-banner.exec-integrity-off {
+  color: #4d5f3c;
+  background: rgba(128, 150, 95, 0.10);
+  border-left-color: #7a9154;
+}
 .peix-instr .exec-integrity-title {
   font-weight: 600;
   font-size: 13px;

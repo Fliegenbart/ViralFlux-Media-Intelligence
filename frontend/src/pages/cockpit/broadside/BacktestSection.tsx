@@ -111,9 +111,8 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
     }, [weeklyHits]);
 
   const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
-  // 2026-04-21 Integrity-Fix: DATA_STALE / DRIFT_WARN readinesses get the
-  // watch tone (banner stops claiming GO) and a distinct label so users see
-  // *why* the banner flipped, not just that it flipped.
+  // 2026-04-21 Integrity-Fix + Pfad-C: DATA_STALE / DRIFT_WARN / SEASON_OFF
+  // readinesses get the watch tone und ein eigenes Label.
   const gateTone: GateTone =
     readiness === 'GO_RANKING' || readiness === 'RANKING_OK' ? 'go' : 'watch';
   const gateLabel =
@@ -121,9 +120,11 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
       ? 'Gate · DATA STALE'
       : readiness === 'DRIFT_WARN'
         ? 'Gate · DRIFT WARN'
-        : gateTone === 'go'
-          ? 'Gate · GO'
-          : 'Gate · WATCH';
+        : readiness === 'SEASON_OFF'
+          ? 'Gate · SEASON OFF'
+          : gateTone === 'go'
+            ? 'Gate · GO'
+            : 'Gate · WATCH';
 
   return (
     <section className="instr-section" id="sec-backtest">

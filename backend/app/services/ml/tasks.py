@@ -90,6 +90,85 @@ def _compute_accuracy_metrics(predicted: list[float], actual: list[float]) -> di
     }
 
 
+# 2026-04-21 Pfad-C: Saison-Stratifizierung für das Drift-Gate.
+# ISO-Kalenderwochen 40..52, 1..10 zählen als "Peak" (Oktober bis Anfang
+# März). Das ist das Fenster, in dem Influenza/RSV-Wellen historisch
+# aktiv sind und der Forecast echten Business-Wert liefern muss. KW 11..39
+# ist "Post" — Signal-flach, fast kein Wellen-Geschehen. Das Drift-Gate
+# soll Post-Saison-Rauschen nicht als "Modell driftet" werten.
+PEAK_SEASON_ISO_WEEKS: frozenset[int] = frozenset(list(range(40, 54)) + list(range(1, 11)))
+
+
+def _iso_week_of(dt: Any) -> int | None:
+    """Safe ISO week extraction for python date/datetime/string."""
+    try:
+        if hasattr(dt, "isocalendar"):
+            return int(dt.isocalendar()[1])
+    except Exception:
+        return None
+    return None
+
+
+def _metrics_or_none(
+    predicted: list[float],
+    actual: list[float],
+    *,
+    drift_mape_threshold: float = 35.0,
+    min_mape_drift_samples: int = 5,
+) -> dict[str, Any]:
+    """Compute metrics plus a size-aware drift decision.
+
+    Returns ``{"samples": 0}`` shell when there are no pairs — the snapshot
+    layer treats that as "nothing to evaluate on this season, skip". When
+    we have ≥ ``min_mape_drift_samples`` pairs, MAPE drives drift; below
+    that we abstain (``drift_detected = None``) rather than raise false
+    alarms on a handful of points.
+    """
+    n = len(predicted)
+    if n == 0:
+        return {"samples": 0}
+
+    metrics = _compute_accuracy_metrics(predicted, actual)
+    drift_detected: bool | None
+    if n < min_mape_drift_samples:
+        drift_detected = None  # honest "insufficient data"
+    else:
+        drift_detected = bool(metrics["mape"] > drift_mape_threshold)
+    return {
+        "samples": n,
+        "mae": round(metrics["mae"], 3),
+        "rmse": round(metrics["rmse"], 3),
+        "mape": round(metrics["mape"], 1),
+        "correlation": round(metrics["correlation"], 4),
+        "drift_detected": drift_detected,
+    }
+
+
+def _season_stratify_pairs(
+    pairs_with_date: list[tuple[float, float, Any]],
+) -> dict[str, Any]:
+    """Split (predicted, actual, forecast_date) triples into peak/post buckets."""
+    peak_pred: list[float] = []
+    peak_act: list[float] = []
+    post_pred: list[float] = []
+    post_act: list[float] = []
+    for pred, act, fdate in pairs_with_date:
+        kw = _iso_week_of(fdate)
+        if kw is None:
+            continue
+        if kw in PEAK_SEASON_ISO_WEEKS:
+            peak_pred.append(pred)
+            peak_act.append(act)
+        else:
+            post_pred.append(pred)
+            post_act.append(act)
+    return {
+        "peak_weeks": sorted(PEAK_SEASON_ISO_WEEKS),
+        "peak": _metrics_or_none(peak_pred, peak_act),
+        "post": _metrics_or_none(post_pred, post_act),
+    }
+
+
 def _naive_datetime(value: Any) -> datetime | None:
     if value is None:
         return None
@@ -873,6 +952,10 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
             predicted = []
             actual = []
             pairs = []
+            # Pfad-C: Triples ``(predicted, actual, forecast_date)`` für die
+            # saisonale Stratifizierung. Datum reicht aus — ``_iso_week_of``
+            # extrahiert die KW.
+            pairs_with_date: list[tuple[float, float, Any]] = []
 
             for fc in forecasts:
                 # Nächsten WastewaterAggregated-Wert finden (+-1 Tag Toleranz)
@@ -895,6 +978,9 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                         "predicted": round(fc.predicted_value, 2),
                         "actual": round(actual_value, 2),
                     })
+                    pairs_with_date.append(
+                        (float(fc.predicted_value), float(actual_value), fc.forecast_date)
+                    )
 
             n = len(predicted)
             if n < 3:
@@ -909,6 +995,19 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
 
             drift = mape > 35.0
 
+            # Pfad-C: Saison-stratifizierte Block für das Snapshot-Gate.
+            # Das Gate entscheidet später (snapshot_builder._synthesize_readiness),
+            # ob es Peak oder Post bewertet — abhängig davon, in welcher KW die
+            # aktuelle Auswertung läuft. Wir persistieren beide Sätze
+            # auditierbar in ``details.season_stratified``.
+            season_block = _season_stratify_pairs(pairs_with_date)
+            season_block["current_iso_week"] = _iso_week_of(cutoff)
+            season_block["current_season"] = (
+                "peak"
+                if _iso_week_of(cutoff) in PEAK_SEASON_ISO_WEEKS
+                else "post"
+            )
+
             log_entry = ForecastAccuracyLog(
                 virus_typ=virus,
                 window_days=max(int((cutoff - window_start).days), 1),
@@ -918,7 +1017,10 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 mape=round(mape, 1),
                 correlation=round(corr, 4),
                 drift_detected=drift,
-                details={"pairs": pairs[:14]},
+                details={
+                    "pairs": pairs[:14],
+                    "season_stratified": season_block,
+                },
             )
             db.add(log_entry)
 
@@ -931,6 +1033,7 @@ def compute_forecast_accuracy_task(self) -> Dict[str, Any]:
                 "correlation": round(corr, 4),
                 "drift_detected": drift,
                 "target_scale": "viruslast",
+                "season_stratified": season_block,
             }
 
             # Trend-Analyse: letzte 3 Logs vergleichen

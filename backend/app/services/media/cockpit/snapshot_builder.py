@@ -801,10 +801,11 @@ def _extract_model_status(
     ranking_metrics = _read_ranking_metrics(virus_typ)
     ranking_metrics.setdefault("horizonDays", ranking_horizon_days)
     ranking_metrics["source"] = "regional_pooled_panel_h7"
+    ranking_metrics["shadowMode"] = virus_typ not in _REGIONAL_VIRUSES
     ranking_metrics["sourceLabel"] = (
         "Regionales 7-Tage-Panel (pilot training)"
         if virus_typ in _REGIONAL_VIRUSES
-        else "Nur nationaler Forecast — kein regionales Modell"
+        else "Ranking-Head im Shadow-Mode — wartet auf Promotion"
     )
     training_panel = _read_training_panel(virus_typ)
 

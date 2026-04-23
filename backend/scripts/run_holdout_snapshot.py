@@ -4,6 +4,10 @@
 The script compares persisted regional forecasts in ``ml_forecasts`` against
 observed weekly SURVSTAT incidence in ``survstat_weekly_data``. It is designed
 as an investor/audit artifact: no model training, no writes, no side effects.
+By default, it only evaluates forecasts issued strictly before
+``target_week_start - horizon_days`` so the report is a genuine holdout and not
+a mid-week peek. Use ``--allow-midweek-forecasts`` only for intentional
+diagnostic comparisons against the old, non-holdout behavior.
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ import json
 import math
 import sys
 from dataclasses import asdict, dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -95,6 +99,14 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path for a JSON report. The database is still read-only.",
     )
+    parser.add_argument(
+        "--allow-midweek-forecasts",
+        action="store_true",
+        help=(
+            "Use forecasts persisted during the target week too. Default is a "
+            "strict holdout cutoff before week_start - horizon_days."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -129,7 +141,7 @@ def _pearson(xs: list[float], ys: list[float]) -> float | None:
     denom = denom_x * denom_y
     if denom == 0:
         return None
-    return sum(x * y for x, y in zip(dx, dy, strict=True)) / denom
+    return sum(x * y for x, y in zip(dx, dy)) / denom
 
 
 def _round_or_none(value: float | None, ndigits: int = 4) -> float | None:
@@ -210,10 +222,16 @@ def _fetch_forecasts(
     virus: str,
     horizon_days: int,
     week_start: date,
+    allow_midweek_forecasts: bool = False,
 ) -> dict[str, float]:
+    holdout_cutoff_clause = (
+        ""
+        if allow_midweek_forecasts
+        else "and created_at::date < (:week_start::date - (:horizon_days || ' days')::interval)"
+    )
     rows = db.execute(
         text(
-            """
+            f"""
             with ranked as (
                 select
                     region,
@@ -228,6 +246,7 @@ def _fetch_forecasts(
                   and horizon_days = :horizon_days
                   and forecast_date::date >= :week_start
                   and forecast_date::date < (:week_start::date + interval '7 days')
+                  {holdout_cutoff_clause}
                   and coalesce(region, '') not in ('Gesamt', 'Bundesweit', 'DE', '')
                   and predicted_value is not null
             )
@@ -284,10 +303,15 @@ def _evaluate_week(
     horizon_days: int,
     week_start: date,
     min_regions: int,
+    allow_midweek_forecasts: bool,
 ) -> WeekMetrics:
     actuals = _fetch_actuals(db, disease, week_start)
     forecasts = _fetch_forecasts(
-        db, virus=virus, horizon_days=horizon_days, week_start=week_start
+        db,
+        virus=virus,
+        horizon_days=horizon_days,
+        week_start=week_start,
+        allow_midweek_forecasts=allow_midweek_forecasts,
     )
     overlap = sorted(set(actuals).intersection(forecasts))
     notes: list[str] = []
@@ -328,10 +352,11 @@ def _evaluate_week(
 
 def _aggregate_report(args: argparse.Namespace) -> dict[str, Any]:
     disease = args.disease or DEFAULT_VIRUS_DISEASE_MAP.get(args.virus, args.virus)
-    generated_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    generated_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     session_local = _session_factory()
 
     with session_local() as db:
+        _validate_disease_exists(db, disease)
         peak_weeks = _fetch_peak_weeks(db, disease, args.peak_weeks)
         week_metrics = [
             _evaluate_week(
@@ -341,6 +366,7 @@ def _aggregate_report(args: argparse.Namespace) -> dict[str, Any]:
                 horizon_days=args.horizon_days,
                 week_start=week_start,
                 min_regions=args.min_regions,
+                allow_midweek_forecasts=args.allow_midweek_forecasts,
             )
             for week_start in peak_weeks
         ]
@@ -356,6 +382,7 @@ def _aggregate_report(args: argparse.Namespace) -> dict[str, Any]:
             "peak_weeks_requested": args.peak_weeks,
             "peak_weeks_found": len(peak_weeks),
             "min_regions": args.min_regions,
+            "allow_midweek_forecasts": args.allow_midweek_forecasts,
         },
         "summary": {
             "weeks_evaluated": len(week_metrics),
@@ -383,12 +410,33 @@ def _aggregate_report(args: argparse.Namespace) -> dict[str, Any]:
                     for week in week_metrics
                     for note in week.notes
                     if note.startswith("no regional forecasts")
+                    or note.startswith("low region overlap")
                 }
             ),
         },
         "weeks": [asdict(week) for week in week_metrics],
     }
     return report
+
+
+def _validate_disease_exists(db, disease: str) -> None:
+    rows = db.execute(
+        text(
+            """
+            select distinct disease
+            from survstat_weekly_data
+            where disease is not null
+            order by disease
+            """
+        )
+    ).mappings().all()
+    known_diseases = {str(row["disease"]) for row in rows}
+    if disease not in known_diseases:
+        sample = ", ".join(sorted(known_diseases)[:10]) or "no diseases found"
+        raise ValueError(
+            f"SURVSTAT disease '{disease}' was not found in survstat_weekly_data. "
+            f"Use --disease with one of the database values. Examples: {sample}"
+        )
 
 
 def _session_factory():
@@ -438,7 +486,11 @@ def _print_text(report: dict[str, Any]) -> None:
 
 def main() -> int:
     args = _parse_args()
-    report = _aggregate_report(args)
+    try:
+        report = _aggregate_report(args)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

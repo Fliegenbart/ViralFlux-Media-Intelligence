@@ -16,7 +16,9 @@ from app.core.celery_app import celery_app
 from app.core.config import get_settings
 from app.db.session import get_db_context
 from app.services.ml.training_contract import (
+    SUPPORTED_FORECAST_REGIONS,
     SUPPORTED_VIRUS_TYPES,
+    normalize_region_selection,
     normalize_training_selection,
 )
 
@@ -382,6 +384,40 @@ def _select_missing_backfill_targets(
     return [target for target in normalized_candidates if target not in existing_scope_dates]
 
 
+_ALL_REGION_SENTINELS = {"ALL", "*", "BUNDESLAENDER", "BUNDESLÄNDER", "REGIONAL"}
+
+
+def _resolve_live_forecast_regions(
+    *,
+    region: str | None = "DE",
+    regions: list[str] | tuple[str, ...] | str | None = None,
+) -> tuple[str, ...]:
+    """Normalize live forecast region scope.
+
+    Default bleibt national (`DE`). `region="ALL"` oder `regions=["ALL"]`
+    bedeutet bewusst: alle Bundesländer, ohne nationale DE-Zeile.
+    """
+    if regions is not None:
+        raw_regions = (
+            [item.strip() for item in regions.split(",")]
+            if isinstance(regions, str)
+            else list(regions)
+        )
+        if any(
+            str(item or "").strip().upper() in _ALL_REGION_SENTINELS
+            for item in raw_regions
+        ):
+            return tuple(
+                item for item in SUPPORTED_FORECAST_REGIONS if item != "DE"
+            )
+        return normalize_region_selection(regions=raw_regions)
+
+    if str(region or "").strip().upper() in _ALL_REGION_SENTINELS:
+        return tuple(item for item in SUPPORTED_FORECAST_REGIONS if item != "DE")
+
+    return normalize_region_selection(region=region)
+
+
 @celery_app.task(
     bind=True,
     name="train_xgboost_model_task",
@@ -476,15 +512,18 @@ def train_xgboost_model_task(
 def refresh_live_forecasts_task(
     self,
     region: str = "DE",
+    regions: list[str] | str | None = None,
     horizon_days: int = 7,
     include_internal_history: bool = True,
 ) -> Dict[str, Any]:
     """Generate fresh persisted live forecasts for all supported virus types."""
     from app.services.ml.forecast_service import ForecastService
 
+    scope_regions = _resolve_live_forecast_regions(region=region, regions=regions)
+
     logger.info(
-        "Celery: refreshing live forecasts (region=%s, horizon_days=%s, internal=%s)",
-        region,
+        "Celery: refreshing live forecasts (regions=%s, horizon_days=%s, internal=%s)",
+        list(scope_regions),
         horizon_days,
         include_internal_history,
     )
@@ -495,22 +534,55 @@ def refresh_live_forecasts_task(
 
     with get_db_context() as db:
         service = ForecastService(db)
-        self.update_state(
-            state="PROGRESS",
-            meta={"step": "Generating live forecasts...", "progress": 40},
-        )
-        result = service.run_forecasts_for_all_viruses(
-            region=region,
-            horizon_days=horizon_days,
-            include_internal_history=include_internal_history,
-        )
+        if len(scope_regions) == 1:
+            self.update_state(
+                state="PROGRESS",
+                meta={"step": "Generating live forecasts...", "progress": 40},
+            )
+            result = service.run_forecasts_for_all_viruses(
+                region=scope_regions[0],
+                horizon_days=horizon_days,
+                include_internal_history=include_internal_history,
+            )
+        else:
+            result = {}
+            total_regions = len(scope_regions)
+            for index, region_code in enumerate(scope_regions, start=1):
+                progress = min(95, 10 + int(index / max(total_regions, 1) * 80))
+                self.update_state(
+                    state="PROGRESS",
+                    meta={
+                        "step": f"Generating live forecasts for {region_code}...",
+                        "progress": progress,
+                    },
+                )
+                result[region_code] = service.run_forecasts_for_all_viruses(
+                    region=region_code,
+                    horizon_days=horizon_days,
+                    include_internal_history=include_internal_history,
+                )
 
-    failed = [
-        virus
-        for virus, payload in result.items()
-        if isinstance(payload, dict) and payload.get("error")
-    ]
-    status = "success" if not failed else ("error" if len(failed) == len(result) else "partial_error")
+    if len(scope_regions) == 1:
+        failed = [
+            virus
+            for virus, payload in result.items()
+            if isinstance(payload, dict) and payload.get("error")
+        ]
+        attempted = len(result)
+    else:
+        failed = [
+            f"{region_code}:{virus}"
+            for region_code, region_payload in result.items()
+            if isinstance(region_payload, dict)
+            for virus, payload in region_payload.items()
+            if isinstance(payload, dict) and payload.get("error")
+        ]
+        attempted = sum(
+            len(region_payload)
+            for region_payload in result.values()
+            if isinstance(region_payload, dict)
+        )
+    status = "success" if not failed else ("error" if attempted and len(failed) >= attempted else "partial_error")
     logger.info(
         "Celery: live forecast refresh completed (status=%s, failed=%s)",
         status,
@@ -519,7 +591,8 @@ def refresh_live_forecasts_task(
     return _json_safe({
         "status": status,
         "result": result,
-        "region": region,
+        "region": scope_regions[0] if len(scope_regions) == 1 else None,
+        "regions": list(scope_regions),
         "horizon_days": horizon_days,
         "include_internal_history": include_internal_history,
         "failed_virus_types": failed,

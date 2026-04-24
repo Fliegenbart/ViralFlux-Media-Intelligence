@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from app.core.celery_app import celery_app
 from app.services.ml.tasks import (
+    _resolve_live_forecast_regions,
     refresh_live_forecasts_task,
     refresh_regional_operational_snapshots_task,
     train_regional_models_task,
@@ -13,7 +14,7 @@ from app.services.ml.tasks import (
 )
 from app.services.ml.forecast_contracts import DEFAULT_DECISION_HORIZON_DAYS
 from app.services.ml.forecast_horizon_utils import DEFAULT_FORECAST_REGION
-from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
+from app.services.ml.training_contract import SUPPORTED_FORECAST_REGIONS, SUPPORTED_VIRUS_TYPES
 
 
 class MLTrainingTaskContractTests(unittest.TestCase):
@@ -207,6 +208,58 @@ class MLTrainingTaskContractTests(unittest.TestCase):
             update_state.call_args_list[1].kwargs["meta"]["step"],
             "Generating live forecasts...",
         )
+
+    def test_resolve_live_forecast_regions_expands_all_to_bundeslaender(self) -> None:
+        regions = _resolve_live_forecast_regions(region="ALL", regions=None)
+
+        self.assertNotIn(DEFAULT_FORECAST_REGION, regions)
+        self.assertEqual(
+            regions,
+            tuple(
+                region
+                for region in SUPPORTED_FORECAST_REGIONS
+                if region != DEFAULT_FORECAST_REGION
+            ),
+        )
+
+    def test_live_forecast_refresh_task_runs_each_requested_region(self) -> None:
+        with patch(
+            "app.services.ml.tasks.get_db_context",
+            return_value=nullcontext(object()),
+        ), patch(
+            "app.services.ml.forecast_service.ForecastService",
+        ) as forecast_service_cls, patch.object(
+            refresh_live_forecasts_task,
+            "update_state",
+        ):
+            forecast_service_cls.return_value.run_forecasts_for_all_viruses.side_effect = [
+                {"Influenza A": {"region": "BY"}},
+                {"Influenza A": {"region": "NW"}},
+            ]
+
+            result = refresh_live_forecasts_task.run(
+                regions=["BY", "NW"],
+                horizon_days=5,
+                include_internal_history=False,
+            )
+
+        forecast_service_cls.return_value.run_forecasts_for_all_viruses.assert_any_call(
+            region="BY",
+            horizon_days=5,
+            include_internal_history=False,
+        )
+        forecast_service_cls.return_value.run_forecasts_for_all_viruses.assert_any_call(
+            region="NW",
+            horizon_days=5,
+            include_internal_history=False,
+        )
+        self.assertEqual(
+            forecast_service_cls.return_value.run_forecasts_for_all_viruses.call_count,
+            2,
+        )
+        self.assertEqual(result["regions"], ["BY", "NW"])
+        self.assertEqual(result["result"]["BY"]["Influenza A"]["region"], "BY")
+        self.assertEqual(result["result"]["NW"]["Influenza A"]["region"], "NW")
 
     def test_snapshot_refresh_task_runs_all_supported_viruses(self) -> None:
         with patch(

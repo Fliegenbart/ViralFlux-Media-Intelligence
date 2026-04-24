@@ -63,6 +63,14 @@ def _feature_freshness(row: MLForecast) -> dict[str, Any]:
     return dict(freshness) if isinstance(freshness, dict) else {}
 
 
+def _forecast_quality(row: MLForecast) -> dict[str, Any]:
+    payload = row.features_used or {}
+    if not isinstance(payload, dict):
+        return {}
+    quality = payload.get("forecast_quality") or payload.get("quality_gate") or {}
+    return dict(quality) if isinstance(quality, dict) else {}
+
+
 def _normalise_virus_types(virus_types: Iterable[str] | None) -> list[str]:
     if virus_types is None:
         return list(DEFAULT_SHIFT_VIRUSES)
@@ -191,18 +199,18 @@ class RegionalLiveShiftSnapshotService:
 
     @staticmethod
     def _latest_groups(rows: list[MLForecast]) -> dict[tuple[str, str], list[MLForecast]]:
-        latest_created: dict[tuple[str, str], datetime] = {}
+        latest_created: dict[str, datetime] = {}
         for row in rows:
-            key = (str(row.virus_typ), str(row.region).upper())
+            key = str(row.virus_typ)
             created_at = row.created_at or datetime.min
             if key not in latest_created or created_at > latest_created[key]:
                 latest_created[key] = created_at
 
         groups: dict[tuple[str, str], list[MLForecast]] = {}
         for row in rows:
-            key = (str(row.virus_typ), str(row.region).upper())
-            if (row.created_at or datetime.min) == latest_created.get(key):
-                groups.setdefault(key, []).append(row)
+            virus = str(row.virus_typ)
+            if (row.created_at or datetime.min) == latest_created.get(virus):
+                groups.setdefault((virus, str(row.region).upper()), []).append(row)
         for key, group_rows in groups.items():
             groups[key] = sorted(group_rows, key=lambda item: (item.forecast_date, item.id or 0))
         return groups
@@ -254,6 +262,19 @@ class RegionalLiveShiftSnapshotService:
         if inline_model:
             blockers.append("model_not_promoted_inline")
 
+        forecast_quality = _forecast_quality(last)
+        model_quality_gate_passed = forecast_quality.get("overall_passed")
+        if not forecast_quality:
+            blockers.append("missing_model_quality_gate")
+            quality_allows_budget = False
+        else:
+            quality_allows_budget = model_quality_gate_passed is True
+            if not quality_allows_budget:
+                blockers.append("model_quality_gate_not_passed")
+        model_forecast_readiness = str(
+            forecast_quality.get("forecast_readiness") or ""
+        ).strip() or None
+
         hard_blockers = {
             "incomplete_horizon",
             "missing_feature_freshness",
@@ -265,7 +286,7 @@ class RegionalLiveShiftSnapshotService:
             budget_release_status = "blocked"
         elif not increase_detected:
             budget_release_status = "watch"
-        elif inline_model:
+        elif inline_model or not quality_allows_budget:
             budget_release_status = "candidate_only"
         else:
             budget_release_status = "go"
@@ -274,6 +295,8 @@ class RegionalLiveShiftSnapshotService:
             warnings.append(f"features_are_{feature_gap_days}_days_old")
         if inline_model:
             warnings.append("inline_fallback_model_not_promoted")
+        if not quality_allows_budget:
+            warnings.append("model_quality_gate_not_passed")
 
         return {
             "virus_typ": virus_typ,
@@ -284,6 +307,12 @@ class RegionalLiveShiftSnapshotService:
             "forecast_end_date": last.forecast_date.date().isoformat(),
             "created_at": last.created_at.isoformat() if last.created_at else None,
             "model_version": model_version or None,
+            "model_quality_gate_passed": (
+                bool(model_quality_gate_passed)
+                if model_quality_gate_passed is not None
+                else None
+            ),
+            "model_forecast_readiness": model_forecast_readiness,
             "start_value": _round_or_none(start_value, 1),
             "end_value": _round_or_none(end_value, 1),
             "absolute_delta": _round_or_none(absolute_delta, 1),

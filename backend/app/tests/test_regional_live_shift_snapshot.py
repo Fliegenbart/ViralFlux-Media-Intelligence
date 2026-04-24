@@ -32,6 +32,8 @@ class RegionalLiveShiftSnapshotServiceTests(unittest.TestCase):
         region: str = "BY",
         values: list[float],
         model_version: str = "xgb_stack_direct_h5_inline",
+        quality_gate_passed: bool = True,
+        forecast_readiness: str = "GO",
         feature_as_of: str = "2026-04-20",
         issue_date: str = "2026-04-24",
         extension_reason: str = "extended",
@@ -59,7 +61,11 @@ class RegionalLiveShiftSnapshotServiceTests(unittest.TestCase):
                             "issue_date": issue_date,
                             "extension_reason": extension_reason,
                             "extension_applied": extension_reason == "extended",
-                        }
+                        },
+                        "forecast_quality": {
+                            "overall_passed": quality_gate_passed,
+                            "forecast_readiness": forecast_readiness,
+                        },
                     },
                 )
             )
@@ -125,6 +131,30 @@ class RegionalLiveShiftSnapshotServiceTests(unittest.TestCase):
         self.assertIn("feature_gap_too_large", region["blockers"])
         self.assertIn("feature_extension_failed", region["blockers"])
 
+    def test_failed_model_quality_gate_is_candidate_only_not_budget_releasable(self) -> None:
+        self._add_forecast_run(
+            region="HE",
+            values=[50.0, 60.0, 70.0, 80.0, 90.0],
+            model_version="regional_pooled_panel:h5:2026-04-24T08:39:41",
+            quality_gate_passed=False,
+            forecast_readiness="WATCH",
+        )
+
+        payload = RegionalLiveShiftSnapshotService(self.db).build_snapshot(
+            virus_types=["Influenza A"],
+            horizon_days=5,
+            max_feature_gap_days=10,
+        )
+
+        region = payload["viruses"]["Influenza A"]["regions"][0]
+        self.assertEqual(region["region"], "HE")
+        self.assertTrue(region["increase_detected"])
+        self.assertEqual(region["budget_release_status"], "candidate_only")
+        self.assertFalse(region["budget_releasable"])
+        self.assertFalse(region["model_quality_gate_passed"])
+        self.assertEqual(region["model_forecast_readiness"], "WATCH")
+        self.assertIn("model_quality_gate_not_passed", region["blockers"])
+
     def test_missing_regions_are_reported_per_virus(self) -> None:
         self._add_forecast_run(
             virus_typ="RSV A",
@@ -142,6 +172,29 @@ class RegionalLiveShiftSnapshotServiceTests(unittest.TestCase):
         self.assertIn("BW", missing)
         self.assertIn("BE", missing)
         self.assertNotIn("BY", missing)
+
+    def test_latest_batch_does_not_carry_forward_stale_region_rows(self) -> None:
+        self._add_forecast_run(
+            region="BY",
+            values=[100.0, 105.0, 110.0, 115.0, 120.0],
+            model_version="regional_pooled_panel:h5:old",
+            created_at=datetime(2026, 4, 24, 7, 0, 0),
+        )
+        self._add_forecast_run(
+            region="NW",
+            values=[100.0, 120.0, 140.0, 160.0, 180.0],
+            model_version="regional_pooled_panel:h5:new",
+            created_at=datetime(2026, 4, 24, 8, 0, 0),
+        )
+
+        payload = RegionalLiveShiftSnapshotService(self.db).build_snapshot(
+            virus_types=["Influenza A"],
+            horizon_days=5,
+        )
+
+        regions = payload["viruses"]["Influenza A"]["regions"]
+        self.assertEqual([item["region"] for item in regions], ["NW"])
+        self.assertIn("BY", payload["summary"]["missing_regions_by_virus"]["Influenza A"])
 
 
 if __name__ == "__main__":

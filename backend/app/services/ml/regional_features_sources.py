@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 from sqlalchemy import Integer, func
 
+from app.core.time import utc_now
 from app.models.database import (
     AREKonsultation,
     GoogleTrendsData,
@@ -37,6 +38,8 @@ from app.services.ml.weather_forecast_vintage import (
 
 logger = logging.getLogger(__name__)
 
+_RSV_A_WASTEWATER_CANDIDATES: tuple[str, ...] = ("RSV A", "RSV A/B", "RSV A+B")
+
 
 def _geo_unit_fallback_id(value: str) -> str:
     return (
@@ -50,9 +53,43 @@ def _geo_unit_fallback_id(value: str) -> str:
     )
 
 
+def _wastewater_virus_candidates(virus_typ: str) -> tuple[str, ...]:
+    if str(virus_typ or "").strip() == "RSV A":
+        return _RSV_A_WASTEWATER_CANDIDATES
+    return (str(virus_typ or "").strip(),)
+
+
+def _wastewater_virus_filter(column: Any, virus_typ: str) -> Any:
+    candidates = _wastewater_virus_candidates(virus_typ)
+    if len(candidates) == 1:
+        return column == candidates[0]
+    return column.in_(candidates)
+
+
+def _select_wastewater_alias_rows(frame: pd.DataFrame, virus_typ: str) -> pd.DataFrame:
+    if frame.empty or "source_virus_typ" not in frame.columns:
+        return frame
+
+    priority = {
+        source_virus_typ: index
+        for index, source_virus_typ in enumerate(_wastewater_virus_candidates(virus_typ))
+    }
+    selected = frame.copy()
+    selected["_source_priority"] = (
+        selected["source_virus_typ"].map(priority).fillna(len(priority)).astype(int)
+    )
+    selected = selected.sort_values(
+        ["bundesland", "datum", "_source_priority", "source_virus_typ"]
+    )
+    selected = selected.drop_duplicates(["bundesland", "datum"], keep="first")
+    selected = selected.drop(columns=["_source_priority"])
+    return selected.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+
+
 def load_wastewater_daily(builder: Any, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
     rows = (
         builder.db.query(
+            WastewaterData.virus_typ.label("source_virus_typ"),
             WastewaterData.bundesland,
             WastewaterData.datum,
             func.max(WastewaterData.available_time).label("available_time"),
@@ -62,11 +99,12 @@ def load_wastewater_daily(builder: Any, virus_typ: str, start_date: pd.Timestamp
             func.stddev_pop(WastewaterData.viruslast).label("viral_std"),
         )
         .filter(
-            WastewaterData.virus_typ == virus_typ,
+            _wastewater_virus_filter(WastewaterData.virus_typ, virus_typ),
             WastewaterData.datum >= start_date.to_pydatetime(),
             WastewaterData.viruslast.isnot(None),
         )
         .group_by(
+            WastewaterData.virus_typ,
             WastewaterData.bundesland,
             WastewaterData.datum,
         )
@@ -77,6 +115,7 @@ def load_wastewater_daily(builder: Any, virus_typ: str, start_date: pd.Timestamp
     frame = pd.DataFrame(
         [
             {
+                "source_virus_typ": str(row.source_virus_typ or virus_typ),
                 "bundesland": normalize_state_code(row.bundesland),
                 "datum": pd.Timestamp(row.datum).normalize(),
                 "available_time": effective_available_time(row.datum, row.available_time, 0),
@@ -92,7 +131,29 @@ def load_wastewater_daily(builder: Any, virus_typ: str, start_date: pd.Timestamp
     if frame.empty:
         return frame
 
+    frame = _select_wastewater_alias_rows(frame, virus_typ)
     return frame.sort_values(["bundesland", "datum"]).reset_index(drop=True)
+
+
+def latest_wastewater_available_date(builder: Any, virus_typ: str) -> pd.Timestamp:
+    if builder.db is None:
+        return pd.Timestamp(utc_now()).normalize()
+
+    row = (
+        builder.db.query(
+            func.max(WastewaterData.available_time).label("available_time"),
+            func.max(WastewaterData.datum).label("datum"),
+        )
+        .filter(_wastewater_virus_filter(WastewaterData.virus_typ, virus_typ))
+        .first()
+    )
+    if row is None:
+        return pd.Timestamp(utc_now()).normalize()
+    return effective_available_time(
+        row.datum or utc_now(),
+        row.available_time,
+        0,
+    ).normalize()
 
 
 def load_supported_wastewater_context(

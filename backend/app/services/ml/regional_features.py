@@ -272,21 +272,7 @@ class RegionalFeatureBuilder:
         return latest_rows
 
     def latest_available_as_of_date(self, virus_typ: str = "Influenza A") -> pd.Timestamp:
-        row = (
-            self.db.query(
-                func.max(WastewaterData.available_time).label("available_time"),
-                func.max(WastewaterData.datum).label("datum"),
-            )
-            .filter(WastewaterData.virus_typ == virus_typ)
-            .first()
-        )
-        if row is None:
-            return pd.Timestamp(utc_now()).normalize()
-        return effective_available_time(
-            row.datum or utc_now(),
-            row.available_time,
-            0,
-        ).normalize()
+        return regional_features_sources.latest_wastewater_available_date(self, virus_typ)
 
     def build_regional_training_data(
         self,

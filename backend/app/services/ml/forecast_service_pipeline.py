@@ -49,6 +49,25 @@ def train_and_forecast(
             "horizon_days": horizon,
         }
 
+    from app.services.ml.forecast_service_nowcast_extension import (
+        extend_training_frame_to_today,
+    )
+
+    today_ts = pd_module.Timestamp(utc_now_fn()).normalize()
+    df, extension_meta = extend_training_frame_to_today(
+        df,
+        today=today_ts,
+        is_holiday_fn=(
+            (lambda d: service._is_holiday(d, region=region_code))
+            if hasattr(service, "_is_holiday")
+            else None
+        ),
+        pd_module=pd_module,
+        np_module=np_module,
+        timedelta_cls=timedelta_cls,
+        logger=logger,
+    )
+
     model_med, model_lo, model_hi, feature_names, feature_importance = (
         service._fit_xgboost_meta_from_panel(panel, target_column="y_target")
     )
@@ -68,7 +87,9 @@ def train_and_forecast(
     upper_bound = max(upper_bound, prediction)
 
     y = df["y"].to_numpy(dtype=float)
-    issue_date = pd_module.Timestamp(df["ds"].max()).to_pydatetime()
+    issue_date = today_ts.to_pydatetime()
+    feature_as_of = extension_meta.get("feature_as_of")
+    days_forward_filled = int(extension_meta.get("days_forward_filled") or 0)
     last_momentum = float(df["trend_momentum_7d"].iloc[-1]) if "trend_momentum_7d" in df.columns else 0.0
     current_y = float(y[-1]) if len(y) > 0 else prediction
     risk = service._compute_outbreak_risk(prediction, y)
@@ -163,6 +184,13 @@ def train_and_forecast(
         },
         "backtest_metrics": backtest_metrics,
         "contracts": contracts,
+        "feature_freshness": {
+            "feature_as_of": feature_as_of,
+            "issue_date": issue_date.date().isoformat() if hasattr(issue_date, "date") else None,
+            "days_forward_filled": days_forward_filled,
+            "extension_reason": extension_meta.get("reason"),
+            "extension_applied": bool(extension_meta.get("applied")),
+        },
         "timestamp": utc_now_fn(),
     }
 

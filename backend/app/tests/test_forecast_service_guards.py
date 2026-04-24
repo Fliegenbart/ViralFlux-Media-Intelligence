@@ -1,4 +1,6 @@
 import unittest
+from datetime import datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import ANY, patch
 
 import numpy as np
@@ -23,9 +25,143 @@ from app.services.ml.forecast_service import (
     reliability_score_from_metrics,
     utc_now,
 )
+from app.services.ml import forecast_service_pipeline
 
 
 class ForecastServiceGuardTests(unittest.TestCase):
+    def test_inline_train_and_forecast_extends_stale_live_frame_to_today(self) -> None:
+        class _Model:
+            def __init__(self, value: float) -> None:
+                self.value = value
+
+            def predict(self, X):
+                return np.array([self.value], dtype=float)
+
+        class _EventModel:
+            feature_names = ["current_y"]
+
+            def predict_proba(self, X):
+                return np.array([0.42], dtype=float)
+
+        class _Service:
+            live_feature_max_ds: str | None = None
+
+            def prepare_training_data(self, **kwargs):
+                dates = pd.date_range("2026-04-01", "2026-04-15", freq="D")
+                return pd.DataFrame(
+                    {
+                        "ds": dates,
+                        "y": np.linspace(10.0, 24.0, len(dates)),
+                        "amelag_pred": np.linspace(9.0, 23.0, len(dates)),
+                        "trends_score": 1.0,
+                        "xd_load": 0.0,
+                        "survstat_incidence": 0.0,
+                        "lab_positivity_rate": 0.0,
+                        "lab_signal_available": 0.0,
+                        "lab_baseline_mean": 0.0,
+                        "lab_baseline_zscore": 0.0,
+                        "schulferien": 0.0,
+                        "lag1": 0.0,
+                        "lag2": 0.0,
+                        "lag3": 0.0,
+                        "ma3": 0.0,
+                        "ma5": 0.0,
+                        "roc": 0.0,
+                        "trend_momentum_7d": 0.0,
+                        "amelag_lag4": 0.0,
+                        "amelag_lag7": 0.0,
+                        "xdisease_lag7": 0.0,
+                        "xdisease_lag14": 0.0,
+                        "survstat_lag7": 0.0,
+                        "survstat_lag14": 0.0,
+                        "lab_positivity_lag7": 0.0,
+                        "region": "BY",
+                    }
+                )
+
+            def _build_direct_training_panel_from_frame(self, df, **kwargs):
+                return pd.DataFrame({"feature": np.linspace(1.0, 30.0, 30)})
+
+            def _fit_xgboost_meta_from_panel(self, panel, target_column):
+                return (
+                    _Model(30.0),
+                    _Model(20.0),
+                    _Model(40.0),
+                    ["current_y", "horizon_days"],
+                    {"current_y": 1.0},
+                )
+
+            def _build_live_direct_feature_row(self, df, **kwargs):
+                self.live_feature_max_ds = pd.Timestamp(df["ds"].max()).date().isoformat()
+                return {"current_y": float(df["y"].iloc[-1]), "horizon_days": float(kwargs["horizon_days"])}
+
+            def _build_event_probability_model_from_panel(self, panel):
+                return {
+                    "model": _EventModel(),
+                    "calibrated_metrics": {},
+                    "probability_source": "test",
+                    "model_family": "test",
+                    "calibration_mode": "raw_probability",
+                    "fallback_reason": None,
+                    "reliability_metrics": {},
+                    "reliability_source": "test",
+                    "reliability_score": 0.75,
+                }
+
+            def _build_live_event_feature_row(self, **kwargs):
+                return {"current_y": kwargs["live_feature_row"]["current_y"]}
+
+            def evaluate_training_candidate(self, **kwargs):
+                return {}
+
+            def _compute_outbreak_risk(self, prediction, y):
+                return 0.5
+
+            def _quality_meta_from_backtest(self, **kwargs):
+                return {"forecast_ready": kwargs["forecast_ready"]}
+
+            def _build_contracts(self, **kwargs):
+                return {
+                    "event_forecast": {"reliability_score": 0.75},
+                    "forecast_quality": {},
+                }
+
+            def _is_holiday(self, day, region="DE"):
+                return False
+
+        service = _Service()
+
+        result = forecast_service_pipeline.train_and_forecast(
+            service,
+            virus_typ="Influenza A",
+            region="BY",
+            horizon_days=5,
+            include_internal_history=True,
+            normalize_forecast_region_fn=lambda region: str(region).upper(),
+            ensure_supported_horizon_fn=lambda horizon: int(horizon),
+            min_direct_train_points=2,
+            utc_now_fn=lambda: datetime(2026, 4, 24, 12, 0, 0),
+            timedelta_cls=timedelta,
+            np_module=np,
+            pd_module=pd,
+            logger=SimpleNamespace(info=lambda *args, **kwargs: None, warning=lambda *args, **kwargs: None),
+        )
+
+        self.assertEqual(service.live_feature_max_ds, "2026-04-24")
+        self.assertEqual(
+            [pd.Timestamp(item["ds"]).date().isoformat() for item in result["forecast"]],
+            [
+                "2026-04-25",
+                "2026-04-26",
+                "2026-04-27",
+                "2026-04-28",
+                "2026-04-29",
+            ],
+        )
+        self.assertEqual(result["feature_freshness"]["feature_as_of"], "2026-04-15")
+        self.assertEqual(result["feature_freshness"]["days_forward_filled"], 9)
+        self.assertTrue(result["feature_freshness"]["extension_applied"])
+
     def test_forecast_service_does_not_keep_dead_confidence_level_state(self) -> None:
         service = ForecastService(db=None)
 

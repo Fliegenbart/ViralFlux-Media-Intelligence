@@ -378,6 +378,31 @@ async def get_regional_decisions(
     )
 
 
+@router.get("/regional/live-shift", dependencies=[Depends(get_current_user)])
+async def get_regional_live_shift(
+    virus_typ: str | None = Query(
+        default=None,
+        description="Optional: nur einen Virus auswerten. Ohne Wert werden Flu A, Flu B und RSV A geprüft.",
+    ),
+    horizon_days: int = Depends(_validated_regional_horizon),
+    top_n: int = Query(default=5, ge=1, le=16),
+    max_feature_gap_days: int = Query(default=10, ge=0, le=60),
+    min_change_pct: float = Query(default=10.0, ge=0.0, le=500.0),
+    db: Session = Depends(get_db),
+):
+    """Rank persisted regional h5 forecast rises with strict budget-readiness gates."""
+    from app.services.ml.regional_live_shift_snapshot import RegionalLiveShiftSnapshotService
+
+    service = RegionalLiveShiftSnapshotService(db)
+    return service.build_snapshot(
+        virus_types=[virus_typ] if virus_typ else None,
+        horizon_days=horizon_days,
+        top_n=top_n,
+        max_feature_gap_days=max_feature_gap_days,
+        min_change_pct=min_change_pct,
+    )
+
+
 @router.get("/regional/experimental-geo/predict", dependencies=[Depends(get_current_user)])
 async def get_experimental_geo_predictions(
     virus_typ: str = "Influenza A",

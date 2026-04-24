@@ -49,6 +49,11 @@ class ForecastApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 401)
 
+    def test_regional_live_shift_requires_authentication(self) -> None:
+        response = self.client.get("/api/v1/forecast/regional/live-shift?horizon_days=5")
+
+        self.assertEqual(response.status_code, 401)
+
     def test_media_activation_openapi_description_is_brand_neutral(self) -> None:
         response = self.client.get("/openapi.json")
 
@@ -148,6 +153,32 @@ class ForecastApiTests(unittest.TestCase):
         self.assertIn("decision_priority_index", first_prediction["decision"])
         self.assertIn("signal_support_score", first_prediction["decision"])
         self.assertIn("expected_target_incidence", first_prediction)
+
+    def test_regional_live_shift_returns_persisted_forecast_gate_payload(self) -> None:
+        payload = {
+            "horizon_days": 5,
+            "summary": {
+                "budget_gate_status": "candidate_only",
+                "top_regions": [{"region": "NW", "virus_typ": "Influenza A"}],
+            },
+            "viruses": {},
+        }
+
+        with patch(
+            "app.services.ml.regional_live_shift_snapshot.RegionalLiveShiftSnapshotService.build_snapshot",
+            return_value=payload,
+        ) as mocked:
+            response = self.client.get(
+                "/api/v1/forecast/regional/live-shift?horizon_days=5&virus_typ=Influenza%20A&top_n=3",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["summary"]["budget_gate_status"], "candidate_only")
+        mocked.assert_called_once()
+        self.assertEqual(mocked.call_args.kwargs["virus_types"], ["Influenza A"])
+        self.assertEqual(mocked.call_args.kwargs["horizon_days"], 5)
+        self.assertEqual(mocked.call_args.kwargs["top_n"], 3)
 
     def test_regional_decisions_defaults_brand_when_query_is_missing(self) -> None:
         payload = {

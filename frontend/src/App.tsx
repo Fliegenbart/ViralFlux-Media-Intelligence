@@ -38,6 +38,9 @@ const VarianteExecutivePage = lazy(
 const VarianteTerminalPage = lazy(
   () => import('./pages/cockpit/variants/VarianteTerminalPage'),
 );
+// 2026-04-23 Atlas-Lab: drei alternative Atlas-Designs zum Probefahren
+// (/cockpit/atlas-lab). Eigene Page, teilt Cookie-Auth mit /cockpit.
+const AtlasLabPage = lazy(() => import('./pages/cockpit/atlas-lab/AtlasLabPage'));
 
 const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -105,6 +108,7 @@ const App: React.FC = () => {
                 <Route path="/cockpit/data" element={<DataOfficePage />} />
                 <Route path="/cockpit/variante-1" element={<VarianteExecutivePage />} />
                 <Route path="/cockpit/variante-2" element={<VarianteTerminalPage />} />
+                <Route path="/cockpit/atlas-lab" element={<AtlasLabPage />} />
                 {RETIRED_ROUTES.map((path) => (
                   <Route
                     key={path}

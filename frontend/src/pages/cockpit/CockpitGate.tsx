@@ -62,7 +62,7 @@ export const CockpitGate: React.FC<{ onUnlocked?: () => void }> = ({ onUnlocked 
         </h1>
         <p className="peix-gate__dek">
           Regionaler Wellen-Forecast + Media-Shift-Empfehlungen für Pharma.
-          7-Tage-Horizont, 16 Bundesländer, honest-by-default. Passwort
+          16 Bundesländer, mehrtägiger Horizont, honest-by-default. Passwort
           eingeben, um das Pilot-Cockpit zu öffnen.
         </p>
         <form onSubmit={handleSubmit} className="peix-gate__form" autoComplete="off">

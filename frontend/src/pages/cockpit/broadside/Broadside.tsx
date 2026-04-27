@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { CockpitSnapshot } from '../types';
 
 import ChronoBar from './ChronoBar';
@@ -8,88 +9,20 @@ import ForecastSection from './ForecastSection';
 import ImpactSection from './ImpactSection';
 import BacktestSection from './BacktestSection';
 import NextStepsSection from './NextStepsSection';
-import ExecutiveHero from './ExecutiveHero';
+import CeoPitchMode from './CeoPitchMode';
 
 /**
- * StatusStrip — a compact "ja, das läuft"-Zeile unter der ChronoBar.
- * Beantwortet ohne Scroll die Frage "was seh ich hier": wie viele
- * Viren, wie viel regionale Tiefe, welcher Horizont, Outcome-State.
- * Pitch-orientiert.
- */
-const StatusStrip: React.FC<{ snapshot: CockpitSnapshot; supportedViruses: readonly string[] }> = ({
-  snapshot,
-  supportedViruses,
-}) => {
-  const activeRegions = snapshot.regions.filter(
-    (r) => r.decisionLabel !== 'TrainingPending',
-  ).length;
-  const horizon = snapshot.modelStatus?.horizonDays ?? 14;
-  const outcomeConnected = snapshot.mediaPlan?.connected === true;
-  // RKI-typischer Lag: SURVSTAT-Wochenwerte erscheinen ca. 5-7 Tage nach
-  // Wochenende. Heute (KW N) sind also Daten bis KW N-1 verfügbar. Diese
-  // Zelle vermeidet die "warum ist das Tool nicht aktuell"-Frage.
-  const isoWeek = (() => {
-    const m = snapshot.isoWeek.match(/(\d+)\D+(\d+)/);
-    return m ? { kw: parseInt(m[1], 10), year: parseInt(m[2], 10) } : null;
-  })();
-  const dataStandLabel = isoWeek
-    ? `KW ${String(isoWeek.kw - 1).padStart(2, '0')} / ${isoWeek.year}`
-    : '—';
-  return (
-    <div className="status-strip">
-      <div className="status-strip-inner">
-        <div className="status-cell">
-          <span className="status-label">Viren live</span>
-          <span className="status-value">{supportedViruses.length} / 4</span>
-        </div>
-        <div className="status-cell">
-          <span className="status-label">Regional ({snapshot.virusLabel ?? snapshot.virusTyp})</span>
-          <span className="status-value">
-            {activeRegions} / 16 Bundesländer
-          </span>
-        </div>
-        <div
-          className="status-cell"
-          title="RKI SURVSTAT veröffentlicht jede Woche mit ca. 5-7 Tagen Verzug. Das Cockpit rechnet auf diesem aktuellen Stand."
-        >
-          <span className="status-label">Daten-Stand</span>
-          <span className="status-value">{dataStandLabel}</span>
-        </div>
-        <div className="status-cell">
-          <span className="status-label">Forecast-Horizont</span>
-          <span className="status-value">{horizon} Tage</span>
-        </div>
-        <div className="status-cell">
-          <span className="status-label">Outcome-Loop</span>
-          <span className={`status-value${outcomeConnected ? ' ok' : ' waiting'}`}>
-            {outcomeConnected ? 'verbunden' : 'bereit · wartet auf CSV'}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
- * Broadside — Instrumentation-Redesign 2026-04-18.
+ * Broadside — Story-Scroll-Renovation 2026-04-22.
  *
- * Aesthetic: wissenschaftliches Messinstrument, nicht SaaS-Dashboard.
- * Der Layout-Rahmen ist radikal ruhig: ein sticky Chrono-Bar oben
- * (live Epoch + KW-Ticker + Next-Run), fünf Kapitel I…V stacked,
- * am Ende ein Redaktions-Footer. Kein floating TOC, keine Punk-Badges,
- * keine editorialen Serifen.
+ * Header (sticky, 56px): Brand · KW-Ticker (±2) · Virus-Switcher.
+ * Body: ExecutiveHero + sechs Sections (Atlas, Decision, Forecast,
+ * Impact, Backtest, NextSteps).
+ * Footer: technische Meta (EPOCH live · NEXT RUN · Quellen · DATA-Link).
  *
- * Drei idiosynkratische Moves (pro Section):
- *   § I  Vernier-Skala für Konfidenz
- *   § II Atlas-HUD mit Corner-Brackets + Riser-Ticker
- *   § III SVG Fan-Chart mit HEUTE-Zäsur (dunkles Label-Rect oben)
- *
- * Palette strikt 5 Farben:
- *   Paper #F4F1EA · Ink #0D0F12 · Slate #4A5261
- *   Signal-Terracotta #C2542A · Oxid-Salbei #8B9788
- *
- * Typo: Supreme (Display) + General Sans (Body) + JetBrains Mono
- * (Ticks/Koordinaten). Alle Fontshare/Google, kostenlos.
+ * StatusStrip wurde aufgelöst — die fünf Status-Werte wandern nach
+ * Phase 2 in den ExecutiveHero. EPOCH-Live-Counter und Next-Run-
+ * Countdown sind in den Footer gewandert (waren vorher Quellen visueller
+ * Unruhe in der Kopfzone).
  */
 
 interface Props {
@@ -99,6 +32,38 @@ interface Props {
   supportedViruses: readonly string[];
   onReload?: () => void;
 }
+
+function fmtNextMondayCountdown(now: Date): string {
+  const next = new Date(now);
+  const dow = now.getDay();
+  const daysToMon = ((8 - dow) % 7) || 7;
+  next.setDate(next.getDate() + daysToMon);
+  next.setHours(8, 0, 0, 0);
+  const diffMs = Math.max(0, next.getTime() - now.getTime());
+  const d = Math.floor(diffMs / 86_400_000);
+  const h = String(Math.floor((diffMs % 86_400_000) / 3_600_000)).padStart(2, '0');
+  const m = String(Math.floor((diffMs % 3_600_000) / 60_000)).padStart(2, '0');
+  const s = String(Math.floor((diffMs % 60_000) / 1000)).padStart(2, '0');
+  return `${d}d ${h}:${m}:${s}`;
+}
+
+const FooterTicker: React.FC = () => {
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <>
+      <div>
+        EPOCH <b>{Math.floor(now.getTime() / 1000)}</b>
+      </div>
+      <div>
+        NEXT RUN <b>{fmtNextMondayCountdown(now)}</b>
+      </div>
+    </>
+  );
+};
 
 const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
   const generated = snapshot.generatedAt ? new Date(snapshot.generatedAt) : null;
@@ -122,9 +87,10 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
     '—';
 
   const trainingPanel = snapshot.modelStatus?.trainingPanel;
-  const trainingLabel = trainingPanel && trainingPanel.maturityTier !== 'unknown'
-    ? `Training-Panel: ${trainingPanel.maturityLabel}`
-    : null;
+  const trainingLabel =
+    trainingPanel && trainingPanel.maturityTier !== 'unknown'
+      ? `Training-Panel: ${trainingPanel.maturityLabel}`
+      : null;
 
   return (
     <footer className="page-foot">
@@ -134,6 +100,7 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
         </div>
         <div>Ausgabe {snapshot.isoWeek} · {generatedLabel}</div>
         <div>peix gmbh · Berlin</div>
+        <FooterTicker />
       </div>
       <div>
         <div>Quellen</div>
@@ -142,6 +109,11 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
           Kalibrierung: {calibMode}, {folds} Walk-forward Folds
         </div>
         {trainingLabel ? <div>{trainingLabel}</div> : null}
+        <div>
+          <Link to="/cockpit/data" className="page-foot-link">
+            Data Office ↗
+          </Link>
+        </div>
       </div>
       <div className="col-right">
         <div>Präsentiert für</div>
@@ -168,14 +140,12 @@ export const Broadside: React.FC<Props> = ({
     <div className="peix-instr">
       <ChronoBar
         currentKw={currentKw}
-        client={snapshot.client}
         virusTyp={virusTyp}
         onVirusChange={onVirusChange}
         supportedViruses={supportedViruses}
       />
-      <StatusStrip snapshot={snapshot} supportedViruses={supportedViruses} />
       <main className="page">
-        <ExecutiveHero snapshot={snapshot} onReload={onReload} />
+        <CeoPitchMode snapshot={snapshot} supportedViruses={supportedViruses} onReload={onReload} />
         {/* 2026-04-20: Atlas promoted to § I — the 3D wave map is the
             consistent aha-moment for first-time readers (confirmed during
             persona walkthrough). Decision follows as § II because the

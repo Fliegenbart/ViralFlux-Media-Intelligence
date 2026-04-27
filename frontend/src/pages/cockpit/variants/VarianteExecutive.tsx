@@ -100,13 +100,13 @@ export const VarianteExecutive: React.FC<Props> = ({
 
           {rec ? (
             <h1 className="vex-headline">
-              Verschiebe{' '}
+              Prüfe{' '}
               <span className="vex-budget">
                 {rec.amountEur
                   ? `${(rec.amountEur / 1000).toLocaleString('de-DE')} k €`
                   : 'Budget'}
               </span>{' '}
-              aus <em className="vex-from">{rec.fromName}</em>
+              als Shift-Kandidat von <em className="vex-from">{rec.fromName}</em>
               <br />
               nach <em className="vex-to">{rec.toName}</em>.
             </h1>

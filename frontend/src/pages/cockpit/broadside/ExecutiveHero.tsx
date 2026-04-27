@@ -17,6 +17,7 @@ import MediaPlanUploadModal from './MediaPlanUploadModal';
 
 interface Props {
   snapshot: CockpitSnapshot;
+  supportedViruses?: readonly string[];
   onReload?: () => void;
 }
 
@@ -53,7 +54,7 @@ function detectSeasonPhase(isoWeek: string): {
   };
 }
 
-export const ExecutiveHero: React.FC<Props> = ({ snapshot, onReload }) => {
+export const ExecutiveHero: React.FC<Props> = ({ snapshot, supportedViruses, onReload }) => {
   const [mediaPlanModalOpen, setMediaPlanModalOpen] = useState(false);
   const phase = useMemo(() => detectSeasonPhase(snapshot.isoWeek), [snapshot.isoWeek]);
 
@@ -175,20 +176,128 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot, onReload }) => {
     return null;
   })();
 
+  // Status-Chip-Daten (ehemaliger StatusStrip)
+  const isoMatch = snapshot.isoWeek.match(/(\d+)\D+(\d+)/);
+  const dataKw = isoMatch ? Math.max(1, parseInt(isoMatch[1], 10) - 1) : null;
+  const dataYear = isoMatch ? parseInt(isoMatch[2], 10) : null;
+  const horizonDays = snapshot.modelStatus?.horizonDays ?? 14;
+  const activeRegions = snapshot.regions.filter(
+    (r) => r.decisionLabel !== 'TrainingPending',
+  ).length;
+  const virusCount = supportedViruses?.length ?? 0;
+
+  // Confidence-Tag in Worten — ergänzt die Saison-Phase im Kicker.
+  const confidenceTag = hasStrongSignal ? 'Trigger aktiv' : 'Ruhiges Signal';
+
   return (
     <section className="exec-hero" id="sec-exec-hero">
-      {integrityWarning ? (
-        <div className={`exec-integrity-banner exec-integrity-${integrityWarning.tone}`} role="alert">
-          <div className="exec-integrity-title">{integrityWarning.title}</div>
-          <div className="exec-integrity-body">{integrityWarning.body}</div>
+      <div className="exec-hero-main">
+        <div className="exec-hero-headline">
+          <div className="exec-hero-kicker">
+            <span className={`exec-phase-tag exec-phase-${phase.tone}`}>{phase.label}</span>
+            <span className={`exec-confidence-tag exec-confidence-${hasStrongSignal ? 'on' : 'off'}`}>{confidenceTag}</span>
+          </div>
+          <h1 className="exec-hero-title">
+            {hasStrongSignal && topRiser ? (
+              <>
+                Welle vorn in <b>{topRiser.name}</b>
+                <span className="exec-delta">
+                  {' '}+{Math.round((topRiser.delta7d ?? 0) * 100)} % in 7 Tagen
+                </span>
+              </>
+            ) : (
+              <>Kein Wellen-Trigger diese Woche</>
+            )}
+          </h1>
+          <p className="exec-hero-sub">
+            {hasStrongSignal
+              ? `${virusLabel}-Aktivität steigt hier merklich. ${phase.note}`
+              : `Alle 16 Bundesländer unterhalb des Aktivierungs-Schwellwerts. ${phase.note}`}
+          </p>
+          <div className="exec-hero-shift">
+            {shiftEur && hasStrongSignal ? (
+              <>
+                <span className="exec-shift-label">Shift-Kandidat</span>
+                <span className="exec-shift-value">
+                  {shiftEur.toLocaleString('de-DE')} €
+                  <span className="exec-direction">
+                    {' '}{topFaller?.code} → {topRiser?.code}
+                  </span>
+                </span>
+                <span className="exec-shift-note">
+                  {mediaConnected
+                    ? `aus Media-Plan (${liveTotalEur ? `${liveTotalEur.toLocaleString('de-DE')} €` : '—'} Wochenbudget) · Signal ${snapshot.primaryRecommendation?.signalScore?.toFixed(2) ?? snapshot.primaryRecommendation?.confidence?.toFixed(2) ?? '—'} · Freigabe über Gates`
+                    : 'Demo-Szene auf 100 k € Wochenbudget · keine automatische Freigabe'}
+                </span>
+                <button
+                  type="button"
+                  className="exec-upload-btn"
+                  onClick={() => setMediaPlanModalOpen(true)}
+                  title="Media-Plan via CSV hochladen"
+                >
+                  {mediaConnected ? 'Plan bearbeiten' : '⬆ CSV hochladen'}
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="exec-shift-label">Kein Shift</span>
+                <span className="exec-shift-note">
+                  {hasStrongSignal
+                    ? 'Shift-Betrag wartet auf Media-Plan-Anbindung und Gate-Prüfung.'
+                    : 'Keine Budgetfreigabe — Tool schont, bis ein sauberer Trigger kommt.'}
+                </span>
+                <button
+                  type="button"
+                  className="exec-upload-btn"
+                  onClick={() => setMediaPlanModalOpen(true)}
+                  title="Media-Plan via CSV hochladen"
+                >
+                  {mediaConnected ? 'Plan bearbeiten' : '⬆ CSV hochladen'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      ) : null}
-      {/* 2026-04-21 Scale-Kalibrator-Badge — eigene Zeile, damit der
-          Post-hoc-Transform sichtbar bleibt. Schmaler als integrity-banner,
-          rein informativ: zeigt alpha/beta + RMSE-Improvement. Falls der
-          Accuracy-Monitor bereits einen calibratedMape-Impact geschätzt
-          hat, hängen wir den als zusätzliches Label mit an ("erwartet ab
-          KW +1"). */}
+        {integrityWarning ? (
+          <aside
+            className={`exec-hero-integrity exec-integrity-${integrityWarning.tone}`}
+            role="alert"
+          >
+            <div className="exec-integrity-title">{integrityWarning.title}</div>
+            <div className="exec-integrity-body">{integrityWarning.body}</div>
+          </aside>
+        ) : null}
+      </div>
+
+      <div className="exec-hero-chips" aria-label="Tool-Status">
+        <span className="exec-chip">
+          <span className="exec-chip-label">Viren</span>
+          <b>{virusCount}</b>
+          <span className="exec-chip-sep">/</span>4
+        </span>
+        <span className="exec-chip">
+          <span className="exec-chip-label">Bundesländer</span>
+          <b>{activeRegions}</b>
+          <span className="exec-chip-sep">/</span>16
+        </span>
+        <span className="exec-chip">
+          <span className="exec-chip-label">Daten</span>
+          KW <b>{dataKw ?? '—'}</b>
+          {' / '}
+          {dataYear ?? '—'}
+        </span>
+        <span className="exec-chip">
+          <span className="exec-chip-label">Horizont</span>
+          <b>{horizonDays}</b> d
+        </span>
+        <span className={`exec-chip ${mediaConnected ? 'exec-chip-ok' : 'exec-chip-wait'}`}>
+          <span className="exec-chip-label">Outcome</span>
+          <b>{mediaConnected ? 'verbunden' : 'wartet auf CSV'}</b>
+        </span>
+      </div>
+
+      {/* Skalen-Kalibrator-Badge bleibt als schmale Mono-Zeile am unteren
+          Rand des Hero — informativ, kein Alarm. */}
       {calibration?.applied ? (
         <div className="exec-calibrator-badge" role="note">
           <b>Skalen-Kalibrator aktiv</b>
@@ -212,80 +321,7 @@ export const ExecutiveHero: React.FC<Props> = ({ snapshot, onReload }) => {
             ) : null}
         </div>
       ) : null}
-      <div className="exec-hero-inner">
-        <div className={`exec-cell phase-${phase.tone}`}>
-          <div className="exec-cell-kicker">Saison-Phase</div>
-          <div className="exec-cell-value">{phase.label}</div>
-          <div className="exec-cell-note">{phase.note}</div>
-        </div>
 
-        <div className={`exec-cell signal-${hasStrongSignal ? 'strong' : 'quiet'}`}>
-          <div className="exec-cell-kicker">Atlas sagt gerade</div>
-          {hasStrongSignal && topRiser ? (
-            <>
-              <div className="exec-cell-value">
-                Welle vorn in{' '}
-                <b>{topRiser.name}</b>
-                <span className="exec-delta">
-                  {' '}+{Math.round((topRiser.delta7d ?? 0) * 100)} % · 7 d
-                </span>
-              </div>
-              <div className="exec-cell-note">
-                {virusLabel}-Aktivität steigt hier merklich — Region in
-                der Top-Riser-Liste des Atlas.
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="exec-cell-value">Kein Wellen-Trigger</div>
-              <div className="exec-cell-note">
-                Alle 16 Bundesländer unterhalb des Aktivierungs-Schwellwerts.
-                Kein Shift diese Woche; das Tool schont dein Budget.
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className={`exec-cell budget-${mediaConnected ? 'connected' : 'demo'}`}>
-          <div className="exec-cell-kicker">
-            {mediaConnected
-              ? `Empfohlener Shift · ${liveTotalEur ? `${liveTotalEur.toLocaleString('de-DE')} € Wochenbudget` : 'Live-Plan verbunden'}`
-              : 'Demo-Szene · 100k € Wochenbudget'}
-            <button
-              type="button"
-              className="exec-upload-btn"
-              onClick={() => setMediaPlanModalOpen(true)}
-              title="Media-Plan via CSV hochladen"
-            >
-              {mediaConnected ? 'Plan bearbeiten' : '⬆ CSV hochladen'}
-            </button>
-          </div>
-          {shiftEur && hasStrongSignal ? (
-            <>
-              <div className="exec-cell-value exec-eur">
-                {shiftEur.toLocaleString('de-DE')} €
-                <span className="exec-direction">
-                  {' '}{topFaller?.code} → {topRiser?.code}
-                </span>
-              </div>
-              <div className="exec-cell-note">
-                {mediaConnected
-                  ? `Shift-Vorschlag des Modells für diese Woche — aus deinem Media-Plan (${liveTotalEur ? `${liveTotalEur.toLocaleString('de-DE')} €` : '—'}) und Signal-Score ${snapshot.primaryRecommendation?.signalScore?.toFixed(2) ?? snapshot.primaryRecommendation?.confidence?.toFixed(2) ?? '—'}.`
-                  : `So würde das Tool bei 100 k € Wochenbudget shiften. Echte EUR sobald GELO-Media-Plan angebunden.`}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="exec-cell-value exec-eur exec-eur-off">0 €</div>
-              <div className="exec-cell-note">
-                {hasStrongSignal
-                  ? 'Shift-Betrag wartet auf Media-Plan-Anbindung.'
-                  : 'Kein Shift — Tool ruht bis zum nächsten Wellen-Trigger.'}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
       <MediaPlanUploadModal
         open={mediaPlanModalOpen}
         onClose={() => setMediaPlanModalOpen(false)}

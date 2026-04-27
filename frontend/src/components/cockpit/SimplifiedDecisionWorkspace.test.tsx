@@ -99,9 +99,9 @@ describe('SimplifiedDecisionWorkspace', () => {
     );
 
     expect(container.firstElementChild).toHaveClass('decision-home');
-    expect(screen.getByText('Diese Woche Budget in Sachsen erhoehen.')).toBeInTheDocument();
+    expect(screen.getByText('Diese Woche Sachsen als Budget-Kandidat pruefen.')).toBeInTheDocument();
     expect(screen.getByText('Verlauf bisher und Prognose')).toBeInTheDocument();
-    expect(screen.getByText('Links siehst du den bisherigen Verlauf, rechts die naechsten 7 Tage.')).toBeInTheDocument();
+    expect(screen.getByText('Links siehst du den bisherigen Verlauf, rechts das aktive 9-Tage-Prognosefenster.')).toBeInTheDocument();
     expect(screen.getByText('DecisionForecastChart')).toBeInTheDocument();
     expect(screen.getByText('Region')).toBeInTheDocument();
     expect(screen.getByText('Trend')).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('SimplifiedDecisionWorkspace', () => {
     expect(screen.getByText('Datenstand 2026-04-14T08:00:00Z')).toBeInTheDocument();
     expect(screen.queryByText('Sachsen fuehrt Forecast und Signal an.')).not.toBeInTheDocument();
 
-    expect(screen.getByText('Diese Woche Budget in Sachsen erhoehen.').closest('.decision-home__hero--go')?.className)
+    expect(screen.getByText('Diese Woche Sachsen als Budget-Kandidat pruefen.').closest('.decision-home__hero--go')?.className)
       .toBe('decision-home__hero decision-home__hero--go');
     expect(screen.getByLabelText('Kernfakten').className).toBe('decision-home__facts');
 

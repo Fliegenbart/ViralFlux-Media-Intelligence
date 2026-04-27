@@ -75,7 +75,7 @@ const SimplifiedDecisionWorkspace: React.FC<Props> = ({
       <section className="decision-home__graph">
         <div className="decision-home__section-head">
           <h2 className="decision-home__section-title">Verlauf bisher und Prognose</h2>
-          <p className="decision-home__section-copy">Links siehst du den bisherigen Verlauf, rechts die naechsten 7 Tage.</p>
+          <p className="decision-home__section-copy">Links siehst du den bisherigen Verlauf, rechts das aktive {horizonDays}-Tage-Prognosefenster.</p>
         </div>
         <DecisionForecastChart
           prediction={model.focusPrediction}

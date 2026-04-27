@@ -15,24 +15,49 @@
  *   3. Atlas-HUD — Corner-Brackets, LAT/LON-Readout, Riser-Ticker
  */
 
-@import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&f[]=supreme@400,500,700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+/* 2026-04-22 Refresh: Inter (body) + Space Grotesk (display) + JetBrains Mono.
+   Inter ersetzt General Sans (frischer, neutraler, lesbarer auf hellen Hintergründen).
+   Space Grotesk ersetzt Supreme (modern-technical statt editorial-warm). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+/* 2026-04-22 Story-Scroll-Fix: Snap muss auf dem scrollenden Container
+   liegen — das ist `html`, nicht `.peix-instr`. Zusätzlich scroll-behavior
+   smooth für sanftes Einrasten, und scroll-padding-top in Höhe des sticky
+   Headers, damit Anchor-Links nicht darunter verschwinden. */
+html {
+  scroll-snap-type: y proximity;
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px;
+}
 
 .peix-instr {
-  /* ----- Color system — 5 Farben, strikt ----- */
-  --paper: #F4F1EA;
-  --paper-warm: #EDE8DC;
-  --ink: #0D0F12;
-  --ink-60: rgba(13, 15, 18, 0.6);
-  --ink-40: rgba(13, 15, 18, 0.4);
-  --ink-20: rgba(13, 15, 18, 0.2);
-  --ink-10: rgba(13, 15, 18, 0.1);
-  --ink-05: rgba(13, 15, 18, 0.05);
-  --slate: #4A5261;
-  --signal: #C2542A;
-  --signal-soft: rgba(194, 84, 42, 0.12);
-  --oxide: #8B9788;
-  --oxide-soft: rgba(139, 151, 136, 0.18);
+  /* ----- Color system — 2026-04-22 Refresh: Off-White statt Creme,
+     schärferes Ink, kühleres Slate. Salbei (oxide) auf Slate gemappt.
+     Signal kräftiger (Vermilion statt Terracotta). ----- */
+  --paper: #FAFAFA;
+  --paper-warm: #F4F4F5;
+  --ink: #0A0A0F;
+  --ink-70: rgba(10, 10, 15, 0.72);
+  --ink-60: rgba(10, 10, 15, 0.6);
+  --ink-50: rgba(10, 10, 15, 0.5);
+  --ink-40: rgba(10, 10, 15, 0.4);
+  --ink-30: rgba(10, 10, 15, 0.3);
+  --ink-20: rgba(10, 10, 15, 0.2);
+  --ink-15: rgba(10, 10, 15, 0.12);
+  --ink-10: rgba(10, 10, 15, 0.1);
+  --ink-05: rgba(10, 10, 15, 0.05);
+  --slate: #3F3F46;
+  --signal: #DC2626;
+  --signal-soft: rgba(220, 38, 38, 0.10);
+  /* Oxide war Salbei (#8B9788) — auf Slate gemappt, da der Salbei zu nah am
+     Slate lag und nur visuelles Rauschen erzeugte. */
+  --oxide: #3F3F46;
+  --oxide-soft: rgba(63, 63, 70, 0.12);
+
+  /* ----- Font stacks — modern, neutral, lesbar ----- */
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-mono);
 
   /* ----- Type scale — präzise, nicht dramatisch ----- */
   --t-micro: 10px;
@@ -52,11 +77,20 @@
   --gutter: 48px;
   --page-max: 1360px;
 
+  /* Phase 3a: Story-Scroll-Skala */
+  --header-h: 56px;
+  --section-min-h: calc(100vh - var(--header-h));
+  --section-pad-y: clamp(64px, 8vh, 128px);
+
+  /* Story-Scroll: snap-type wanderte auf html (siehe oben). Hier nur
+     noch sicherstellen, dass Container selbst keinen eigenen Scroll
+     erzeugt. */
+
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   background: var(--paper);
   color: var(--ink);
-  font-family: 'General Sans', -apple-system, sans-serif;
+  font-family: var(--font-body);
   font-size: var(--t-body);
   line-height: 1.5;
   font-feature-settings: "ss01", "ss02", "tnum";
@@ -81,9 +115,9 @@
 .peix-instr * { box-sizing: border-box; }
 
 /* Typography primitives */
-.peix-instr .instr-mono      { font-family: 'JetBrains Mono', monospace; font-feature-settings: "tnum", "zero"; letter-spacing: -0.01em; }
-.peix-instr .instr-display   { font-family: 'Supreme', 'General Sans', sans-serif; font-weight: 500; letter-spacing: -0.03em; line-height: 0.95; }
-.peix-instr .instr-kicker    { font-family: 'JetBrains Mono', monospace; font-size: var(--t-tick); font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-60); }
+.peix-instr .instr-mono      { font-family: var(--font-mono); font-feature-settings: "tnum", "zero"; letter-spacing: -0.01em; }
+.peix-instr .instr-display   { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.03em; line-height: 0.95; }
+.peix-instr .instr-kicker    { font-family: var(--font-mono); font-size: var(--t-tick); font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-60); }
 .peix-instr .instr-tnum      { font-variant-numeric: tabular-nums; }
 
 /* -----------------------------------------------------
@@ -94,7 +128,7 @@
   background: var(--ink);
   color: var(--paper);
   border-bottom: 1px solid var(--ink);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   letter-spacing: 0.04em;
 }
@@ -102,51 +136,455 @@
   max-width: var(--page-max);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto auto;
-  gap: 32px;
+  grid-template-columns: auto 1fr auto;
+  gap: 48px;
   align-items: center;
-  padding: 10px 32px;
-}
-.peix-instr .chrono-data-link {
-  color: var(--paper);
-  text-decoration: none;
-  padding: 5px 12px;
-  border: 1px solid rgba(244,241,234,0.35);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  font-weight: 500;
-  text-transform: uppercase;
-  transition: background 0.15s var(--ease), border-color 0.15s var(--ease);
-}
-.peix-instr .chrono-data-link:hover {
-  background: rgba(244,241,234,0.1);
-  border-color: var(--signal);
-  color: var(--signal);
+  padding: 14px 32px;
+  min-height: 56px;
 }
 .peix-instr .chrono-brand { display: flex; align-items: center; gap: 12px; font-weight: 600; letter-spacing: 0.18em; }
 .peix-instr .chrono-brand .dot { width: 6px; height: 6px; background: var(--signal); border-radius: 50%; animation: instrPulse 2s var(--ease) infinite; }
 @keyframes instrPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .peix-instr .chrono-ticks {
-  display: flex; gap: 0;
-  font-size: 10px;
-  color: rgba(244, 241, 234, 0.5);
-  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: 18px;
+  font-size: 11px;
+  color: rgba(244, 241, 234, 0.4);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
-.peix-instr .chrono-tick { padding: 0 10px; border-right: 1px solid rgba(244, 241, 234, 0.1); }
-.peix-instr .chrono-tick:last-child { border: none; }
-.peix-instr .chrono-tick.active { color: var(--signal); }
+.peix-instr .chrono-tick {
+  letter-spacing: 0.05em;
+  transition: color 0.2s var(--ease);
+}
+.peix-instr .chrono-tick.active {
+  color: var(--paper);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0 6px;
+  position: relative;
+}
+.peix-instr .chrono-tick.active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -10px;
+  height: 2px;
+  background: var(--signal);
+}
 
-.peix-instr .chrono-meta { display: flex; gap: 24px; font-size: 10px; color: rgba(244, 241, 234, 0.65); }
-.peix-instr .chrono-meta b { color: var(--paper); font-weight: 500; }
+/* Executive Hero — Story-Scroll-Renovation 2026-04-22.
+   Eine Headline, eine Sub-Zeile, eine Shift-Zeile. Integrity-Banner
+   wandert in die Sidebar (rechts). Status-Chips bilden den Fuß des
+   Hero. Keine konkurrierenden Cards mehr.
 
-/* Executive Hero — 30-Sekunden-Summary oben. 3 Kacheln: Saison-Phase,
-   Atlas-Signal, EUR-Shift-Schätzung. Speaks GELO-language, not ML. */
+   Phase 3a: Hero ist die §0-Section — bekommt min-height + snap +
+   vertikale Zentrierung des Headline-Blocks, damit der erste
+   Bildschirm beim Öffnen ruhig wirkt. */
 .peix-instr .exec-hero {
-  margin: 0 0 48px;
-  padding: 0;
+  margin: 0;
+  padding: var(--section-pad-y) 0;
+  min-height: var(--section-min-h);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  scroll-margin-top: var(--header-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.peix-instr .exec-hero-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.peix-instr .exec-hero-main:has(.exec-hero-integrity) {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+}
+.peix-instr .exec-hero-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.peix-instr .exec-hero-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-50, rgba(13, 15, 18, 0.55));
+}
+.peix-instr .exec-phase-tag,
+.peix-instr .exec-confidence-tag {
+  padding: 3px 8px;
+  border: 0.5px solid var(--ink-20, rgba(13, 15, 18, 0.18));
+  border-radius: 2px;
+}
+.peix-instr .exec-phase-tag.exec-phase-peak {
+  color: #8a3f20;
+  border-color: rgba(194, 84, 42, 0.4);
+  background: rgba(194, 84, 42, 0.06);
+}
+.peix-instr .exec-phase-tag.exec-phase-shoulder {
+  color: #5a4a2a;
+  border-color: rgba(217, 158, 48, 0.4);
+  background: rgba(217, 158, 48, 0.06);
+}
+.peix-instr .exec-phase-tag.exec-phase-off {
+  color: #4d5f3c;
+  border-color: rgba(128, 150, 95, 0.4);
+  background: rgba(128, 150, 95, 0.06);
+}
+.peix-instr .exec-confidence-tag.exec-confidence-on {
+  color: #8a3f20;
+  border-color: rgba(194, 84, 42, 0.5);
+}
+.peix-instr .exec-confidence-tag.exec-confidence-off {
+  color: var(--ink-50, rgba(13, 15, 18, 0.55));
+}
+.peix-instr .exec-hero-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 3.6vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ink, #0d0f12);
+}
+.peix-instr .exec-hero-title b {
+  font-weight: 600;
+  color: var(--signal, #c2542a);
+}
+.peix-instr .exec-hero-title .exec-delta {
+  font-family: var(--font-mono);
+  font-size: 0.7em;
+  font-weight: 400;
+  color: var(--signal, #c2542a);
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+.peix-instr .exec-hero-sub {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-70, rgba(13, 15, 18, 0.72));
+  max-width: 70ch;
+}
+.peix-instr .exec-hero-shift {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: center;
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: rgba(13, 15, 18, 0.03);
+  border-left: 2px solid var(--ink-20, rgba(13, 15, 18, 0.18));
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+.peix-instr .exec-shift-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-50, rgba(13, 15, 18, 0.55));
+}
+.peix-instr .exec-shift-value {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--signal, #c2542a);
+}
+.peix-instr .exec-shift-value .exec-direction {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-60, rgba(13, 15, 18, 0.62));
+  margin-left: 4px;
+}
+.peix-instr .exec-shift-note {
+  color: var(--ink-60, rgba(13, 15, 18, 0.62));
+  font-size: 12px;
+  flex: 1 1 auto;
+}
+
+/* -----------------------------------------------------
+   PEIX CEO PITCH MODE — erster Screen für Entscheider.
+   Gleiche Daten, weniger Labor-Text: Entscheidung, Evidenz, Risiko.
+----------------------------------------------------- */
+.peix-instr .ceo-pitch {
+  margin: 0 -32px;
+  padding:
+    clamp(56px, 8vh, 92px)
+    32px
+    clamp(34px, 6vh, 64px);
+  min-height: calc(100svh - var(--header-h));
+  scroll-snap-align: start;
+  scroll-margin-top: var(--header-h);
+  color: var(--paper);
+  background:
+    linear-gradient(110deg, rgba(10, 10, 15, 0.98) 0%, rgba(10, 10, 15, 0.92) 48%, rgba(10, 10, 15, 0.98) 100%),
+    radial-gradient(circle at 72% 42%, rgba(220, 38, 38, 0.18), transparent 34%);
+  position: relative;
+  overflow: hidden;
+}
+
+.peix-instr .ceo-pitch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(250, 250, 250, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(250, 250, 250, 0.025) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.12));
+  pointer-events: none;
+}
+
+.peix-instr .ceo-pitch-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.96fr) minmax(380px, 0.9fr);
+  gap: clamp(32px, 6vw, 88px);
+  align-items: center;
+}
+
+.peix-instr .ceo-pitch-copy {
+  max-width: 760px;
+}
+
+.peix-instr .ceo-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(250, 250, 250, 0.58);
+  margin-bottom: 18px;
+}
+
+.peix-instr .ceo-pitch h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(48px, 7.4vw, 98px);
+  line-height: 0.95;
+  letter-spacing: -0.045em;
+  max-width: 10ch;
+}
+
+.peix-instr .ceo-pitch h1 span {
+  color: var(--signal);
+}
+
+.peix-instr .ceo-lede {
+  margin: 28px 0 0;
+  max-width: 66ch;
+  color: rgba(250, 250, 250, 0.72);
+  font-size: clamp(16px, 1.5vw, 20px);
+  line-height: 1.55;
+}
+
+.peix-instr .ceo-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 30px;
+}
+
+.peix-instr .ceo-primary-link,
+.peix-instr .ceo-secondary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid rgba(250, 250, 250, 0.26);
+  color: var(--paper);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 160ms var(--ease),
+    border-color 160ms var(--ease),
+    transform 160ms var(--ease);
+}
+
+.peix-instr .ceo-primary-link {
+  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--paper);
+}
+
+.peix-instr .ceo-primary-link:hover,
+.peix-instr .ceo-secondary-link:hover {
+  transform: translateY(-1px);
+}
+
+.peix-instr .ceo-secondary-link:hover {
+  background: rgba(250, 250, 250, 0.08);
+  border-color: rgba(250, 250, 250, 0.5);
+}
+
+.peix-instr .ceo-plan-button {
+  font: inherit;
+}
+
+.peix-instr .ceo-map-stage {
+  position: relative;
+  min-height: clamp(420px, 58vh, 620px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid rgba(250, 250, 250, 0.18);
+  border-bottom: 1px solid rgba(250, 250, 250, 0.18);
+}
+
+.peix-instr .ceo-map-stage .atlas-choropleth {
+  width: min(100%, 640px);
+  height: min(58vh, 620px);
+  filter: saturate(1.06) contrast(1.04);
+}
+
+.peix-instr .ceo-map-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(250, 250, 250, 0.14);
+  color: rgba(250, 250, 250, 0.72);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.peix-instr .ceo-map-caption b {
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.peix-instr .ceo-readout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: clamp(30px, 5vh, 54px);
+  border-top: 1px solid rgba(250, 250, 250, 0.18);
+  border-left: 1px solid rgba(250, 250, 250, 0.12);
+}
+
+.peix-instr .ceo-readout > div {
+  min-height: 118px;
+  padding: 18px 18px 16px;
+  border-right: 1px solid rgba(250, 250, 250, 0.12);
+  border-bottom: 1px solid rgba(250, 250, 250, 0.12);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.peix-instr .ceo-readout span {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(250, 250, 250, 0.46);
+}
+
+.peix-instr .ceo-readout b {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.4vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--paper);
+  font-weight: 500;
+}
+
+.peix-instr .ceo-readout small {
+  color: rgba(250, 250, 250, 0.58);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.peix-instr .ceo-trust-go b { color: #86efac; }
+.peix-instr .ceo-trust-caution b { color: #facc15; }
+.peix-instr .ceo-trust-stop b { color: #f87171; }
+
+/* Integrity-Sidebar — schmaler Streifen rechts neben der Headline,
+   nicht mehr gestackt. Tone-Variants (.exec-integrity-stale/drift/
+   lag/off) bleiben unverändert kompatibel. */
+.peix-instr .exec-hero-integrity {
+  padding: 14px 16px;
+  border: 0.5px solid currentColor;
+  border-left-width: 3px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Status-Chips — Fuß des Hero, ehemaliger StatusStrip. Inline-Flex
+   statt 5-Cell-Grid, mit Trennern statt Spalten. */
+.peix-instr .exec-hero-chips {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 0.5px solid var(--ink-15, rgba(13, 15, 18, 0.12));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-70, rgba(13, 15, 18, 0.72));
+}
+.peix-instr .exec-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  letter-spacing: 0.04em;
+}
+.peix-instr .exec-chip b {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink, #0d0f12);
+  letter-spacing: 0;
+}
+.peix-instr .exec-chip-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-50, rgba(13, 15, 18, 0.5));
+}
+.peix-instr .exec-chip-sep {
+  color: var(--ink-30, rgba(13, 15, 18, 0.3));
+}
+.peix-instr .exec-chip.exec-chip-wait b {
+  color: #8a3f20;
+}
+.peix-instr .exec-chip.exec-chip-ok b {
+  color: #4d6e3c;
+}
+
+@media (max-width: 900px) {
+  .peix-instr .exec-hero-main:has(.exec-hero-integrity) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 /* 2026-04-21 Integrity-Fix: dedicated red banner that overrides the hero
    whenever the backend reports DATA_STALE or DRIFT_WARN. Shown above the
@@ -156,7 +594,7 @@
   padding: 14px 18px;
   border: 0.5px solid currentColor;
   border-left-width: 3px;
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   line-height: 1.35;
 }
 .peix-instr .exec-integrity-banner.exec-integrity-stale {
@@ -188,7 +626,7 @@
   padding: 8px 14px;
   background: rgba(26, 30, 36, 0.04);
   border-left: 2px solid rgba(26, 30, 36, 0.25);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.04em;
   color: rgba(26, 30, 36, 0.72);
@@ -203,7 +641,7 @@
   margin-left: 10px;
   padding: 3px 10px;
   font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background: transparent;
@@ -236,7 +674,7 @@
   background: #F4F1EA;
   border: 0.5px solid rgba(26, 30, 36, 0.3);
   padding: 28px 32px 32px;
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   color: #1A1E24;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
 }
@@ -270,7 +708,7 @@
 .mpu-sample {
   background: rgba(26, 30, 36, 0.05);
   padding: 10px 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.45;
   margin: 8px 0 8px;
@@ -300,7 +738,7 @@
   border: 1px dashed rgba(26, 30, 36, 0.3);
   text-align: center;
   cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: rgba(26, 30, 36, 0.6);
   transition: all 0.12s ease-out;
@@ -313,7 +751,7 @@
 }
 .mpu-filename {
   margin-top: 10px;
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-size: 12px;
   color: #1A1E24;
   font-weight: 500;
@@ -350,7 +788,7 @@
 }
 .mpu-errors summary {
   cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #8a3020;
@@ -365,7 +803,7 @@
 }
 .mpu-btn {
   padding: 9px 18px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -414,14 +852,14 @@
 }
 .peix-instr .exec-cell:last-child { border-right: none; }
 .peix-instr .exec-cell-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-60);
 }
 .peix-instr .exec-cell-value {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 22px;
   line-height: 1.25;
@@ -434,7 +872,7 @@
   color: var(--ink);
 }
 .peix-instr .exec-cell-note {
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-60);
@@ -444,12 +882,12 @@
 .peix-instr .exec-delta {
   color: var(--signal, #c2542a);
   font-weight: 600;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 18px;
   letter-spacing: 0.01em;
 }
 .peix-instr .exec-eur {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 30px;
   color: var(--signal, #c2542a);
@@ -458,7 +896,7 @@
   color: var(--ink-40);
 }
 .peix-instr .exec-direction {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   color: var(--ink-60);
   font-weight: 500;
@@ -490,43 +928,20 @@
   border-left: 3px solid var(--signal, #c2542a);
 }
 
-/* Mobile / Tablet: StatusStrip → 2 Spalten, Atlas niedriger, TOC (falls
-   aktiviert) versteckt. */
+/* Mobile / Tablet: Atlas niedriger, ChronoBar kompakter. */
 @media (max-width: 900px) {
-  .peix-instr .status-strip-inner {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px 0;
-    padding: 10px 20px;
-  }
-  .peix-instr .status-strip .status-cell {
-    padding: 4px 12px;
-    border-right: 0.5px solid var(--ink-20);
-    border-bottom: 0.5px solid var(--ink-20);
-  }
-  .peix-instr .status-strip .status-cell:nth-child(2n) {
-    border-right: none;
-  }
-  .peix-instr .status-strip .status-cell:nth-last-child(1) {
-    border-bottom: none;
-    border-right: none;
-    grid-column: 1 / -1;
-  }
-  .peix-instr .status-strip .status-cell:nth-last-child(2):nth-child(odd) {
-    border-bottom: none;
-  }
-  .peix-instr .atlas-wrap { height: 420px; margin: 0 -16px; }
+  .peix-instr .atlas-wrap { height: clamp(420px, 60vh, 720px); margin: 0 -16px; }
   .peix-instr .next-steps-grid { grid-template-columns: 1fr; }
   .peix-instr .impact-unlock-timeline .unlock-row { grid-template-columns: 1fr; }
-  .peix-instr .chrono-inner { flex-wrap: wrap; padding: 8px 16px; gap: 10px; }
+  .peix-instr .chrono-inner { padding: 10px 16px; gap: 16px; }
   .peix-instr .chrono-ticks { display: none; }
-  .peix-instr .chrono-virus-switcher { order: 2; }
 }
 @media (max-width: 600px) {
   .peix-instr .sec-head { grid-template-columns: 36px 1fr; gap: 12px; }
   .peix-instr .sec-title { font-size: 22px; }
   .peix-instr .sec-primer { font-size: 14px; max-width: 100%; }
   .peix-instr .decision-grid { grid-template-columns: 1fr; gap: 32px; }
-  .peix-instr .atlas-wrap { height: 340px; }
+  .peix-instr .atlas-wrap { height: clamp(340px, 50vh, 540px); }
   .peix-instr .exec-hero-inner { grid-template-columns: 1fr; }
   .peix-instr .exec-cell {
     border-right: none;
@@ -562,53 +977,18 @@
   to { opacity: 1; }
 }
 
-/* Status-Strip: 'ja, das läuft'-Zeile direkt unter der ChronoBar.
-   Paper-background, 4 Zellen mit Haarlinien getrennt. */
-.peix-instr .status-strip {
-  background: var(--paper);
+/* Status-Strip wurde am 2026-04-22 entfernt (Story-Scroll-Renovation,
+   Phase 1). Die fünf Status-Werte wandern nach Phase 2 in den
+   ExecutiveHero. Footer bekommt EPOCH/NEXT-RUN als Live-Ticker. */
+.peix-instr .page-foot-link {
+  color: var(--ink-60);
+  text-decoration: none;
   border-bottom: 0.5px solid var(--ink-20);
-  position: sticky;
-  top: 48px; /* hängt genau unter der 48px ChronoBar */
-  z-index: 90;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
 }
-.peix-instr .status-strip-inner {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 10px 32px;
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 0;
-  font-family: 'JetBrains Mono', monospace;
-}
-.peix-instr .status-strip .status-cell {
-  padding: 2px 18px;
-  border-right: 0.5px solid var(--ink-20);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.peix-instr .status-strip .status-cell:first-child { padding-left: 0; }
-.peix-instr .status-strip .status-cell:last-child {
-  border-right: none;
-  padding-right: 0;
-}
-.peix-instr .status-strip .status-label {
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-60);
-}
-.peix-instr .status-strip .status-value {
-  font-size: 13px;
-  color: var(--ink);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-.peix-instr .status-strip .status-value.ok {
-  color: var(--oxide, #8b9788);
-}
-.peix-instr .status-strip .status-value.waiting {
-  color: var(--ink-60);
+.peix-instr .page-foot-link:hover {
+  color: var(--signal);
+  border-color: var(--signal);
 }
 
 /* § IV Impact — Unlock-Timeline chips. Rendered instead of the raw
@@ -639,7 +1019,7 @@
 }
 .peix-instr .impact-unlock-timeline .unlock-label {
   display: block;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -648,7 +1028,7 @@
 }
 .peix-instr .impact-unlock-timeline .unlock-value {
   display: block;
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
   font-weight: 500;
   color: var(--ink);
@@ -659,7 +1039,7 @@
 }
 .peix-instr .impact-unlock-timeline .unlock-note {
   display: block;
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.5;
   color: var(--ink-60);
@@ -680,7 +1060,7 @@
   border: none;
   color: rgba(244, 241, 234, 0.6);
   padding: 4px 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -707,11 +1087,24 @@
 .peix-instr .page { position: relative; z-index: 1; max-width: var(--page-max); margin: 0 auto; padding: 0 32px; }
 
 .peix-instr .instr-section {
-  padding: 96px 0;
-  border-top: 1px solid var(--ink);
+  /* Phase 3a: Sections atmen — Story-Scroll-Höhe + Snap. Border-top
+     ist hairline statt fett-schwarz, damit Sections nicht wie
+     getrennte Blätter wirken, sondern Kapitel-Übergänge fühlbar
+     bleiben ohne den Lesefluss zu schneiden. */
+  padding: var(--section-pad-y) 0;
+  min-height: var(--section-min-h);
+  border-top: var(--hair) solid var(--ink-15);
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  scroll-margin-top: var(--header-h);
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
-.peix-instr .instr-section:first-of-type { border-top: none; padding-top: 48px; }
+.peix-instr .instr-section:first-of-type {
+  border-top: none;
+  padding-top: clamp(32px, 4vh, 64px);
+}
 
 .peix-instr .sec-head {
   display: grid;
@@ -723,7 +1116,7 @@
   border-bottom: 0.5px solid var(--ink-20);
 }
 .peix-instr .sec-numeral {
-  font-family: 'Supreme', serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 48px;
   letter-spacing: -0.04em;
@@ -732,7 +1125,7 @@
   font-feature-settings: "ss01";
 }
 .peix-instr .sec-title {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: var(--t-title);
   letter-spacing: -0.025em;
@@ -741,7 +1134,7 @@
 }
 .peix-instr .sec-title .sub {
   display: block;
-  font-family: 'General Sans';
+  font-family: var(--font-body);
   font-weight: 400;
   font-size: var(--t-lead);
   color: var(--ink-60);
@@ -755,7 +1148,7 @@
    contrast, wider line-height — optimised for reading, not decoration.
    Bold runs stay dark ink so key terms visually anchor the sentence. */
 .peix-instr .sec-primer {
-  font-family: 'General Sans', 'Inter', -apple-system, sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.65;
   color: var(--ink-70, #3a424c);
@@ -772,7 +1165,7 @@
 /* Status gate — GO / WATCH / UNKNOWN */
 .peix-instr .gate {
   display: inline-flex; align-items: center; gap: 8px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -810,7 +1203,7 @@
   align-items: start;
 }
 .peix-instr .decision-statement {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 44px;
   line-height: 1.08;
@@ -848,9 +1241,9 @@
   border-top: 0.5px solid var(--ink-20);
   border-bottom: 0.5px solid var(--ink-20);
 }
-.peix-instr .transfer-node { font-family: 'JetBrains Mono', monospace; }
+.peix-instr .transfer-node { font-family: var(--font-mono); }
 .peix-instr .transfer-node .label { font-size: var(--t-tick); text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-40); margin-bottom: 4px; }
-.peix-instr .transfer-node .place { font-family: 'Supreme'; font-weight: 500; font-size: 24px; letter-spacing: -0.02em; margin-bottom: 4px; }
+.peix-instr .transfer-node .place { font-family: var(--font-display); font-weight: 500; font-size: 24px; letter-spacing: -0.02em; margin-bottom: 4px; }
 .peix-instr .transfer-node .delta { font-size: var(--t-small); }
 .peix-instr .transfer-node .delta.down { color: var(--slate); }
 .peix-instr .transfer-node .delta.up   { color: var(--signal); }
@@ -871,7 +1264,7 @@
 .peix-instr .transfer-arrow .amt {
   position: absolute; left: 50%; top: -22px; transform: translateX(-50%);
   background: var(--paper); padding: 0 8px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-weight: 600;
   font-size: var(--t-small);
   color: var(--signal);
@@ -889,7 +1282,7 @@
 }
 .peix-instr .vernier-head {
   display: flex; justify-content: space-between; align-items: baseline;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -959,7 +1352,7 @@
 }
 
 .peix-instr .vernier-readout {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 300;
   font-size: 140px;
   letter-spacing: -0.055em;
@@ -996,7 +1389,7 @@
 .peix-instr .vernier-scale .tick-label {
   position: absolute;
   top: 32px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: 10px;
   color: var(--ink-40);
   transform: translateX(-50%);
@@ -1021,7 +1414,7 @@
   position: absolute;
   top: -24px; left: 50%;
   transform: translateX(-50%);
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   color: var(--signal);
@@ -1035,7 +1428,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
 }
 .peix-instr .vernier-meta dl,
@@ -1067,10 +1460,14 @@
    KAPITEL II — ATLAS 3D
 ----------------------------------------------------- */
 .peix-instr .atlas-wrap {
+  /* 2026-04-23 Atlas-Größe: fluid statt fix. Auf großen Screens nimmt
+     die 3D-Szene den Section-Raum ernst (min 540px, hoch bis 1100px),
+     statt nur als Mittel-Block zu wirken. calc(100vh - 280px) lässt
+     SectionHeader oben und Section-Padding stehen. */
   position: relative;
   background: var(--ink);
   color: var(--paper);
-  height: 680px;
+  height: clamp(540px, calc(100vh - 280px), 1100px);
   overflow: hidden;
   margin: 0 -32px;
 }
@@ -1093,10 +1490,146 @@
   z-index: 1;
 }
 
+/* ----- 2026-04-23 Atlas-View-Toggle (Hex / 3D) ----- */
+.peix-instr .atlas-toggle {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  display: inline-flex;
+  gap: 0;
+  padding: 3px;
+  background: rgba(250, 250, 250, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: var(--hair) solid var(--ink-20);
+  border-radius: 4px;
+  pointer-events: auto;
+}
+.peix-instr .atlas-toggle button {
+  padding: 5px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+  background: transparent;
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+}
+.peix-instr .atlas-toggle button:hover {
+  color: var(--ink);
+}
+.peix-instr .atlas-toggle button.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* ----- 2026-04-23 Choropleth (löst 3D-Türme + Hex-Grid ab) ----- */
+.peix-instr .atlas-wrap-choropleth {
+  background: var(--ink);
+}
+.peix-instr .atlas-choropleth {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.peix-instr .choropleth-state {
+  transition: stroke-width 0.18s ease-out;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.peix-instr .choropleth-state.is-pulsing {
+  animation: peix-choropleth-pulse-mild var(--pulse-duration, 3s) ease-in-out infinite;
+}
+@keyframes peix-choropleth-pulse-mild {
+  0%, 100% { filter: drop-shadow(0 0 1px rgba(220, 38, 38, 0.12)); }
+  50%      { filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.42)); }
+}
+.peix-instr .choropleth-state.is-top {
+  animation: peix-choropleth-pulse-top 2.0s ease-in-out infinite;
+}
+@keyframes peix-choropleth-pulse-top {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.5)); }
+  50%      { filter: drop-shadow(0 0 18px rgba(220, 38, 38, 0.95)); }
+}
+.peix-instr .choropleth-code {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  fill: rgba(250, 250, 250, 0.96);
+  paint-order: stroke fill;
+  stroke: rgba(10, 10, 15, 0.55);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  letter-spacing: -0.01em;
+  pointer-events: none;
+}
+.peix-instr .choropleth-delta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: rgba(250, 250, 250, 0.86);
+  paint-order: stroke fill;
+  stroke: rgba(10, 10, 15, 0.55);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.peix-instr .choropleth-label-group.is-top .choropleth-code {
+  fill: #FFFFFF;
+  font-size: 14px;
+}
+.peix-instr .choropleth-label-group.is-top .choropleth-delta {
+  fill: #FCA5A5;
+  font-weight: 600;
+}
+
+/* ----- Hex-Grid-Map (Alternative zur 3D-Szene) ----- */
+.peix-instr .atlas-view-hex {
+  /* In Hex-View darf der Wrap denselben dunklen Hintergrund behalten —
+     Hexagons leuchten farbig darauf. */
+  background: var(--ink);
+}
+.peix-instr .atlas-hexgrid {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.peix-instr .atlas-hexgrid .hex-cell {
+  cursor: default;
+  transition: transform 0.18s var(--ease);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.peix-instr .atlas-hexgrid .hex-cell:hover {
+  transform: scale(1.06);
+}
+.peix-instr .atlas-hexgrid .hex-cell.is-top polygon {
+  filter: drop-shadow(0 0 14px rgba(220, 38, 38, 0.55));
+}
+.peix-instr .atlas-hexgrid .hex-code {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.peix-instr .atlas-hexgrid .hex-delta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.92;
+  pointer-events: none;
+}
+
 .peix-instr .atlas-hud {
   position: absolute; inset: 0;
   pointer-events: none;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   color: var(--paper);
 }
 .peix-instr .atlas-hud-corner {
@@ -1133,7 +1666,7 @@
   pointer-events: none;
   z-index: 200;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1146,13 +1679,13 @@
   margin-bottom: 8px;
 }
 .atlas-tooltip-name {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 500;
   letter-spacing: -0.01em;
 }
 .atlas-tooltip-delta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1173,7 +1706,7 @@
 }
 .atlas-tooltip-meta {
   margin-top: 8px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1211,7 +1744,7 @@
    echten budget-basierten Empfehlungen. */
 .peix-instr .rec-mode-chip {
   display: inline-block;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1387,7 +1920,7 @@
   background: color-mix(in srgb, var(--oxide, #8b9788) 4%, transparent);
 }
 .peix-instr .historical-proof .proof-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1396,7 +1929,7 @@
   font-weight: 600;
 }
 .peix-instr .historical-proof .proof-value {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 19px;
   line-height: 1.3;
@@ -1408,7 +1941,7 @@
   font-weight: 600;
 }
 .peix-instr .historical-proof .proof-body {
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-60);
@@ -1432,7 +1965,7 @@
   padding: 14px 18px;
   background: transparent;
   border: none;
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   color: var(--ink);
   cursor: pointer;
@@ -1442,7 +1975,7 @@
   background: color-mix(in srgb, var(--signal, #c2542a) 6%, transparent);
 }
 .peix-instr .demo-badge {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1474,7 +2007,7 @@
   gap: 14px;
   align-items: center;
   margin: 18px 0;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1491,7 +2024,7 @@
   width: 100%;
 }
 .peix-instr .demo-statement {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-size: 22px;
   font-weight: 400;
   line-height: 1.4;
@@ -1507,7 +2040,7 @@
 .peix-instr .demo-to { color: var(--oxide, #8b9788); font-weight: 500; }
 .peix-instr .demo-faller-delta,
 .peix-instr .demo-riser-delta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 14px;
   color: var(--ink-60);
 }
@@ -1526,7 +2059,7 @@
   border: 0.5px solid var(--ink-20);
   color: var(--ink-60);
   padding: 6px 14px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1596,7 +2129,7 @@
   transform: translateY(-1px);
 }
 .peix-instr .next-step-card .ns-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1604,7 +2137,7 @@
   margin-bottom: 10px;
 }
 .peix-instr .next-step-card .ns-title {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-size: 18px;
   font-weight: 500;
   line-height: 1.3;
@@ -1612,14 +2145,14 @@
   margin-bottom: 10px;
 }
 .peix-instr .next-step-card .ns-body {
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-60);
   margin: 0 0 16px;
 }
 .peix-instr .next-step-card .ns-cta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1658,7 +2191,7 @@
   margin-bottom: 6px;
 }
 .peix-instr .fc-drift-badge {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--signal, #c2542a);
   background: color-mix(in srgb, var(--signal, #c2542a) 14%, transparent);
@@ -1666,12 +2199,12 @@
   font-weight: 600;
 }
 .peix-instr .fc-drift-scope {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px; color: var(--ink-60); letter-spacing: 0.04em;
 }
 .peix-instr .fc-drift-body {
   margin: 0;
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px; line-height: 1.5;
   color: var(--ink);
   max-width: 76ch;
@@ -1699,7 +2232,7 @@
   pointer-events: none;
 }
 .peix-instr .atlas-riser-list .head {
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1717,9 +2250,9 @@
   border-bottom: 0.5px solid rgba(244, 241, 234, 0.1);
   font-size: var(--t-small);
 }
-.peix-instr .riser-row .rank  { font-family: 'JetBrains Mono'; color: rgba(244, 241, 234, 0.4); font-size: 11px; }
-.peix-instr .riser-row .name  { font-family: 'Supreme'; font-weight: 500; letter-spacing: -0.01em; }
-.peix-instr .riser-row .delta { font-family: 'JetBrains Mono'; font-weight: 600; color: var(--signal); font-size: var(--t-small); }
+.peix-instr .riser-row .rank  { font-family: var(--font-mono); color: rgba(244, 241, 234, 0.4); font-size: 11px; }
+.peix-instr .riser-row .name  { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.01em; }
+.peix-instr .riser-row .delta { font-family: var(--font-mono); font-weight: 600; color: var(--signal); font-size: var(--t-small); }
 .peix-instr .riser-row.fall .delta { color: rgba(244, 241, 234, 0.55); }
 
 .peix-instr .atlas-legend {
@@ -1727,7 +2260,7 @@
   bottom: 20px; left: 50%;
   transform: translateX(-50%);
   display: flex; gap: 24px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1761,7 +2294,7 @@
   text-align: center;
   color: var(--slate);
   font-style: italic;
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-size: 16px;
   background: var(--paper);
   border: 1px solid var(--ink);
@@ -1784,7 +2317,7 @@
   border-bottom: 0.5px solid var(--ink-20);
 }
 .peix-instr .ephemeris-hero .hero-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -1793,7 +2326,7 @@
   margin-bottom: 20px;
 }
 .peix-instr .ephemeris-hero .hero-value {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 200;
   font-size: clamp(88px, 11vw, 176px);
   letter-spacing: -0.055em;
@@ -1804,7 +2337,7 @@
   gap: 12px;
 }
 .peix-instr .ephemeris-hero .hero-unit {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-size: 0.28em;
   font-weight: 400;
   color: var(--slate);
@@ -1812,7 +2345,7 @@
   text-transform: uppercase;
 }
 .peix-instr .ephemeris-hero .hero-note {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 300;
   font-size: 20px;
   letter-spacing: -0.01em;
@@ -1828,7 +2361,7 @@
   gap: 96px;
 }
 .peix-instr .ephemeris-col .col-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -1848,14 +2381,14 @@
 }
 .peix-instr .ephem-row:last-child { border-bottom: none; }
 .peix-instr .ephem-row .label {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 15px;
   color: var(--slate);
   letter-spacing: -0.01em;
 }
 .peix-instr .ephem-row .value {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 15px;
   font-weight: 500;
   color: var(--ink);
@@ -1867,7 +2400,7 @@
 }
 .peix-instr .ephem-row .value.warn::after {
   content: ' ⚠';
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 13px;
   margin-left: 4px;
 }
@@ -1890,7 +2423,7 @@
   gap: 20px;
 }
 .peix-instr .fc-controls-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
@@ -1905,7 +2438,7 @@
   background: var(--paper);
   border: none;
   padding: 9px 18px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -1926,7 +2459,7 @@
   align-items: center;
   gap: 10px;
   cursor: pointer;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -1991,7 +2524,7 @@
   flex-wrap: wrap;
 }
 .peix-instr .reconciliation .col-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -2000,7 +2533,7 @@
   margin-bottom: 8px;
 }
 .peix-instr .reconciliation .recon-subline {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 15px;
   color: var(--slate);
@@ -2012,7 +2545,7 @@
   gap: 48px;
 }
 .peix-instr .recon-stat .stat-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
@@ -2021,7 +2554,7 @@
   margin-bottom: 6px;
 }
 .peix-instr .recon-stat .stat-value {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 300;
   font-size: 40px;
   letter-spacing: -0.03em;
@@ -2045,7 +2578,7 @@
 }
 .peix-instr .proof-monument:last-child { border-right: none; }
 .peix-instr .proof-monument .m-kicker {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -2054,7 +2587,7 @@
   margin-bottom: 20px;
 }
 .peix-instr .proof-monument .m-value {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 300;
   font-size: 104px;
   letter-spacing: -0.05em;
@@ -2070,7 +2603,7 @@
 }
 .peix-instr .proof-monument .m-ref {
   margin-top: 16px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: rgba(244, 241, 234, 0.55);
   line-height: 1.6;
@@ -2101,7 +2634,7 @@
 .peix-instr .proof-track-legend {
   display: flex;
   gap: 24px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -2135,7 +2668,7 @@
 }
 .peix-instr .proof-track-foot {
   margin-top: 14px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--ink-60);
   text-align: right;
@@ -2168,14 +2701,14 @@
   gap: 2px;
 }
 .peix-instr .recon-row .date-kw {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.08em;
 }
 .peix-instr .recon-row .date-day {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--ink-60);
 }
@@ -2191,14 +2724,14 @@
   gap: 2px;
 }
 .peix-instr .recon-values .vlabel {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.16em;
   color: var(--ink-40);
 }
 .peix-instr .recon-values .vval {
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 22px;
   letter-spacing: -0.02em;
@@ -2227,7 +2760,7 @@
 .peix-instr .recon-bar-fill.over { background: var(--signal); }
 .peix-instr .recon-bar-fill.under { background: var(--slate); }
 .peix-instr .recon-delta {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   text-align: right;
@@ -2239,7 +2772,7 @@
   margin-top: 16px;
   padding-top: 16px;
   border-top: 0.5px solid var(--ink-10);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   font-style: italic;
   color: var(--ink-40);
@@ -2250,7 +2783,7 @@
   padding: 60px 40px;
   text-align: center;
   color: var(--slate);
-  font-family: 'Supreme', sans-serif;
+  font-family: var(--font-display);
   font-style: italic;
   font-size: 15px;
 }
@@ -2264,7 +2797,7 @@
   margin-bottom: 32px;
   border: 0.5px solid var(--signal);
   background: rgba(194, 84, 42, 0.07);
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-size: 14px;
   line-height: 1.55;
   color: var(--slate);
@@ -2303,7 +2836,7 @@
 }
 .peix-instr .impact-cell:last-child { border-right: none; }
 .peix-instr .impact-cell .label {
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2311,7 +2844,7 @@
   margin-bottom: 16px;
 }
 .peix-instr .impact-cell .monument {
-  font-family: 'Supreme';
+  font-family: var(--font-display);
   font-weight: 300;
   font-size: 120px;
   letter-spacing: -0.04em;
@@ -2338,17 +2871,17 @@
 }
 .peix-instr .impact-log-row.head {
   border-top: 1px solid var(--ink);
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-60);
   padding: 12px 0;
 }
-.peix-instr .impact-log-row .wk   { font-family: 'JetBrains Mono'; color: var(--ink-60); }
-.peix-instr .impact-log-row .rec  { font-family: 'Supreme'; font-weight: 500; font-size: var(--t-body); letter-spacing: -0.01em; }
+.peix-instr .impact-log-row .wk   { font-family: var(--font-mono); color: var(--ink-60); }
+.peix-instr .impact-log-row .rec  { font-family: var(--font-display); font-weight: 500; font-size: var(--t-body); letter-spacing: -0.01em; }
 .peix-instr .impact-log-row .status {
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2380,7 +2913,7 @@
 }
 .peix-instr .bt-monument:last-child { border-right: none; }
 .peix-instr .bt-monument .label {
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -2388,7 +2921,7 @@
   margin-bottom: 20px;
 }
 .peix-instr .bt-monument .num {
-  font-family: 'Supreme';
+  font-family: var(--font-display);
   font-weight: 300;
   font-size: 140px;
   letter-spacing: -0.05em;
@@ -2408,7 +2941,7 @@
 }
 .peix-instr .bt-monument .ref {
   margin-top: 16px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   color: rgba(244, 241, 234, 0.55);
   line-height: 1.6;
@@ -2431,7 +2964,7 @@
   background: var(--paper);
   border: none;
   padding: 10px 18px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -2445,7 +2978,7 @@
 .peix-instr .virus-switcher button:hover:not(.active) { background: var(--ink-05); color: var(--ink); }
 
 .peix-instr .bt-window {
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -2466,19 +2999,19 @@
 }
 .peix-instr .roster-row.head {
   border-bottom: 1px solid var(--ink);
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-60);
   padding: 12px 0;
 }
-.peix-instr .roster-row .rank  { font-family: 'JetBrains Mono'; color: var(--ink-40); }
-.peix-instr .roster-row .name  { font-family: 'Supreme'; font-weight: 500; letter-spacing: -0.01em; }
-.peix-instr .roster-row .score { font-family: 'JetBrains Mono'; font-weight: 600; text-align: right; }
+.peix-instr .roster-row .rank  { font-family: var(--font-mono); color: var(--ink-40); }
+.peix-instr .roster-row .name  { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.01em; }
+.peix-instr .roster-row .score { font-family: var(--font-mono); font-weight: 600; text-align: right; }
 .peix-instr .roster-row .bar-wrap { position: relative; height: 6px; background: var(--ink-10); }
 .peix-instr .roster-row .bar { position: absolute; top: 0; left: 0; bottom: 0; background: var(--signal); }
-.peix-instr .roster-row .lead { font-family: 'JetBrains Mono'; color: var(--ink-60); font-size: var(--t-tick); text-align: right; }
+.peix-instr .roster-row .lead { font-family: var(--font-mono); color: var(--ink-60); font-size: var(--t-tick); text-align: right; }
 
 /* Hit barcode */
 .peix-instr .barcode-section {
@@ -2491,7 +3024,7 @@
   margin-bottom: 16px;
 }
 .peix-instr .barcode-title {
-  font-family: 'Supreme';
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 20px;
   letter-spacing: -0.02em;
@@ -2500,7 +3033,7 @@
 /* Reader-Note: erklärt Farblogik in plain German. Direkt über dem
    Scoreboard, damit niemand den grauen Balken als "Miss" missliest. */
 .peix-instr .barcode-reader-note {
-  font-family: 'General Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   line-height: 1.55;
   color: var(--ink-60);
@@ -2537,7 +3070,7 @@
   border-left: 3px solid var(--ink-40);
 }
 .peix-instr .barcode-scoreboard .score-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -2545,7 +3078,7 @@
   margin-bottom: 8px;
 }
 .peix-instr .barcode-scoreboard .score-value {
-  font-family: 'Supreme', 'General Sans', sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 28px;
   letter-spacing: -0.01em;
@@ -2557,7 +3090,7 @@
   font-weight: 400;
 }
 .peix-instr .barcode-scoreboard .score-denom {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 400;
   color: var(--ink-60);
@@ -2599,7 +3132,7 @@
   position: absolute;
   bottom: -20px; left: 50%;
   transform: translateX(-50%);
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: 9px;
   color: var(--ink-40);
   opacity: 0;
@@ -2611,7 +3144,7 @@
 .peix-instr .barcode-legend {
   display: flex; gap: 24px;
   margin-top: 32px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: var(--t-tick);
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -2633,7 +3166,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 32px;
-  font-family: 'JetBrains Mono';
+  font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -2647,6 +3180,22 @@
    RESPONSIVE
 ----------------------------------------------------- */
 @media (max-width: 1100px) {
+  .peix-instr .ceo-pitch-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .peix-instr .ceo-pitch h1 {
+    max-width: 12ch;
+  }
+
+  .peix-instr .ceo-map-stage {
+    min-height: 420px;
+  }
+
+  .peix-instr .ceo-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .peix-instr .decision-grid { grid-template-columns: 1fr; gap: 40px; }
   .peix-instr .ephemeris-hero {
     grid-template-columns: 1fr;
@@ -2670,12 +3219,664 @@
     grid-template-columns: auto 1fr auto;
     gap: 16px;
   }
-  .peix-instr .chrono-ticks,
-  .peix-instr .chrono-meta { display: none; }
+  .peix-instr .chrono-ticks { display: none; }
   .peix-instr .sec-head { grid-template-columns: 48px 1fr; }
   .peix-instr .sec-head .gate { grid-column: 1 / -1; margin-top: 12px; }
   .peix-instr .impact-row { grid-template-columns: 1fr; }
   .peix-instr .impact-cell { border-right: none; border-bottom: 0.5px solid var(--ink-20); }
   .peix-instr .backtest-head { grid-template-columns: 1fr; }
   .peix-instr .bt-monument { border-right: none; border-bottom: 0.5px solid rgba(244,241,234,0.2); }
+}
+
+/* Mobile cockpit pass — keep the scientific instrument look, but turn the
+   page into a readable hand-held briefing instead of a desktop wallboard. */
+@media (max-width: 720px) {
+  html {
+    scroll-snap-type: none;
+    scroll-padding-top: 88px;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .peix-instr {
+    --header-h: 88px;
+    --section-min-h: auto;
+    --section-pad-y: clamp(40px, 8vh, 72px);
+    --gutter: 16px;
+    font-size: 14px;
+    overflow-x: hidden;
+  }
+
+  .peix-instr .page {
+    width: 100%;
+    padding: 0 16px;
+    overflow-x: hidden;
+  }
+
+  .peix-instr .ceo-pitch {
+    margin: 0 -16px;
+    padding: 34px 16px 28px;
+    min-height: auto;
+    scroll-snap-align: none;
+  }
+
+  .peix-instr .ceo-pitch::before {
+    background-size: 48px 48px;
+  }
+
+  .peix-instr .ceo-pitch-layout {
+    gap: 24px;
+  }
+
+  .peix-instr .ceo-eyebrow {
+    font-size: 10px;
+    line-height: 1.45;
+    margin-bottom: 14px;
+  }
+
+  .peix-instr .ceo-pitch h1 {
+    max-width: 11ch;
+    font-size: clamp(40px, 13vw, 54px);
+  }
+
+  .peix-instr .ceo-lede {
+    margin-top: 20px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .peix-instr .ceo-action-row {
+    flex-direction: column;
+    margin-top: 22px;
+  }
+
+  .peix-instr .ceo-primary-link,
+  .peix-instr .ceo-secondary-link {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .peix-instr .ceo-map-stage {
+    min-height: 330px;
+  }
+
+  .peix-instr .ceo-map-stage .atlas-choropleth {
+    height: 320px;
+  }
+
+  .peix-instr .ceo-map-caption {
+    position: static;
+    flex-direction: column;
+    margin-top: 8px;
+    font-size: 10px;
+  }
+
+  .peix-instr .ceo-readout {
+    grid-template-columns: 1fr;
+    margin-top: 24px;
+  }
+
+  .peix-instr .ceo-readout > div {
+    min-height: 96px;
+    padding: 15px 14px;
+  }
+
+  .peix-instr .ceo-readout b {
+    font-size: 26px;
+  }
+
+  .peix-instr .chrono {
+    position: sticky;
+  }
+
+  .peix-instr .chrono-inner {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 8px 12px 10px;
+    min-height: 0;
+  }
+
+  .peix-instr .chrono-brand {
+    justify-content: center;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+
+  .peix-instr .chrono-virus-switcher {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .peix-instr .chrono-virus-btn {
+    min-height: 36px;
+    padding: 8px 6px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .peix-instr .exec-hero,
+  .peix-instr .instr-section {
+    min-height: auto;
+    scroll-snap-align: none;
+    scroll-snap-stop: normal;
+  }
+
+  .peix-instr .exec-hero {
+    padding: 32px 0 44px;
+  }
+
+  .peix-instr .exec-hero-main {
+    gap: 18px;
+  }
+
+  .peix-instr .exec-hero-title {
+    font-size: clamp(30px, 9vw, 38px);
+    line-height: 1.06;
+  }
+
+  .peix-instr .exec-hero-title .exec-delta {
+    display: block;
+    margin: 8px 0 0;
+    font-size: 0.62em;
+  }
+
+  .peix-instr .exec-hero-sub {
+    font-size: 14px;
+    max-width: 100%;
+  }
+
+  .peix-instr .exec-hero-shift {
+    align-items: stretch;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .peix-instr .exec-shift-value {
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .peix-instr .exec-shift-value .exec-direction {
+    display: block;
+    margin: 4px 0 0;
+  }
+
+  .peix-instr .exec-upload-btn {
+    width: 100%;
+    min-height: 40px;
+    margin-left: 0;
+    padding: 9px 10px;
+  }
+
+  .peix-instr .exec-hero-integrity {
+    padding: 12px 14px;
+  }
+
+  .peix-instr .exec-hero-chips {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin-top: 18px;
+    padding-top: 8px;
+  }
+
+  .peix-instr .exec-chip {
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 0.5px solid var(--ink-10);
+  }
+
+  .peix-instr .exec-chip:last-child {
+    border-bottom: none;
+  }
+
+  .peix-instr .exec-calibrator-badge {
+    margin-top: 14px;
+    font-size: 10px;
+    line-height: 1.55;
+  }
+
+  .peix-instr .instr-section {
+    padding: 48px 0;
+  }
+
+  .peix-instr .instr-section:first-of-type {
+    padding-top: 36px;
+  }
+
+  .peix-instr .sec-head {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+    padding-bottom: 16px;
+  }
+
+  .peix-instr .sec-numeral {
+    font-size: 28px;
+  }
+
+  .peix-instr .sec-title {
+    font-size: 26px;
+    line-height: 1.08;
+  }
+
+  .peix-instr .sec-title .sub {
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  .peix-instr .sec-primer {
+    margin: 10px 0 24px;
+    font-size: 14px;
+    line-height: 1.58;
+    max-width: 100%;
+  }
+
+  .peix-instr .gate {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    padding: 8px 10px;
+  }
+
+  .peix-instr .decision-grid {
+    gap: 28px;
+  }
+
+  .peix-instr .decision-statement {
+    font-size: 29px;
+    line-height: 1.1;
+  }
+
+  .peix-instr .rationale {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 24px;
+    padding-top: 18px;
+  }
+
+  .peix-instr .transfer {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 28px;
+    padding: 18px 0;
+  }
+
+  .peix-instr .transfer-node.to {
+    text-align: left;
+  }
+
+  .peix-instr .transfer-arrow {
+    display: none;
+  }
+
+  .peix-instr .vernier {
+    padding: 22px 16px 18px;
+  }
+
+  .peix-instr .vernier-head {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .peix-instr .vernier-readout {
+    font-size: clamp(70px, 24vw, 96px);
+    margin: 6px 0 20px;
+  }
+
+  .peix-instr .vernier-readout .pct {
+    font-size: 28px;
+  }
+
+  .peix-instr .vernier-meta {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 22px;
+  }
+
+  .peix-instr .decision-evidence-row {
+    gap: 14px;
+    margin-top: 24px;
+    padding-top: 24px;
+  }
+
+  .peix-instr .demo-budget-slider {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .peix-instr .atlas-wrap {
+    height: clamp(360px, 68svh, 520px);
+    margin: 0 -16px;
+  }
+
+  .peix-instr .atlas-hud-corner,
+  .peix-instr .atlas-bracket,
+  .peix-instr .atlas-riser-list {
+    display: none;
+  }
+
+  .peix-instr .atlas-toggle {
+    top: 10px;
+    right: 10px;
+  }
+
+  .peix-instr .atlas-toggle button {
+    padding: 6px 10px;
+    font-size: 10px;
+  }
+
+  .peix-instr .atlas-legend {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    transform: none;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    flex-wrap: wrap;
+  }
+
+  .atlas-tooltip {
+    left: 12px !important;
+    right: 12px;
+    max-width: none;
+    transform: translateY(-50%);
+  }
+
+  .peix-instr .fc-mode-toggle-row {
+    gap: 8px;
+  }
+
+  .peix-instr .fc-mode-btn {
+    flex: 1 1 100%;
+    min-height: 40px;
+  }
+
+  .peix-instr .fc-controls {
+    align-items: stretch;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding-bottom: 18px;
+  }
+
+  .peix-instr .fc-controls-left,
+  .peix-instr .fc-controls-right {
+    width: 100%;
+    align-items: stretch;
+    gap: 12px;
+    flex-direction: column;
+  }
+
+  .peix-instr .fc-virus-switcher,
+  .peix-instr .virus-switcher {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .peix-instr .fc-virus-switcher button,
+  .peix-instr .virus-switcher button {
+    min-height: 42px;
+    padding: 8px 6px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .peix-instr .strip-chart {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .peix-instr .strip-chart svg {
+    min-width: 680px;
+  }
+
+  .peix-instr .strip-empty {
+    padding: 48px 20px;
+  }
+
+  .peix-instr .ephemeris,
+  .peix-instr .reconciliation {
+    margin-top: 38px;
+    padding-top: 38px;
+  }
+
+  .peix-instr .ephemeris-hero {
+    gap: 24px;
+    padding-bottom: 38px;
+    margin-bottom: 38px;
+  }
+
+  .peix-instr .ephemeris-hero .hero-value {
+    font-size: clamp(64px, 22vw, 96px);
+    flex-wrap: wrap;
+  }
+
+  .peix-instr .ephemeris-hero .hero-note {
+    font-size: 16px;
+  }
+
+  .peix-instr .ephemeris-cols {
+    gap: 28px;
+  }
+
+  .peix-instr .ephem-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px 0;
+  }
+
+  .peix-instr .ephem-row .value {
+    text-align: left;
+  }
+
+  .peix-instr .reconciliation-head,
+  .peix-instr .proof-track-head,
+  .peix-instr .barcode-head,
+  .peix-instr .bt-controls {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .peix-instr .recon-stats {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .peix-instr .recon-stat .stat-value {
+    font-size: 32px;
+  }
+
+  .peix-instr .proof-monuments {
+    grid-template-columns: 1fr;
+  }
+
+  .peix-instr .proof-monument {
+    padding: 30px 20px;
+    border-right: none;
+    border-bottom: 0.5px solid rgba(244, 241, 234, 0.2);
+  }
+
+  .peix-instr .proof-monument .m-value {
+    font-size: clamp(64px, 22vw, 92px);
+  }
+
+  .peix-instr .recon-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 16px 0;
+  }
+
+  .peix-instr .recon-values,
+  .peix-instr .recon-bar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .peix-instr .recon-delta {
+    text-align: left;
+  }
+
+  .peix-instr .impact-cell {
+    padding: 28px 18px;
+  }
+
+  .peix-instr .impact-cell .monument {
+    font-size: clamp(72px, 24vw, 96px);
+  }
+
+  .peix-instr .impact-log-row.head {
+    display: none;
+  }
+
+  .peix-instr .impact-log-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 14px 0;
+  }
+
+  .peix-instr .impact-log-row .status,
+  .peix-instr .impact-log-row .dash-note {
+    font-size: 12px;
+  }
+
+  .peix-instr .backtest-head {
+    grid-template-columns: 1fr;
+  }
+
+  .peix-instr .bt-monument {
+    padding: 32px 20px;
+  }
+
+  .peix-instr .bt-monument .num {
+    font-size: clamp(74px, 24vw, 100px);
+  }
+
+  .peix-instr .bt-monument .num .unit {
+    font-size: 28px;
+  }
+
+  .peix-instr .bt-monument .num .mult {
+    font-size: 36px;
+  }
+
+  .peix-instr .roster-row.head {
+    display: none;
+  }
+
+  .peix-instr .roster-row {
+    grid-template-columns: 28px 1fr 60px;
+    gap: 8px 12px;
+    align-items: start;
+    padding: 13px 0;
+  }
+
+  .peix-instr .roster-row .bar-wrap {
+    grid-column: 2 / -1;
+    width: 100%;
+  }
+
+  .peix-instr .roster-row .lead {
+    grid-column: 2 / -1;
+    text-align: left;
+  }
+
+  .peix-instr .barcode-wrap,
+  .peix-instr .proof-track-bars {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .peix-instr .barcode-bar,
+  .peix-instr .proof-track-bars .track-bar {
+    min-width: 8px;
+  }
+
+  .peix-instr .barcode-legend,
+  .peix-instr .proof-track-legend {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .peix-instr .next-step-card {
+    padding: 18px 18px 20px;
+  }
+
+  .peix-instr .page-foot {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-top: 48px;
+    padding: 36px 0 52px;
+  }
+
+  .peix-instr .page-foot .col-right {
+    text-align: left;
+  }
+
+  .mpu-backdrop {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  .mpu-modal {
+    max-height: 88svh;
+    padding: 22px 18px 24px;
+  }
+
+  .mpu-head {
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .mpu-actions {
+    flex-direction: column-reverse;
+  }
+
+  .mpu-btn {
+    width: 100%;
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 420px) {
+  .peix-instr {
+    --header-h: 86px;
+    --section-pad-y: 36px;
+  }
+
+  .peix-instr .page {
+    padding: 0 14px;
+  }
+
+  .peix-instr .ceo-pitch {
+    margin: 0 -14px;
+    padding-inline: 14px;
+  }
+
+  .peix-instr .exec-hero-title {
+    font-size: 29px;
+  }
+
+  .peix-instr .decision-statement {
+    font-size: 26px;
+  }
+
+  .peix-instr .atlas-wrap {
+    height: clamp(320px, 62svh, 460px);
+    margin: 0 -14px;
+  }
+
+  .peix-instr .strip-chart svg {
+    min-width: 620px;
+  }
 }

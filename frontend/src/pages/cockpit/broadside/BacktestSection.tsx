@@ -251,7 +251,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
               padding: '32px 0',
               fontStyle: 'italic',
               color: 'var(--ink-40)',
-              fontFamily: "'Supreme', sans-serif",
+              fontFamily: "var(--font-display)",
             }}
           >
             Keine Backtest-Werte verfügbar — Roster leer.
@@ -333,7 +333,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
                 padding: 24,
                 fontStyle: 'italic',
                 color: 'var(--ink-40)',
-                fontFamily: "'Supreme', sans-serif",
+                fontFamily: "var(--font-display)",
                 width: '100%',
                 textAlign: 'center',
               }}

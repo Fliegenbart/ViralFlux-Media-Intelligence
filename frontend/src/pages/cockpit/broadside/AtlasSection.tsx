@@ -3,6 +3,12 @@ import type { CockpitSnapshot, RegionForecast, Bundesland } from '../types';
 import { fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
+import AtlasChoropleth from './AtlasChoropleth';
+
+// 2026-04-23 Atlas-Refactor: 3D-Türme + Hex-Toggle entfernt zugunsten
+// einer realen Deutschland-Karte (Choropleth). AtlasScene und AtlasHexgrid
+// bleiben als Files im Repo (nicht mehr importiert), können später
+// gelöscht werden.
 
 /**
  * § II — Wellen-Atlas (3D).
@@ -684,23 +690,23 @@ const AtlasTooltip: React.FC<{
       return `Für dieses Bundesland ist das Regional-Modell noch nicht trainiert — der Turm steht hier nur als Platzhalter, ohne Prognose.`;
     }
     if (pct === null) {
-      return `Keine verwertbare Δ-Messung in 7 Tagen — der Turm bleibt flach.`;
+      return `Keine verwertbare Δ-Messung im Prognosefenster — der Turm bleibt flach.`;
     }
     const sign = pct >= 0 ? '+' : '';
     const abs = Math.abs(pct).toFixed(0);
     if (tone === 'strong-rise') {
-      return `Frühsignal: deutlicher Anstieg der ${virusLabel}-Aktivität in 7 Tagen — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region aktivieren, Budget hochziehen.`;
+      return `Frühsignal: deutlicher Anstieg der ${virusLabel}-Aktivität im Prognosefenster — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region als Budget-Kandidat prüfen.`;
     }
     if (tone === 'rise') {
-      return `Frühsignal: moderater Anstieg um etwa ${sign}${abs} % in 7 Tagen — Welle noch nicht klar, aber Tendenz nach oben. In Marketing-Sprache: genauer beobachten, nicht überreagieren.`;
+      return `Frühsignal: moderater Anstieg um etwa ${sign}${abs} % im Prognosefenster — Welle noch nicht klar, aber Tendenz nach oben. In Marketing-Sprache: genauer beobachten, nicht überreagieren.`;
     }
     if (tone === 'strong-fall') {
-      return `Frühsignal: ${virusLabel}-Aktivität geht in 7 Tagen deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Budget schrittweise abziehen, auf wirksamere Regionen umshiften.`;
+      return `Frühsignal: ${virusLabel}-Aktivität geht im Prognosefenster deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Budget nicht automatisch verschieben, sondern Spar-Region prüfen.`;
     }
     if (tone === 'fall') {
-      return `Frühsignal: leichter Rückgang von rund ${sign}${abs} % in 7 Tagen. Keine Welle hier; in Marketing-Sprache: kein aktiver Trigger, aber auch kein Anlass zum Aktivieren.`;
+      return `Frühsignal: leichter Rückgang von rund ${sign}${abs} % im Prognosefenster. Keine Welle hier; in Marketing-Sprache: kein aktiver Trigger, aber auch kein Anlass zum Aktivieren.`;
     }
-    return `Plateau — das Signal in 7 Tagen bleibt nahezu unverändert (${sign}${abs} %). Weder Alarm noch Chance.`;
+    return `Plateau — das Signal im Prognosefenster bleibt nahezu unverändert (${sign}${abs} %). Weder Alarm noch Chance.`;
   })();
 
   return (
@@ -714,7 +720,7 @@ const AtlasTooltip: React.FC<{
         {pct !== null ? (
           <span className="atlas-tooltip-delta">
             {pct >= 0 ? '+' : ''}
-            {pct.toFixed(0)}% · 7d
+            {pct.toFixed(0)}% · Δ
           </span>
         ) : null}
       </div>
@@ -741,12 +747,6 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   );
 
   const topRisers = useMemo(() => ranked.slice(0, 3), [ranked]);
-  const bottomFallers = useMemo(() => ranked.slice(-3).reverse(), [ranked]);
-
-  const topRiserCodes = useMemo(
-    () => new Set<Bundesland>(topRisers.map((r) => r.code)),
-    [topRisers],
-  );
 
   const activeRegionCount = useMemo(
     () =>
@@ -760,17 +760,10 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   const shiftFromCode = snapshot.primaryRecommendation?.fromCode ?? null;
   const shiftToCode = snapshot.primaryRecommendation?.toCode ?? null;
 
-  // 2026-04-21 Integrity-Fix: dropped the hardcoded "H3N2" subtype tag —
-  // the backend does not actually classify Influenza A subtypes (no NRZ
-  // sequencing feed), so rendering "H3N2" here is a claim without evidence.
-  const virusShort =
-    snapshot.virusTyp === 'Influenza A'
-      ? 'Flu-A'
-      : snapshot.virusTyp === 'Influenza B'
-        ? 'Flu-B'
-        : snapshot.virusTyp === 'RSV A' || snapshot.virusTyp === 'RSV'
-          ? 'RSV-A'
-          : snapshot.virusTyp;
+  // 2026-04-22 Atlas-Cleanup: virusShort wurde in atlas-hud-corner tr
+  // gerendert — beide sind jetzt weg (SectionHeader zeigt den Virus
+  // bereits im Subtitle). Variable entfernt, damit kein toter Code
+  // bleibt.
 
   const horizonDays = snapshot.modelStatus?.horizonDays ?? 21;
 
@@ -807,12 +800,10 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
       ? `${shiftFromCode} → ${shiftToCode}`
       : null;
 
-  // Regional ranking always runs at RANKING_HORIZON_DAYS (h=7) — the
-  // snapshot-builder enforces this regardless of the header lead horizon.
-  // We label tiles and HUD explicitly with "7 d" so readers stop asking
-  // whether +45 % means today, T+7 or T+21.
-  const RANKING_HORIZON_LABEL = '7 Tage';
-  const RANKING_HORIZON_SHORT = '7d';
+  // Label the active model horizon from the snapshot so the UI does not
+  // imply a fixed 7-day claim when the GELO path is operated as h5.
+  const RANKING_HORIZON_LABEL = `${horizonDays} Tage`;
+  const RANKING_HORIZON_SHORT = `${horizonDays}d`;
 
   return (
     <section className="instr-section" id="sec-atlas">
@@ -823,80 +814,45 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           <>
             {activeRegionCount} / 16 Bundesländer
             {pendingRegionCount > 0 ? ` (${pendingRegionCount} Training pending)` : ''}{' '}
-            · Höhe = {RANKING_HORIZON_LABEL}-Richtung · Farbe = Wellen-Signal
+            · Färbung = Δ über {RANKING_HORIZON_LABEL}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Deutschland in 16 Türmen. <b>Höhe</b> = erwartete Wellen-
-            Bewegung in 7 Tagen. <b>Farbe</b>: rot = Früh-Signal
-            (Region aktivieren), grün = flach oder rückläufig
-            (<b>Sparmodus</b> — Budget nicht verbrennen, wo keine Welle
-            ist). <b>Hover</b> über einen Turm → Klartext-Erklärung
-            pro Bundesland. Das Tool ist ein <b>Früherkennungs-System</b>
-            gegen das RKI-Meldewesen (typisch 7–10 Tage voraus), keine
+            Deutschland-Karte mit allen 16 Bundesländern.{' '}
+            <b>Farbe</b>: rot = Früh-Signal (Region aktivieren), grün =
+            flach oder rückläufig (<b>Sparmodus</b> — Budget nicht
+            verbrennen, wo keine Welle ist). Die Schattierungs-Intensität
+            zeigt die Stärke des aktiven Prognosefensters. Riser <b>pulsieren</b>;
+            der stärkste Riser bekommt einen weißen Outline + kräftigen
+            Glow. Das Tool ist ein <b>Früherkennungs-System</b> gegen
+            das RKI-Meldewesen (typisch 7–10 Tage voraus), keine
             absolute Fallzahl-Prognose.
           </>
         }
       />
 
-      <div className="atlas-wrap">
-        <AtlasScene
-          regions={snapshot.regions}
-          topRisers={topRisers}
-          topRiserCodes={topRiserCodes}
-          shiftFromCode={shiftFromCode as Bundesland | null}
-          shiftToCode={shiftToCode as Bundesland | null}
-          virusLabel={snapshot.virusLabel ?? snapshot.virusTyp}
-        />
-
-        {/* Grain overlay — subtile Papier-Struktur */}
-        <div className="atlas-grain" aria-hidden />
-
-        {/* Corner brackets — instrument viewport */}
-        <div className="atlas-bracket tl" />
-        <div className="atlas-bracket tr" />
-        <div className="atlas-bracket bl" />
-        <div className="atlas-bracket br" />
+      <div className="atlas-wrap atlas-wrap-choropleth">
+        {/* 2026-04-23: Echte Deutschland-Karte als Choropleth. Bundesländer
+           leuchten in HSL-Schattierung pro Δ7d, Riser pulsieren mit
+           Geschwindigkeit proportional zur Stärke. Top-Riser zusätzlich
+           mit weißem Stroke + kräftigem Glow. */}
+        <AtlasChoropleth snapshot={snapshot} />
 
         <div className="atlas-hud">
-          <div className="atlas-hud-corner tl">
-            <div>Projektion · Perspektive 30°</div>
-            <div>Frühsignal · <b>+7 TAGE</b></div>
-            <div>Skalierung · <b>LINEAR</b></div>
-          </div>
-          <div className="atlas-hud-corner tr">
-            <div>{virusShort}</div>
-            <div>
-              Signal · <span className="sig">ONLINE</span>
-            </div>
-            <div>
-              Ausgabe · <b>{snapshot.isoWeek}</b>
-            </div>
-          </div>
           <div className="atlas-hud-corner bl">
-            <div>
-              {activeRegionCount} / 16 Länder aktiv
-            </div>
+            <div>{activeRegionCount} / 16 Länder aktiv</div>
             {pendingRegionCount > 0 ? (
               <div className="atlas-hud-pending">
                 {pendingRegionCount}× Training pending
               </div>
             ) : null}
-            <div>
-              Top-3 Spotlights <span className="sig">●●●</span>
-            </div>
             {shiftHudLine && (
               <div>
-                Transfer · <span className="sig">{shiftHudLine}</span>
+                Budget-Kandidat · <span className="sig">{shiftHudLine}</span>
               </div>
             )}
-          </div>
-          <div className="atlas-hud-corner br">
-            <div>LAT 51.1657° N</div>
-            <div>LON 10.4515° E</div>
-            <div>ALT 640.0 m</div>
           </div>
 
           <div className="atlas-riser-list">
@@ -904,21 +860,6 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
             {topRisers.map((r, i) => (
               <div className="riser-row" key={r.code}>
                 <span className="rank">{String(i + 1).padStart(2, '0')}</span>
-                <span className="name">{r.name}</span>
-                <span className="delta">
-                  {fmtSignedPct(r.delta7d)} · {RANKING_HORIZON_SHORT}
-                </span>
-              </div>
-            ))}
-            {bottomFallers.map((r, i) => (
-              <div
-                className="riser-row fall"
-                key={r.code}
-                style={i === 0 ? { marginTop: 24 } : undefined}
-              >
-                <span className="rank">
-                  {String(ranked.length - bottomFallers.length + i + 1).padStart(2, '0')}
-                </span>
                 <span className="name">{r.name}</span>
                 <span className="delta">
                   {fmtSignedPct(r.delta7d)} · {RANKING_HORIZON_SHORT}

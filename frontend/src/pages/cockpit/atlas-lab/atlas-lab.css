@@ -1,0 +1,310 @@
+/*
+ * atlas-lab.css — scoped CSS für die Atlas-Lab-Seite (/cockpit/atlas-lab).
+ * Bewusst NICHT unter .peix-instr scoped — die Lab-Page lebt eigenständig.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+.atlas-lab {
+  background: #FAFAFA;
+  color: #0A0A0F;
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+  padding: 64px 32px 128px;
+}
+
+.atlas-lab-state {
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.atlas-lab-state a { color: #DC2626; text-decoration: none; }
+
+.atlas-lab .lab-head {
+  max-width: 1280px;
+  margin: 0 auto 64px;
+}
+.atlas-lab .lab-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 15, 0.5);
+  margin: 0 0 8px;
+}
+.atlas-lab .lab-head h1 {
+  font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0 0 16px;
+  max-width: 22ch;
+}
+.atlas-lab .lab-intro {
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(10, 10, 15, 0.65);
+  max-width: 70ch;
+  margin: 0 0 24px;
+}
+.atlas-lab .lab-back {
+  margin: 0;
+}
+.atlas-lab .lab-back a {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 15, 0.55);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(10, 10, 15, 0.2);
+  padding-bottom: 1px;
+}
+.atlas-lab .lab-back a:hover {
+  color: #DC2626;
+  border-bottom-color: #DC2626;
+}
+
+.atlas-lab .lab-section {
+  max-width: 1280px;
+  margin: 96px auto 0;
+  border-top: 0.5px solid rgba(10, 10, 15, 0.12);
+  padding-top: 56px;
+}
+.atlas-lab .lab-section header {
+  margin-bottom: 32px;
+  max-width: 720px;
+}
+.atlas-lab .lab-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #DC2626;
+  margin: 0 0 8px;
+}
+.atlas-lab .lab-section h2 {
+  font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  font-size: clamp(24px, 2.8vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0 0 12px;
+}
+.atlas-lab .lab-section header p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(10, 10, 15, 0.65);
+  margin: 0;
+}
+
+.atlas-lab .lab-canvas {
+  border-radius: 6px;
+  padding: 32px;
+  overflow: hidden;
+}
+.atlas-lab .lab-canvas-dark {
+  background: #0A0A0F;
+}
+.atlas-lab .lab-canvas-night {
+  background: radial-gradient(ellipse at 50% 30%, #14182A 0%, #050608 78%);
+  padding: 0;
+}
+
+.atlas-lab .lab-foot {
+  max-width: 720px;
+  margin: 96px auto 0;
+  padding-top: 32px;
+  border-top: 0.5px solid rgba(10, 10, 15, 0.12);
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(10, 10, 15, 0.6);
+}
+
+/* ----- AtlasRidge ----- */
+.atlas-lab .atlas-ridge {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.atlas-lab .ridge-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  fill: rgba(250, 250, 250, 0.85);
+  letter-spacing: 0.06em;
+}
+.atlas-lab .ridge-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  fill: rgba(250, 250, 250, 0.55);
+}
+.atlas-lab .ridge-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  fill: rgba(250, 250, 250, 0.7);
+}
+.atlas-lab .ridge-delta.is-top {
+  fill: #FCA5A5;
+  font-weight: 600;
+}
+
+/* ----- AtlasConstellationMap v2: Choropleth (volle BL-Färbung) ----- */
+.atlas-lab .atlas-choropleth {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: block;
+  height: auto;
+}
+.atlas-lab .choropleth-state {
+  transition: stroke-width 0.18s ease-out;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* Pulse für alle Riser — Duration wird per Inline-Style gesetzt
+   (1.8 s strong / 3.5 s mild). Faller & Flat haben keine Klasse. */
+.atlas-lab .choropleth-state.is-pulsing {
+  animation: choropleth-pulse-mild var(--pulse-duration, 3s) ease-in-out infinite;
+}
+@keyframes choropleth-pulse-mild {
+  0%, 100% {
+    filter: drop-shadow(0 0 1px rgba(220, 38, 38, 0.12));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.4));
+  }
+}
+
+/* Top-Riser: stärkerer Glow, eigener Keyframe (kein Überschneiden
+   mit .is-pulsing — die Klasse wird im TSX ausgelassen wenn is-top). */
+.atlas-lab .choropleth-state.is-top {
+  animation: choropleth-pulse-top 2.0s ease-in-out infinite;
+}
+@keyframes choropleth-pulse-top {
+  0%, 100% {
+    filter: drop-shadow(0 0 4px rgba(220, 38, 38, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 18px rgba(220, 38, 38, 0.95));
+  }
+}
+.atlas-lab .choropleth-code {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  fill: rgba(250, 250, 250, 0.96);
+  paint-order: stroke fill;
+  stroke: rgba(10, 10, 15, 0.55);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  letter-spacing: -0.01em;
+}
+.atlas-lab .choropleth-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  fill: rgba(250, 250, 250, 0.86);
+  paint-order: stroke fill;
+  stroke: rgba(10, 10, 15, 0.55);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.atlas-lab .choropleth-label-group.is-top .choropleth-code {
+  fill: #FFFFFF;
+  font-size: 14px;
+}
+.atlas-lab .choropleth-label-group.is-top .choropleth-delta {
+  fill: #FCA5A5;
+  font-weight: 600;
+}
+
+/* ----- AtlasConstellation (abstract version) ----- */
+.atlas-lab .atlas-constellation {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  display: block;
+  height: auto;
+}
+.atlas-lab .star-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  fill: rgba(250, 250, 250, 0.92);
+  letter-spacing: -0.01em;
+}
+.atlas-lab .star-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  fill: rgba(250, 250, 250, 0.55);
+}
+.atlas-lab .star-cell.is-top .star-label {
+  fill: #FCA5A5;
+}
+
+/* ----- AtlasSparklines ----- */
+.atlas-lab .atlas-sparklines {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.atlas-lab .sparkline-card {
+  background: rgba(250, 250, 250, 0.04);
+  border: 0.5px solid rgba(250, 250, 250, 0.12);
+  border-radius: 4px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.atlas-lab .sparkline-card.is-top {
+  border-color: rgba(220, 38, 38, 0.55);
+  background: rgba(220, 38, 38, 0.06);
+}
+.atlas-lab .sparkline-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.atlas-lab .sparkline-code {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(250, 250, 250, 0.95);
+  letter-spacing: -0.01em;
+}
+.atlas-lab .sparkline-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(250, 250, 250, 0.55);
+}
+.atlas-lab .sparkline-svg {
+  width: 100%;
+  height: 64px;
+}
+.atlas-lab .sparkline-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.atlas-lab .sparkline-delta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+}
+.atlas-lab .sparkline-window {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: rgba(250, 250, 250, 0.4);
+  letter-spacing: 0.06em;
+}
+
+@media (max-width: 1100px) {
+  .atlas-lab .atlas-sparklines { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 720px) {
+  .atlas-lab .atlas-sparklines { grid-template-columns: repeat(2, 1fr); }
+  .atlas-lab .lab-canvas { padding: 16px; }
+}

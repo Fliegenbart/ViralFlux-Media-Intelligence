@@ -117,7 +117,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
           'Das Wellen-Signal ist aktuell deutlich, aber ohne ' +
           'Media-Plan keine EUR-Empfehlung. Sobald der Plan im Data ' +
           'Office sitzt, reicht ein Refresh und § II zieht den ' +
-          'konkreten Shift-Vorschlag.',
+          'prüfbaren Shift-Kandidaten.',
         cta: 'Cockpit neu laden',
         tone: 'wait',
         priority: 70,

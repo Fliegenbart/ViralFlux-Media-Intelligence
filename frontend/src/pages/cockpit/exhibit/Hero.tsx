@@ -92,15 +92,15 @@ export const Hero: React.FC<HeroProps> = ({ snapshot, layout = 'fullbleed', onOp
   // Lede — full serif display with italic accents on from / to / amount
   const lede = rec ? (
     <h1 className="ex-lede">
-      Verschiebe <em>{fmtEurCompactOrDash(rec.amountEur)}</em>
+      Prüfe <em>{fmtEurCompactOrDash(rec.amountEur)}</em>
       <br />
-      aus <em>{rec.fromName}</em> nach
+      als Shift-Kandidat von <em>{rec.fromName}</em> nach
       <br />
       <em>{rec.toName}</em>.
     </h1>
   ) : (
     <h1 className="ex-lede">
-      Aktuell <em>kein Shift-Vorschlag</em>.
+      Aktuell <em>kein Shift-Kandidat</em>.
     </h1>
   );
 

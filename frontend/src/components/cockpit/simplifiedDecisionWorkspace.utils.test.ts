@@ -76,7 +76,7 @@ describe('buildSimplifiedDecisionModel', () => {
     });
 
     expect(model.state).toBe('go');
-    expect(model.headline).toBe('Diese Woche Budget in Sachsen erhoehen.');
+    expect(model.headline).toBe('Diese Woche Sachsen als Budget-Kandidat pruefen.');
     expect(model.facts.map((item) => item.label)).toEqual(['Region', 'Trend', 'Vertrauen']);
     expect(model.summary).toBe('Der Verlauf steigt und die Prognose zeigt weiter nach oben.');
   });

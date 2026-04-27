@@ -66,7 +66,7 @@ function readRegionName(
 }
 
 function buildGoHeadline(regionName: string): string {
-  return `Diese Woche Budget in ${regionName} erhoehen.`;
+  return `Diese Woche ${regionName} als Budget-Kandidat pruefen.`;
 }
 
 function buildWatchHeadline(regionName: string): string {

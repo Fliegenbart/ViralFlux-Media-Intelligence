@@ -15,7 +15,7 @@ import {
  *
  * Composition (top to bottom):
  *   TopChrome  — three-column editorial masthead
- *   Hero        — the full-bleed stage (Verschiebe €X aus A nach B)
+ *   Hero        — the full-bleed stage (Prüfe €X als Shift-Kandidat von A nach B)
  *   Rationale   — § 01 Begründung (3-sentence pull quote + 3 stats)
  *   Candidates  — § 02 Weitere Kandidaten (roster on alt paper)
  *   FootRail    — edition stamp (Ausgabe / Redaktionsschluss / Nächste)
@@ -95,7 +95,7 @@ const RationaleSection: React.FC<{
               style={{ fontSize: 26, lineHeight: 1.35, margin: 0, color: 'var(--ex-ink)' }}
             >
               In dieser Woche ergibt die Modellarbeit keinen eindeutig
-              gerichteten Shift-Vorschlag. Statt einer erfundenen Zahl
+              gerichteten Shift-Kandidaten. Statt einer erfundenen Zahl
               steht hier die Leere, die das Produkt-Axiom verlangt.
             </p>
           </div>

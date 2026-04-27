@@ -400,6 +400,39 @@ export interface MediaPlanStatus {
   note?: string | null;
 }
 
+export type EvidenceComponentStatus = 'pass' | 'warn' | 'block' | 'unknown';
+
+export interface EvidenceComponent {
+  key: string;
+  label: string;
+  score: number | null;
+  status: EvidenceComponentStatus;
+  detail: string;
+  blockers: string[];
+}
+
+export interface EvidenceScore {
+  /** 0..100 decision-support score. Not a probability. */
+  overallScore: number | null;
+  releaseStatus: 'releasable' | 'candidate_only' | 'blocked' | string;
+  label: string;
+  components: EvidenceComponent[];
+  blockers: string[];
+  alignmentSummary?: {
+    total_rows?: number;
+    status_counts?: Record<string, number>;
+  } | null;
+  businessValidation?: {
+    validated_for_budget_activation?: boolean;
+    rows?: number;
+    weeks?: number;
+    regions?: number;
+    media_spend_eur?: number;
+    missing_requirements?: string[];
+  } | null;
+  plainLanguage: string;
+}
+
 export interface CockpitSnapshot {
   client: string;
   virusTyp: string;
@@ -427,6 +460,10 @@ export interface CockpitSnapshot {
   topDrivers: { label: string; value: string; subtitle?: string }[];
   /** Always populated — UI uses this for WATCH banners, calibration warnings, etc. */
   modelStatus: ModelStatus;
+  /** Decision-support trust layer: signal + freshness + H5/H7 + business gate. */
+  evidenceScore?: EvidenceScore | null;
+  /** Raw H5/H7 alignment snapshot for future UI drilldowns. */
+  horizonAlignment?: unknown;
   /** Always populated — UI uses this to decide whether to show EUR values or "—". */
   mediaPlan: MediaPlanStatus;
   /** Free-form operator notes, shown in a small "facts" strip. */

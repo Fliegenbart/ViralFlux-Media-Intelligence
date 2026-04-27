@@ -1585,6 +1585,225 @@ def _build_timeline_from_national(
     return timeline
 
 
+def _evidence_component(
+    *,
+    key: str,
+    label: str,
+    score: float | None,
+    status: str,
+    detail: str,
+    blockers: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "key": key,
+        "label": label,
+        "score": None if score is None else round(max(0.0, min(float(score), 100.0)), 1),
+        "status": status,
+        "detail": detail,
+        "blockers": sorted(set(blockers or [])),
+    }
+
+
+def _build_evidence_score(
+    *,
+    model_status: dict[str, Any],
+    regions: list[dict[str, Any]],
+    primary_recommendation: dict[str, Any] | None,
+    media_plan_connected: bool,
+    h5_shift_snapshot: dict[str, Any] | None,
+    horizon_alignment: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Summarise whether the weekly recommendation is evidence-backed.
+
+    This is intentionally a decision-support score, not a statistical
+    probability. It combines model, data and business gates so the cockpit can
+    say "candidate, blocked, or releasable" without hiding why.
+    """
+
+    components: list[dict[str, Any]] = []
+
+    signal_score = None
+    if primary_recommendation is not None:
+        raw = primary_recommendation.get("signalScore") or primary_recommendation.get("confidence")
+        try:
+            signal_score = float(raw) * 100.0
+        except (TypeError, ValueError):
+            signal_score = None
+    if signal_score is None:
+        p_values = [float(r.get("pRising")) for r in regions if isinstance(r.get("pRising"), (int, float))]
+        signal_score = (sum(p_values) / len(p_values) * 100.0) if p_values else None
+    components.append(
+        _evidence_component(
+            key="signal_strength",
+            label="Signalstärke",
+            score=signal_score,
+            status="pass" if signal_score is not None and signal_score >= 55 else "warn" if signal_score else "unknown",
+            detail=(
+                "Regionaler Ranking-Score ist deutlich genug für einen Kandidaten."
+                if signal_score is not None and signal_score >= 55
+                else "Kein starkes gerichtetes Signal; eher beobachten."
+            ),
+        )
+    )
+
+    freshness = model_status.get("forecastFreshness") or {}
+    is_stale = bool(freshness.get("isStale"))
+    feature_lag = freshness.get("featureLagDays")
+    freshness_score = 100.0
+    freshness_detail = "Forecast und Feature-Stand sind frisch genug."
+    freshness_status = "pass"
+    freshness_blockers: list[str] = []
+    if is_stale:
+        freshness_score = 0.0
+        freshness_status = "block"
+        freshness_detail = "Der neueste Forecast liegt zu weit in der Vergangenheit."
+        freshness_blockers.append("forecast_stale")
+    elif isinstance(feature_lag, (int, float)):
+        freshness_score = max(0.0, 100.0 - min(float(feature_lag), 30.0) * 3.0)
+        if feature_lag > 10:
+            freshness_status = "warn"
+            freshness_detail = f"Feature-Stand ist {int(feature_lag)} Tage alt; Signal nur vorsichtig lesen."
+    else:
+        freshness_score = 55.0
+        freshness_status = "warn"
+        freshness_detail = "Feature-Frische ist nicht vollständig dokumentiert."
+    components.append(
+        _evidence_component(
+            key="data_freshness",
+            label="Datenfrische",
+            score=freshness_score,
+            status=freshness_status,
+            detail=freshness_detail,
+            blockers=freshness_blockers,
+        )
+    )
+
+    expected_regions = len(BUNDESLAND_NAMES)
+    scored_regions = len([r for r in regions if r.get("decisionLabel") != "TrainingPending"])
+    coverage_score = (scored_regions / expected_regions * 100.0) if expected_regions else None
+    components.append(
+        _evidence_component(
+            key="regional_coverage",
+            label="Regionale Abdeckung",
+            score=coverage_score,
+            status="pass" if scored_regions == expected_regions else "warn" if scored_regions >= 12 else "block",
+            detail=f"{scored_regions}/{expected_regions} Bundesländer sind auswertbar.",
+            blockers=[] if scored_regions == expected_regions else ["regional_coverage_incomplete"],
+        )
+    )
+
+    alignment_summary = ((horizon_alignment or {}).get("summary") or {})
+    alignment_counts = alignment_summary.get("status_counts") or {}
+    confirmed = int(alignment_counts.get("confirmed_direction") or 0)
+    short_term = int(alignment_counts.get("short_term_only") or 0)
+    weekly = int(alignment_counts.get("weekly_building") or 0)
+    blocked = int(alignment_counts.get("coverage_blocked") or 0)
+    alignment_total = int(alignment_summary.get("total_rows") or 0)
+    alignment_score = None
+    alignment_status = "unknown"
+    alignment_detail = "H5/H7-Abgleich ist für diesen Snapshot nicht verfügbar."
+    alignment_blockers: list[str] = []
+    if alignment_total:
+        alignment_score = min(100.0, confirmed * 28.0 + short_term * 10.0 + weekly * 8.0)
+        if confirmed > 0:
+            alignment_status = "pass"
+            alignment_detail = f"{confirmed} Regionen haben H5-Anstieg plus frische H7-Bestätigung."
+        elif short_term or weekly:
+            alignment_status = "warn"
+            alignment_detail = f"{short_term + weekly} Regionen zeigen nur einen der beiden Horizonte."
+        else:
+            alignment_status = "warn"
+            alignment_detail = "H5 und H7 bestätigen aktuell keinen gemeinsamen Anstieg."
+        if blocked:
+            alignment_blockers.append("horizon_coverage_blocked")
+    components.append(
+        _evidence_component(
+            key="h5_h7_alignment",
+            label="H5/H7-Abgleich",
+            score=alignment_score,
+            status=alignment_status,
+            detail=alignment_detail,
+            blockers=alignment_blockers,
+        )
+    )
+
+    readiness = str(model_status.get("forecastReadiness") or "UNKNOWN")
+    model_score_by_readiness = {
+        "GO_RANKING": 90.0,
+        "RANKING_OK": 78.0,
+        "LEAD_ONLY": 58.0,
+        "SEASON_OFF": 45.0,
+        "WATCH": 40.0,
+        "DATA_STALE": 0.0,
+        "DRIFT_WARN": 25.0,
+        "UNKNOWN": 30.0,
+    }
+    components.append(
+        _evidence_component(
+            key="model_gate",
+            label="Modell-Gate",
+            score=model_score_by_readiness.get(readiness, 30.0),
+            status="pass" if readiness in {"GO_RANKING", "RANKING_OK"} else "block" if readiness in {"DATA_STALE", "DRIFT_WARN"} else "warn",
+            detail=f"Forecast-Readiness: {readiness}.",
+            blockers=[] if readiness in {"GO_RANKING", "RANKING_OK"} else [f"readiness_{readiness.lower()}"],
+        )
+    )
+
+    business = ((h5_shift_snapshot or {}).get("summary") or {}).get("business_validation") or {}
+    business_valid = bool(business.get("validated_for_budget_activation"))
+    missing_business = [str(item) for item in business.get("missing_requirements") or []]
+    business_score = 100.0 if business_valid else 20.0 if missing_business else 45.0
+    business_detail = (
+        "Outcome-, Spend- und Regionsdaten reichen für Budgetfreigabe."
+        if business_valid
+        else "Budgetfreigabe blockiert: echte Outcome-/Spend-/Vergleichsdaten reichen noch nicht."
+    )
+    if not media_plan_connected:
+        missing_business = sorted(set([*missing_business, "media_plan_not_connected"]))
+    components.append(
+        _evidence_component(
+            key="business_gate",
+            label="Business-Gate",
+            score=business_score,
+            status="pass" if business_valid and media_plan_connected else "block",
+            detail=business_detail,
+            blockers=missing_business,
+        )
+    )
+
+    scored = [c["score"] for c in components if isinstance(c.get("score"), (int, float))]
+    overall_score = round(sum(scored) / len(scored), 1) if scored else None
+    blocker_keys = sorted({b for c in components for b in (c.get("blockers") or [])})
+    has_block = any(c.get("status") == "block" for c in components)
+    has_warn = any(c.get("status") == "warn" for c in components)
+    if has_block:
+        release_status = "blocked"
+        label = "Signal prüfen, Budget blockiert"
+    elif has_warn:
+        release_status = "candidate_only"
+        label = "Kandidat mit Prüfbedarf"
+    else:
+        release_status = "releasable"
+        label = "Budgetfreigabe möglich"
+
+    return {
+        "overallScore": overall_score,
+        "releaseStatus": release_status,
+        "label": label,
+        "components": components,
+        "blockers": blocker_keys,
+        "alignmentSummary": alignment_summary,
+        "businessValidation": business,
+        "plainLanguage": (
+            "Das Tool sieht ein Signal, aber Budget bleibt blockiert, bis Business- und Spend-Daten reichen."
+            if release_status == "blocked"
+            else "Das Signal ist ein Kandidat; vor Budgetverschiebung sind die Warnpunkte zu prüfen."
+            if release_status == "candidate_only"
+            else "Modell, Daten und Business-Gate reichen für eine kontrollierte Budgetfreigabe."
+        ),
+    }
+
+
 def build_cockpit_snapshot(
     db: Session,
     *,
@@ -1635,6 +1854,7 @@ def build_cockpit_snapshot(
     # to the lead-time horizon selected above.
     notes: list[str] = []
     regions: list[dict[str, Any]] = []
+    regional_payload: dict[str, Any] = {}
     if model_status["regionalAvailable"]:
         if regional_forecast_service is None:
             from app.services.ml.regional_forecast import RegionalForecastService
@@ -1657,6 +1877,27 @@ def build_cockpit_snapshot(
         notes.append(
             f"Für {virus_typ} gibt es aktuell kein regionales Modell — Bundesländer-Ansicht deaktiviert."
         )
+
+    h5_shift_snapshot: dict[str, Any] | None = None
+    horizon_alignment: dict[str, Any] | None = None
+    try:
+        from app.services.ml.regional_horizon_alignment import build_horizon_alignment_snapshot
+        from app.services.ml.regional_live_shift_snapshot import RegionalLiveShiftSnapshotService
+
+        h5_shift_snapshot = RegionalLiveShiftSnapshotService(db).build_snapshot(
+            virus_types=[virus_typ],
+            horizon_days=5,
+            top_n=5,
+            brand=(brand or client or "gelo"),
+            require_business_validation=True,
+        )
+        horizon_alignment = build_horizon_alignment_snapshot(
+            h5_snapshot=h5_shift_snapshot,
+            h7_forecasts={virus_typ: regional_payload},
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("cockpit h5/h7 evidence build failed (non-fatal)")
+        notes.append("H5/H7-Evidence-Block konnte für diesen Snapshot nicht berechnet werden.")
 
     timeline = _build_timeline_from_national(db, virus_typ, horizon_days)
 
@@ -1828,6 +2069,15 @@ def build_cockpit_snapshot(
             elif code == to_code:
                 region["recommendedShiftEur"] = shift_eur if shift_eur else None
 
+    evidence_score = _build_evidence_score(
+        model_status=model_status,
+        regions=regions,
+        primary_recommendation=primary_recommendation,
+        media_plan_connected=plan_connected,
+        h5_shift_snapshot=h5_shift_snapshot,
+        horizon_alignment=horizon_alignment,
+    )
+
     return {
         "client": client,
         "virusTyp": virus_typ,
@@ -1850,6 +2100,8 @@ def build_cockpit_snapshot(
         "sources": sources,
         "topDrivers": top_drivers,
         "modelStatus": model_status,
+        "evidenceScore": evidence_score,
+        "horizonAlignment": horizon_alignment,
         "mediaPlan": {
             "connected": plan_connected,
             "totalWeeklySpendEur": total_weekly_spend,

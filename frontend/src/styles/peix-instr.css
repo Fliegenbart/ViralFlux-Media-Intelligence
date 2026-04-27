@@ -1240,6 +1240,143 @@
   }
 }
 
+.peix-instr .evidence-score-panel {
+  margin-top: 32px;
+  padding: 20px;
+  border: 1px solid var(--ink-20);
+  border-left: 3px solid var(--ink-40);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+}
+.peix-instr .evidence-score-panel.evidence-go {
+  border-left-color: var(--oxide, #8b9788);
+}
+.peix-instr .evidence-score-panel.evidence-candidate {
+  border-left-color: var(--signal, #c2542a);
+}
+.peix-instr .evidence-score-panel.evidence-blocked {
+  border-left-color: var(--ink);
+}
+.peix-instr .evidence-score-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+}
+.peix-instr .evidence-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+  margin-bottom: 6px;
+}
+.peix-instr .evidence-label {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.peix-instr .evidence-score-value {
+  font-family: var(--font-display);
+  font-size: 48px;
+  line-height: .9;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.peix-instr .evidence-plain {
+  max-width: 880px;
+  margin: 14px 0 0;
+  color: var(--slate);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
+.peix-instr .evidence-components {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.peix-instr .evidence-component {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 2px solid var(--ink-20);
+}
+.peix-instr .evidence-component.status-pass { border-top-color: var(--oxide, #8b9788); }
+.peix-instr .evidence-component.status-warn { border-top-color: var(--signal, #c2542a); }
+.peix-instr .evidence-component.status-block { border-top-color: var(--ink); }
+.peix-instr .evidence-component.status-unknown { border-top-style: dashed; }
+.peix-instr .component-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-60);
+}
+.peix-instr .component-top span {
+  overflow-wrap: anywhere;
+}
+.peix-instr .component-top b {
+  color: var(--ink);
+  font-size: 12px;
+}
+.peix-instr .component-track {
+  margin-top: 8px;
+  height: 4px;
+  background: var(--ink-10);
+  overflow: hidden;
+}
+.peix-instr .component-track span {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+.peix-instr .evidence-component.status-pass .component-track span {
+  background: var(--oxide, #8b9788);
+}
+.peix-instr .evidence-component.status-warn .component-track span {
+  background: var(--signal, #c2542a);
+}
+.peix-instr .evidence-blockers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+}
+.peix-instr .evidence-blockers b {
+  color: var(--ink);
+  border: 1px dashed var(--ink-20);
+  padding: 4px 7px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+@media (max-width: 1100px) {
+  .peix-instr .evidence-components {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .peix-instr .evidence-score-head {
+    display: block;
+  }
+  .peix-instr .evidence-score-value {
+    margin-top: 12px;
+    font-size: 40px;
+  }
+  .peix-instr .evidence-components {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Historical-Proof: Peak-Woche-Replay als "Hier hat das Tool schon
    funktioniert"-Beweis. Solid border (nicht dashed wie Demo) weil
    es sich auf echte Backtest-Historie beruft. */

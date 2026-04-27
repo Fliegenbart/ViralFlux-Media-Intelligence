@@ -185,13 +185,93 @@ const VernierScale: React.FC<{
   );
 };
 
+const BLOCKER_LABELS: Record<string, string> = {
+  business_validation_missing: 'Business-Evidenz fehlt',
+  insufficient_outcome_weeks: 'zu wenige Outcome-Wochen',
+  insufficient_outcome_regions: 'zu wenige Vergleichsregionen',
+  missing_sales_units: 'Sales fehlen',
+  missing_media_spend: 'Spend fehlt',
+  media_plan_not_connected: 'Media-Plan fehlt',
+  regional_coverage_incomplete: 'regionale Abdeckung unvollständig',
+  horizon_coverage_blocked: 'H5/H7-Coverage blockiert',
+  forecast_stale: 'Forecast veraltet',
+};
+
+const formatBlocker = (value: string): string =>
+  BLOCKER_LABELS[value] ?? value.replace(/_/g, ' ');
+
+const EvidenceScorePanel: React.FC<{
+  evidence: CockpitSnapshot['evidenceScore'];
+}> = ({ evidence }) => {
+  if (!evidence) return null;
+  const score = evidence.overallScore;
+  const scoreLabel = score !== null ? `${Math.round(score)}/100` : '—';
+  const releaseClass =
+    evidence.releaseStatus === 'releasable'
+      ? 'go'
+      : evidence.releaseStatus === 'candidate_only'
+        ? 'candidate'
+        : 'blocked';
+  const blockers = (evidence.blockers ?? []).slice(0, 4);
+
+  return (
+    <div className={`evidence-score-panel evidence-${releaseClass}`}>
+      <div className="evidence-score-head">
+        <div>
+          <div className="evidence-kicker">Evidence Score</div>
+          <div className="evidence-label">{evidence.label}</div>
+        </div>
+        <div className="evidence-score-value">{scoreLabel}</div>
+      </div>
+      <p className="evidence-plain">{evidence.plainLanguage}</p>
+
+      <div className="evidence-components">
+        {(evidence.components ?? []).map((component) => (
+          <div
+            className={`evidence-component status-${component.status}`}
+            key={component.key}
+            title={component.detail}
+          >
+            <div className="component-top">
+              <span>{component.label}</span>
+              <b>
+                {typeof component.score === 'number'
+                  ? Math.round(component.score)
+                  : '—'}
+              </b>
+            </div>
+            <div className="component-track">
+              <span
+                style={{
+                  width: `${Math.max(
+                    3,
+                    Math.min(100, component.score ?? 0),
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {blockers.length ? (
+        <div className="evidence-blockers">
+          <span>Blocker</span>
+          {blockers.map((blocker) => (
+            <b key={blocker}>{formatBlocker(blocker)}</b>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 // -----------------------------------------------------------------
 // Root — Decision Section
 // -----------------------------------------------------------------
 export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const rec = snapshot.primaryRecommendation;
   const calibrationMode = snapshot.modelStatus?.calibrationMode ?? 'unknown';
-  const calibrated = calibrationMode === 'calibrated';
   const bestLag = snapshot.modelStatus?.lead?.bestLagDays ?? null;
   const horizonWeeks = Math.max(
     1,
@@ -324,10 +404,11 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Die <b>eine Empfehlung</b> der Woche: „Verschiebe X € aus A
-            nach B." Rechts die Konfidenz als Skala mit Nadel — kein
-            Prozent-Pill, das Genauigkeit vortäuscht. In Wellen-Peaks
-            (z. B. KW 05-10) steht hier ein konkreter Shift-Vorschlag
+            Die <b>eine Empfehlung</b> der Woche: „Prüfe X € als
+            kontrollierten Shift-Kandidaten von A nach B." Rechts die
+            Konfidenz als Skala mit Nadel — kein Prozent-Pill, das
+            Genauigkeit vortäuscht. In Wellen-Peaks
+            (z. B. KW 05-10) steht hier ein prüfbarer Shift-Kandidat
             mit Begründung; in Post-Saison-Wochen wie heute schweigt
             das Tool bewusst — keine Empfehlung ist die ehrliche
             Empfehlung, wenn kein Signal da ist. Probier die
@@ -353,17 +434,18 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
               <p className="decision-statement">
                 {rec.amountEur !== null ? (
                   <>
-                    Verschiebe{' '}
+                    Prüfe{' '}
                     <span className="amt">
                       {fmtEurCompactOrDash(rec.amountEur)}
                     </span>{' '}
+                    als Shift-Kandidat{' '}
                   </>
                 ) : (
                   <>
-                    Shift-Richtung:{' '}
+                    Shift-Kandidat:{' '}
                   </>
                 )}
-                aus <span className="from">{rec.fromName}</span>{' '}
+                von <span className="from">{rec.fromName}</span>{' '}
                 nach <span className="to">{rec.toName}</span>
                 {rec.why ? ' — ' : '.'}
                 {rec.why}
@@ -442,7 +524,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
             <>
               <p className="decision-statement">
                 <span className="from">Kein</span> klar gerichteter{' '}
-                <span className="amt">Shift-Vorschlag</span> diese Woche.
+                <span className="amt">Shift-Kandidat</span> diese Woche.
               </p>
 
               <div className="rationale">
@@ -472,6 +554,8 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
           }
         />
       </div>
+
+      <EvidenceScorePanel evidence={snapshot.evidenceScore} />
 
       {!mediaPlanConnected ? (
         <div className="decision-evidence-row">
@@ -511,9 +595,9 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
                   <div className="demo-note">
                     <b>Demo — keine echten GELO-Zahlen.</b> Mit einem
                     angenommenen Wochenbudget rechnet das System aus,
-                    welchen EUR-Shift das Signal rechtfertigt. Sobald
+                    welchen EUR-Shift das Signal als Kandidat markiert. Sobald
                     der Media-Plan verbunden ist, ersetzt die echte
-                    Zahl diese Simulation.
+                    Zahl diese Simulation; die Freigabe bleibt an Gates gebunden.
                   </div>
                   <label className="demo-budget-slider">
                     <span>Angenommenes Wochenbudget</span>
@@ -530,11 +614,11 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
                     </output>
                   </label>
                   <p className="demo-statement">
-                    <span className="demo-verb">Verschiebe</span>{' '}
+                    <span className="demo-verb">Prüfe</span>{' '}
                     <span className="demo-amt">
                       {demoShiftEur.toLocaleString('de-DE')} €
                     </span>{' '}
-                    aus <span className="demo-from">{demoFrom!.name}</span>{' '}
+                    als Shift-Kandidat von <span className="demo-from">{demoFrom!.name}</span>{' '}
                     <span className="demo-faller-delta">
                       ({fmtSignedPct(demoFrom!.delta7d)})
                     </span>{' '}

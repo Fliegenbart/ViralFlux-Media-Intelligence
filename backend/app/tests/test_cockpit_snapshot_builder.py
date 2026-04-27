@@ -141,6 +141,20 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
             patch.object(snapshot_builder, "build_data_freshness", return_value={}),
             patch.object(snapshot_builder, "_read_ranking_metrics", return_value=dict(ranking_metrics)),
             patch.object(snapshot_builder, "_read_training_panel", return_value=dict(training_panel)),
+            patch.object(snapshot_builder, "_read_latest_accuracy", return_value={}),
+            patch.object(
+                snapshot_builder,
+                "_compute_forecast_freshness",
+                return_value={
+                    "latestForecastDate": "2026-04-27",
+                    "daysFromToday": 7,
+                    "isStale": False,
+                    "isFuture": True,
+                    "featureAsOf": "2026-04-26",
+                    "daysForwardFilled": 1,
+                    "featureLagDays": 1,
+                },
+            ),
         ]
 
     def _build(self, **overrides) -> dict:
@@ -456,6 +470,63 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self.assertFalse(payload["mediaPlan"]["connected"])
         self.assertIsNone(payload["totalSpendEur"])
         self.assertIsNone(payload["primaryRecommendation"])
+
+    def test_evidence_score_blocks_budget_without_business_data(self) -> None:
+        """Snapshot exposes an investor-readable trust layer, not just a rec."""
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+        fake = _FakeRegionalForecastService(
+            {
+                "status": "success",
+                "predictions": [
+                    {
+                        "bundesland": "BY",
+                        "event_probability": 0.78,
+                        "expected_next_week_incidence": 130.0,
+                        "current_incidence": 100.0,
+                        "prediction_interval": {"lower": 110.0, "upper": 145.0},
+                        "decision_label": "Activate",
+                        "reason_trace": {"why": ["strong signal"]},
+                        "change_pct": 30.0,
+                        "regional_data_fresh": True,
+                        "quality_gate": {"overall_passed": True},
+                    },
+                    {
+                        "bundesland": "HB",
+                        "event_probability": 0.12,
+                        "expected_next_week_incidence": 70.0,
+                        "current_incidence": 100.0,
+                        "prediction_interval": {"lower": 55.0, "upper": 90.0},
+                        "decision_label": "Watch",
+                        "reason_trace": {"why": ["falling"]},
+                        "change_pct": -30.0,
+                        "regional_data_fresh": True,
+                        "quality_gate": {"overall_passed": True},
+                    },
+                ],
+            }
+        )
+
+        patches = self._patch_external()
+        for p in patches:
+            p.start()
+        try:
+            payload = snapshot_builder.build_cockpit_snapshot(
+                self.db,
+                virus_typ="Influenza A",
+                horizon_days=14,
+                regional_forecast_service=fake,
+            )
+        finally:
+            for p in patches:
+                p.stop()
+
+        evidence = payload["evidenceScore"]
+        self.assertEqual(evidence["releaseStatus"], "blocked")
+        self.assertIn("media_plan_not_connected", evidence["blockers"])
+        self.assertIn("business_gate", [c["key"] for c in evidence["components"]])
+        business_component = next(c for c in evidence["components"] if c["key"] == "business_gate")
+        self.assertEqual(business_component["status"], "block")
+        self.assertIn("horizonAlignment", payload)
 
     # ---------- timeline ----------
 

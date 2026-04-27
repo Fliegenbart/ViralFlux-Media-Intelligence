@@ -57,18 +57,19 @@ function pulseDuration(delta: number | null | undefined): number | null {
 export const AtlasChoropleth: React.FC<{ snapshot: CockpitSnapshot }> = ({
   snapshot,
 }) => {
+  const { regions } = snapshot;
   const ranked = useMemo(() => {
-    return [...snapshot.regions]
+    return [...regions]
       .filter((r) => typeof r.delta7d === 'number')
       .sort((a, b) => (b.delta7d ?? 0) - (a.delta7d ?? 0));
-  }, [snapshot.regions]);
+  }, [regions]);
   const topCode = ranked[0]?.code ?? null;
 
   const regionByCode = useMemo(() => {
-    const m = new Map<string, (typeof snapshot.regions)[number]>();
-    snapshot.regions.forEach((r) => m.set(r.code as string, r));
+    const m = new Map<string, (typeof regions)[number]>();
+    regions.forEach((r) => m.set(r.code as string, r));
     return m;
-  }, [snapshot.regions]);
+  }, [regions]);
 
   return (
     <svg
@@ -91,7 +92,7 @@ export const AtlasChoropleth: React.FC<{ snapshot: CockpitSnapshot }> = ({
           .filter(Boolean)
           .join(' ');
         const pulseStyle = pulse != null
-          ? ({ ['--pulse-duration']: `${pulse}s` } as React.CSSProperties)
+          ? ({ '--pulse-duration': `${pulse}s` } as React.CSSProperties)
           : undefined;
         return (
           <path

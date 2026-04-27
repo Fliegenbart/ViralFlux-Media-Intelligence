@@ -67,8 +67,6 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
   const headline = data?.headline;
   const baselines = data?.baselines;
   const window = data?.window;
-  const perBL = data?.per_bundesland ?? [];
-  const weeklyHits = data?.weekly_hits ?? [];
 
   // PR-AUC & multiplier
   const prAuc = headline?.pr_auc ?? null;
@@ -88,18 +86,20 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
 
   // Roster — sort by PR-AUC desc, filter to finite values
   const roster = useMemo(() => {
+    const perBL = data?.per_bundesland ?? [];
     return [...perBL]
       .filter(
         (r) => typeof r.pr_auc === 'number' && Number.isFinite(r.pr_auc),
       )
       .sort((a, b) => (b.pr_auc ?? -Infinity) - (a.pr_auc ?? -Infinity));
-  }, [perBL]);
+  }, [data?.per_bundesland]);
 
   const maxPrAuc = roster[0]?.pr_auc ?? 1;
 
   // Barcode — map weekly_hits to hit / miss / nodata
   const barcodeEntries: Array<{ state: 'hit' | 'miss' | 'nodata'; label: string }> =
     useMemo(() => {
+      const weeklyHits = data?.weekly_hits ?? [];
       if (weeklyHits.length === 0) return [];
       return weeklyHits.map((w) => {
         const date = new Date(w.target_date);
@@ -108,7 +108,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           return { state: 'nodata', label };
         return { state: w.was_hit ? 'hit' : 'miss', label };
       });
-    }, [weeklyHits]);
+    }, [data?.weekly_hits]);
 
   const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
   // 2026-04-21 Integrity-Fix + Pfad-C: DATA_STALE / DRIFT_WARN / SEASON_OFF

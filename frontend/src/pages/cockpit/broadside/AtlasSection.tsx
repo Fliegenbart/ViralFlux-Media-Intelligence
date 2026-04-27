@@ -123,7 +123,7 @@ function makeLabelTexture(
   return tex;
 }
 
-const AtlasScene: React.FC<AtlasSceneProps> = ({
+export const AtlasScene: React.FC<AtlasSceneProps> = ({
   regions,
   topRisers,
   topRiserCodes,

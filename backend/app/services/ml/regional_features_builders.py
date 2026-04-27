@@ -146,29 +146,29 @@ def build_rows(
                 rsv_by_state.get(state),
                 as_of=as_of,
             )
-            visible_are = None
-            if virus_typ == "SARS-CoV-2":
-                are_frame = are_by_state.get(state)
-                if are_frame is not None and not are_frame.empty:
-                    visible_are = are_frame.loc[
-                        (are_frame["datum"] <= as_of) & (are_frame["available_time"] <= as_of)
-                    ].copy()
-                else:
-                    visible_are = pd.DataFrame()
+            are_frame = are_by_state.get(state)
+            if are_frame is not None and not are_frame.empty:
+                visible_are = are_frame.loc[
+                    (are_frame["datum"] <= as_of) & (are_frame["available_time"] <= as_of)
+                ].copy()
+            else:
+                visible_are = pd.DataFrame()
 
-            visible_notaufnahme = None
-            if virus_typ == "SARS-CoV-2" and national_notaufnahme is not None:
+            if national_notaufnahme is not None and not national_notaufnahme.empty:
                 visible_notaufnahme = national_notaufnahme.loc[
                     (national_notaufnahme["datum"] <= as_of)
                     & (national_notaufnahme["available_time"] <= as_of)
                 ].copy()
+            else:
+                visible_notaufnahme = pd.DataFrame()
 
-            visible_trends = None
-            if virus_typ == "SARS-CoV-2" and national_trends is not None:
+            if national_trends is not None and not national_trends.empty:
                 visible_trends = observed_as_of_only_rows(
                     national_trends,
                     as_of=as_of,
                 )
+            else:
+                visible_trends = pd.DataFrame()
 
             target_date = builder._target_date(as_of, horizon)
             target_week_start = builder._target_week_start(as_of, horizon)

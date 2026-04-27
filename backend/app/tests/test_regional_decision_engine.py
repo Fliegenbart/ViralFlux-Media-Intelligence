@@ -21,8 +21,9 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         activation_policy: str = "quality_gate",
         action_threshold: float = 0.6,
         horizon_days: int = 7,
+        change_pct: float | None = None,
     ) -> dict:
-        return {
+        payload = {
             "bundesland": "BY",
             "bundesland_name": "Bayern",
             "event_probability_calibrated": event_probability,
@@ -37,6 +38,9 @@ class RegionalDecisionEngineTests(unittest.TestCase):
             "action_threshold": action_threshold,
             "horizon_days": horizon_days,
         }
+        if change_pct is not None:
+            payload["change_pct"] = change_pct
+        return payload
 
     @staticmethod
     def _metadata(
@@ -170,6 +174,26 @@ class RegionalDecisionEngineTests(unittest.TestCase):
         self.assertTrue(decision.reason_trace.policy_overrides)
         self.assertIn("quality gate", decision.reason_trace.policy_overrides[0].lower())
         self.assertIn("quality gate not passed", decision.uncertainty_summary)
+
+    def test_probability_delta_contradiction_downgrades_to_watch(self) -> None:
+        decision = self.engine.evaluate(
+            virus_typ="RSV A",
+            prediction=self._prediction(
+                event_probability=0.92,
+                predicted=40.0,
+                current=100.0,
+                quality_gate_passed=True,
+                change_pct=-60.0,
+            ),
+            feature_row=self._feature_row(),
+            metadata=self._metadata(),
+        )
+
+        self.assertEqual(decision.signal_stage, "activate")
+        self.assertEqual(decision.stage, "watch")
+        self.assertTrue(decision.reason_trace.policy_overrides)
+        self.assertIn("inconsistent", decision.reason_trace.policy_overrides[0].lower())
+        self.assertEqual(decision.metadata["prepare_mode"], None)
 
     def test_watch_only_policy_keeps_early_prepare_visible(self) -> None:
         decision = self.engine.evaluate(

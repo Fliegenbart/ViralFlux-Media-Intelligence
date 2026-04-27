@@ -10,6 +10,59 @@ from app.services.ml.forecast_science_contract import (
     QUANTILE_GRID_VERSION,
     SCIENCE_CONTRACT_VERSION,
 )
+from app.services.ml.regional_panel_utils import ALL_BUNDESLAENDER
+
+
+def _regional_as_of_lag_days(*, run_as_of_date: Any, row_as_of_date: Any, pd_module: Any) -> int:
+    run_as_of = pd_module.Timestamp(run_as_of_date).normalize()
+    row_as_of = pd_module.Timestamp(row_as_of_date).normalize()
+    return max(int((run_as_of - row_as_of).days), 0)
+
+
+def _force_watch_for_regional_coverage(
+    decision: dict[str, Any],
+    *,
+    reason: str,
+) -> dict[str, Any]:
+    updated = dict(decision)
+    updated["stage"] = "watch"
+    reason_trace = dict(updated.get("reason_trace") or {})
+    policy_overrides = list(reason_trace.get("policy_overrides") or [])
+    if reason not in policy_overrides:
+        policy_overrides.append(reason)
+    reason_trace["policy_overrides"] = policy_overrides
+    policy_override_details = list(reason_trace.get("policy_override_details") or [])
+    policy_override_details.append(
+        {
+            "key": "regional_data_stale",
+            "message": reason,
+        }
+    )
+    reason_trace["policy_override_details"] = policy_override_details
+    uncertainty = list(reason_trace.get("uncertainty") or [])
+    uncertainty.append(reason)
+    reason_trace["uncertainty"] = uncertainty
+    updated["reason_trace"] = reason_trace
+    updated["explanation_summary"] = reason
+    updated["uncertainty_summary"] = reason
+    metadata = dict(updated.get("metadata") or {})
+    metadata["coverage_blocked"] = True
+    updated["metadata"] = metadata
+    return updated
+
+
+def _legacy_non_sars_context_fill_columns(
+    *,
+    virus_typ: str,
+    missing_columns: list[str],
+) -> list[str]:
+    if str(virus_typ or "").strip() == "SARS-CoV-2":
+        return []
+    return sorted(
+        column
+        for column in missing_columns
+        if str(column).startswith("sars_")
+    )
 
 
 def predict_all_regions(
@@ -87,6 +140,7 @@ def predict_all_regions(
         )
 
     as_of_date = service._latest_as_of_date(virus_typ=virus_typ)
+    run_as_of_date = pd_module.Timestamp(as_of_date).normalize()
     revision_policy = service.orchestrator.resolve_revision_policy(metadata=metadata)
     revision_policy_metadata = metadata.get("revision_policy_metadata") or {}
     source_revision_policy = revision_policy_metadata.get("source_policies") or {}
@@ -121,6 +175,22 @@ def predict_all_regions(
         )
 
     event_feature_columns = metadata.get("event_feature_columns") or feature_columns
+
+    initially_missing_columns = sorted(
+        {
+            str(column)
+            for column in [*feature_columns, *event_feature_columns]
+            if str(column) not in panel.columns
+        }
+    )
+    artifact_feature_compatibility_fills = _legacy_non_sars_context_fill_columns(
+        virus_typ=virus_typ,
+        missing_columns=initially_missing_columns,
+    )
+    if artifact_feature_compatibility_fills:
+        panel = panel.copy()
+        for column in artifact_feature_compatibility_fills:
+            panel[column] = 0.0
 
     missing_feature_columns = sorted(
         {
@@ -453,8 +523,23 @@ def predict_all_regions(
     business_gate = service._business_gate(quality_gate=quality_gate, brand=brand)
     cluster_forecast_quantiles = hierarchy_meta.get("cluster_quantiles") or {}
     national_forecast_quantiles = hierarchy_meta.get("national_quantiles") or {}
+    max_regional_as_of_lag_days = int(
+        metadata.get("max_regional_as_of_lag_days")
+        or metadata.get("regional_data_freshness_max_lag_days")
+        or horizon
+    )
     predictions = []
+    stale_regions: list[str] = []
     for idx, row in panel.reset_index(drop=True).iterrows():
+        regional_lag_days = _regional_as_of_lag_days(
+            run_as_of_date=run_as_of_date,
+            row_as_of_date=row["as_of_date"],
+            pd_module=pd_module,
+        )
+        regional_data_fresh = regional_lag_days <= max_regional_as_of_lag_days
+        coverage_blockers = [] if regional_data_fresh else ["regional_data_stale"]
+        if not regional_data_fresh:
+            stale_regions.append(str(row["bundesland"]))
         current_incidence = float(row["current_known_incidence"] or 0.0)
         expected_next = max(float(pred_next[idx]), 0.0)
         change_pct = ((expected_next - current_incidence) / max(current_incidence, 1.0)) * 100.0
@@ -466,12 +551,18 @@ def predict_all_regions(
             activation_policy != "watch_only"
             and quality_gate.get("overall_passed")
             and event_probability >= action_threshold
+            and regional_data_fresh
         )
         prediction = {
             "bundesland": str(row["bundesland"]),
             "bundesland_name": str(row["bundesland_name"]),
             "virus_typ": virus_typ,
             "as_of_date": str(row["as_of_date"]),
+            "run_as_of_date": str(run_as_of_date),
+            "regional_as_of_lag_days": int(regional_lag_days),
+            "regional_data_fresh": bool(regional_data_fresh),
+            "max_regional_as_of_lag_days": int(max_regional_as_of_lag_days),
+            "coverage_blockers": list(coverage_blockers),
             "target_date": str(target_date),
             "target_week_start": str(row["target_week_start"]),
             "target_window_days": list(target_window_days),
@@ -529,6 +620,11 @@ def predict_all_regions(
             feature_row=row.to_dict(),
             metadata={"aggregate_metrics": metadata.get("aggregate_metrics") or {}},
         ).to_dict()
+        if not regional_data_fresh:
+            reason = (
+                "Regional data is stale versus the shared run date, so this region stays Watch."
+            )
+            decision = _force_watch_for_regional_coverage(decision, reason=reason)
         prediction["decision"] = decision
         prediction["decision_label"] = str(decision.get("stage") or "watch").title()
         prediction["decision_priority_index"] = float(
@@ -553,9 +649,14 @@ def predict_all_regions(
     for decision_rank, item in enumerate(ranked_decisions, start=1):
         item["decision_rank"] = decision_rank
 
+    observed_regions = sorted({str(item.get("bundesland")) for item in predictions})
+    expected_regions = list(ALL_BUNDESLAENDER)
+    missing_regions = [region for region in expected_regions if region not in observed_regions]
+
     return {
         "virus_typ": virus_typ,
         "as_of_date": str(as_of_date),
+        "run_as_of_date": str(run_as_of_date),
         "horizon_days": horizon,
         "supported_horizon_days": list(supported_forecast_horizons),
         "supported_horizon_days_for_virus": support["supported_horizons"],
@@ -593,6 +694,7 @@ def predict_all_regions(
         "calibration_evidence_mode": str(
             metadata.get("calibration_evidence_mode") or CALIBRATION_EVIDENCE_MODE
         ),
+        "artifact_feature_compatibility_fills": list(artifact_feature_compatibility_fills),
         "promotion_evidence": metadata.get("promotion_evidence") or {},
         "registry_status": metadata.get("registry_status"),
         "artifact_transition_mode": artifact_transition_mode,
@@ -602,6 +704,14 @@ def predict_all_regions(
         "action_threshold": round(action_threshold, 4),
         "decision_policy_version": service.decision_engine.get_config(virus_typ).version,
         "decision_summary": service._decision_summary(predictions),
+        "regional_coverage": {
+            "expected_regions": expected_regions,
+            "observed_regions": observed_regions,
+            "missing_regions": missing_regions,
+            "stale_regions": sorted(set(stale_regions)),
+            "complete": not missing_regions,
+            "max_regional_as_of_lag_days": int(max_regional_as_of_lag_days),
+        },
         "total_regions": len(predictions),
         "predictions": predictions,
         "top_5": predictions[:5],

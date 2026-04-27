@@ -78,6 +78,23 @@ from app.services.ml.training_contract import SUPPORTED_VIRUS_TYPES
 
 logger = logging.getLogger(__name__)
 
+INFERENCE_STALE_REGION_FALLBACK_DAYS = 28
+
+
+_NOTAUFNAHME_SYNDROME_FOR_VIRUS: dict[str, str] = {
+    "Influenza A": "ILI",
+    "Influenza B": "ILI",
+    "RSV A": "ARI",
+    "SARS-CoV-2": "COVID",
+}
+
+_TRENDS_KEYWORDS_FOR_VIRUS: dict[str, tuple[str, ...]] = {
+    "Influenza A": ("Grippe", "Fieber", "Husten"),
+    "Influenza B": ("Grippe", "Fieber", "Husten"),
+    "RSV A": ("Erkältung", "Husten", "Fieber"),
+    "SARS-CoV-2": ("Corona Test",),
+}
+
 
 def _feature_virus_slug(value: str) -> str:
     return value.lower().replace("-", "_").replace(" ", "_")
@@ -137,9 +154,19 @@ class RegionalFeatureBuilder:
         grippeweb = self._load_grippeweb_signals(truth_start, end_date)
         influenza_ifsg = self._load_influenza_ifsg(truth_start, end_date)
         rsv_ifsg = self._load_rsv_ifsg(truth_start, end_date)
-        are = self._load_are_konsultation(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
-        notaufnahme = self._load_notaufnahme_covid(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
-        trends = self._load_corona_test_trends(truth_start, end_date) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
+        are = self._load_are_konsultation(truth_start, end_date)
+        notaufnahme_syndrome = _NOTAUFNAHME_SYNDROME_FOR_VIRUS.get(virus_typ)
+        notaufnahme = (
+            self._load_notaufnahme_syndrome(truth_start, end_date, notaufnahme_syndrome)
+            if notaufnahme_syndrome
+            else pd.DataFrame()
+        )
+        trends_kw = _TRENDS_KEYWORDS_FOR_VIRUS.get(virus_typ, ())
+        trends = (
+            self._load_trends_keywords(truth_start, end_date, trends_kw)
+            if trends_kw
+            else pd.DataFrame()
+        )
         weather = self._load_weather(truth_start, end_date + pd.Timedelta(days=horizon))
         pollen = self._load_pollen(truth_start, end_date + pd.Timedelta(days=horizon))
         holidays = self._load_holidays()
@@ -200,7 +227,9 @@ class RegionalFeatureBuilder:
         horizon = ensure_supported_horizon(horizon_days)
         effective_as_of = pd.Timestamp(as_of_date or utc_now()).normalize()
         history_start = effective_as_of - pd.Timedelta(days=lookback_days)
-        row_start = effective_as_of - pd.Timedelta(days=horizon + 7)
+        row_start = effective_as_of - pd.Timedelta(
+            days=max(horizon + 7, INFERENCE_STALE_REGION_FALLBACK_DAYS)
+        )
         truth_start = history_start - pd.Timedelta(days=730)
 
         wastewater = self._load_wastewater_daily(virus_typ, truth_start)
@@ -209,13 +238,19 @@ class RegionalFeatureBuilder:
         grippeweb = self._load_grippeweb_signals(truth_start, effective_as_of)
         influenza_ifsg = self._load_influenza_ifsg(truth_start, effective_as_of)
         rsv_ifsg = self._load_rsv_ifsg(truth_start, effective_as_of)
-        are = self._load_are_konsultation(truth_start, effective_as_of) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
+        are = self._load_are_konsultation(truth_start, effective_as_of)
+        notaufnahme_syndrome = _NOTAUFNAHME_SYNDROME_FOR_VIRUS.get(virus_typ)
         notaufnahme = (
-            self._load_notaufnahme_covid(truth_start, effective_as_of)
-            if virus_typ == "SARS-CoV-2"
+            self._load_notaufnahme_syndrome(truth_start, effective_as_of, notaufnahme_syndrome)
+            if notaufnahme_syndrome
             else pd.DataFrame()
         )
-        trends = self._load_corona_test_trends(truth_start, effective_as_of) if virus_typ == "SARS-CoV-2" else pd.DataFrame()
+        trends_kw = _TRENDS_KEYWORDS_FOR_VIRUS.get(virus_typ, ())
+        trends = (
+            self._load_trends_keywords(truth_start, effective_as_of, trends_kw)
+            if trends_kw
+            else pd.DataFrame()
+        )
         weather = self._load_weather(truth_start, effective_as_of + pd.Timedelta(days=horizon))
         pollen = self._load_pollen(truth_start, effective_as_of + pd.Timedelta(days=horizon))
         holidays = self._load_holidays()
@@ -272,21 +307,7 @@ class RegionalFeatureBuilder:
         return latest_rows
 
     def latest_available_as_of_date(self, virus_typ: str = "Influenza A") -> pd.Timestamp:
-        row = (
-            self.db.query(
-                func.max(WastewaterData.available_time).label("available_time"),
-                func.max(WastewaterData.datum).label("datum"),
-            )
-            .filter(WastewaterData.virus_typ == virus_typ)
-            .first()
-        )
-        if row is None:
-            return pd.Timestamp(utc_now()).normalize()
-        return effective_available_time(
-            row.datum or utc_now(),
-            row.available_time,
-            0,
-        ).normalize()
+        return regional_features_sources.latest_wastewater_available_date(self, virus_typ)
 
     def build_regional_training_data(
         self,
@@ -410,8 +431,28 @@ class RegionalFeatureBuilder:
     def _load_notaufnahme_covid(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         return regional_features_sources.load_notaufnahme_covid(self, start_date, end_date)
 
+    def _load_notaufnahme_syndrome(
+        self,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        syndrome: str,
+    ) -> pd.DataFrame:
+        return regional_features_sources.load_notaufnahme_syndrome(
+            self, start_date, end_date, syndrome
+        )
+
     def _load_corona_test_trends(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         return regional_features_sources.load_corona_test_trends(self, start_date, end_date)
+
+    def _load_trends_keywords(
+        self,
+        start_date: pd.Timestamp,
+        end_date: pd.Timestamp,
+        keywords: tuple[str, ...],
+    ) -> pd.DataFrame:
+        return regional_features_sources.load_trends_keywords(
+            self, start_date, end_date, keywords
+        )
 
     def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
         return regional_features_sources.load_weather(self, start_date, end_date)
@@ -719,7 +760,7 @@ class RegionalFeatureBuilder:
         revision_policy: str,
         source_revision_policy: dict[str, str] | None,
     ) -> dict[str, float]:
-        if virus_typ != "SARS-CoV-2":
+        if str(virus_typ or "").strip() != "SARS-CoV-2":
             return {}
 
         are_frame = visible_are if visible_are is not None else pd.DataFrame()

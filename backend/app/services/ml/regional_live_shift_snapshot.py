@@ -14,9 +14,10 @@ from collections import Counter
 from datetime import date, datetime
 from typing import Any, Iterable
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.database import MLForecast
+from app.models.database import MediaOutcomeRecord, MLForecast
 from app.services.ml.forecast_horizon_utils import ensure_supported_horizon
 from app.services.ml.regional_panel_utils import ALL_BUNDESLAENDER, BUNDESLAND_NAMES
 
@@ -24,6 +25,8 @@ from app.services.ml.regional_panel_utils import ALL_BUNDESLAENDER, BUNDESLAND_N
 DEFAULT_SHIFT_VIRUSES: tuple[str, ...] = ("Influenza A", "Influenza B", "RSV A")
 DEFAULT_MIN_CHANGE_PCT = 10.0
 DEFAULT_MAX_FEATURE_GAP_DAYS = 10
+DEFAULT_MIN_BUSINESS_WEEKS = 4
+DEFAULT_MIN_BUSINESS_REGIONS = 8
 INLINE_MODEL_MARKER = "_inline"
 
 
@@ -63,6 +66,14 @@ def _feature_freshness(row: MLForecast) -> dict[str, Any]:
     return dict(freshness) if isinstance(freshness, dict) else {}
 
 
+def _forecast_quality(row: MLForecast) -> dict[str, Any]:
+    payload = row.features_used or {}
+    if not isinstance(payload, dict):
+        return {}
+    quality = payload.get("forecast_quality") or payload.get("quality_gate") or {}
+    return dict(quality) if isinstance(quality, dict) else {}
+
+
 def _normalise_virus_types(virus_types: Iterable[str] | None) -> list[str]:
     if virus_types is None:
         return list(DEFAULT_SHIFT_VIRUSES)
@@ -91,12 +102,22 @@ class RegionalLiveShiftSnapshotService:
         top_n: int = 5,
         max_feature_gap_days: int = DEFAULT_MAX_FEATURE_GAP_DAYS,
         min_change_pct: float = DEFAULT_MIN_CHANGE_PCT,
+        brand: str = "gelo",
+        require_business_validation: bool = True,
+        min_business_weeks: int = DEFAULT_MIN_BUSINESS_WEEKS,
+        min_business_regions: int = DEFAULT_MIN_BUSINESS_REGIONS,
     ) -> dict[str, Any]:
         horizon = ensure_supported_horizon(horizon_days)
         viruses = _normalise_virus_types(virus_types)
         top_limit = max(1, int(top_n or 1))
         max_gap = max(0, int(max_feature_gap_days))
         min_pct = max(0.0, float(min_change_pct))
+        business_validation = self._business_validation_status(
+            brand=brand,
+            required=require_business_validation,
+            min_weeks=min_business_weeks,
+            min_regions=min_business_regions,
+        )
 
         rows = (
             self.db.query(MLForecast)
@@ -131,6 +152,7 @@ class RegionalLiveShiftSnapshotService:
                     horizon_days=horizon,
                     max_feature_gap_days=max_gap,
                     min_change_pct=min_pct,
+                    business_validation=business_validation,
                 )
                 for region in ALL_BUNDESLAENDER
                 if latest_groups.get((virus, region))
@@ -173,10 +195,16 @@ class RegionalLiveShiftSnapshotService:
                 "min_change_pct": min_pct,
                 "max_feature_gap_days": max_gap,
                 "inline_model_policy": "candidate_only",
+                "business_validation_policy": (
+                    "required_for_budget_release"
+                    if require_business_validation
+                    else "not_required"
+                ),
                 "expected_regions": list(ALL_BUNDESLAENDER),
             },
             "summary": {
                 "budget_gate_status": budget_gate_status,
+                "business_validation": business_validation,
                 "total_forecast_groups": len(all_regions),
                 "budget_releasable_regions": status_counts.get("go", 0),
                 "candidate_regions": status_counts.get("candidate_only", 0),
@@ -191,18 +219,18 @@ class RegionalLiveShiftSnapshotService:
 
     @staticmethod
     def _latest_groups(rows: list[MLForecast]) -> dict[tuple[str, str], list[MLForecast]]:
-        latest_created: dict[tuple[str, str], datetime] = {}
+        latest_created: dict[str, datetime] = {}
         for row in rows:
-            key = (str(row.virus_typ), str(row.region).upper())
+            key = str(row.virus_typ)
             created_at = row.created_at or datetime.min
             if key not in latest_created or created_at > latest_created[key]:
                 latest_created[key] = created_at
 
         groups: dict[tuple[str, str], list[MLForecast]] = {}
         for row in rows:
-            key = (str(row.virus_typ), str(row.region).upper())
-            if (row.created_at or datetime.min) == latest_created.get(key):
-                groups.setdefault(key, []).append(row)
+            virus = str(row.virus_typ)
+            if (row.created_at or datetime.min) == latest_created.get(virus):
+                groups.setdefault((virus, str(row.region).upper()), []).append(row)
         for key, group_rows in groups.items():
             groups[key] = sorted(group_rows, key=lambda item: (item.forecast_date, item.id or 0))
         return groups
@@ -216,6 +244,7 @@ class RegionalLiveShiftSnapshotService:
         horizon_days: int,
         max_feature_gap_days: int,
         min_change_pct: float,
+        business_validation: dict[str, Any],
     ) -> dict[str, Any]:
         first = rows[0]
         last = rows[-1]
@@ -254,6 +283,24 @@ class RegionalLiveShiftSnapshotService:
         if inline_model:
             blockers.append("model_not_promoted_inline")
 
+        forecast_quality = _forecast_quality(last)
+        model_quality_gate_passed = forecast_quality.get("overall_passed")
+        if not forecast_quality:
+            blockers.append("missing_model_quality_gate")
+            quality_allows_budget = False
+        else:
+            quality_allows_budget = model_quality_gate_passed is True
+            if not quality_allows_budget:
+                blockers.append("model_quality_gate_not_passed")
+        model_forecast_readiness = str(
+            forecast_quality.get("forecast_readiness") or ""
+        ).strip() or None
+        business_allows_budget = bool(
+            business_validation.get("validated_for_budget_activation")
+        )
+        if not business_allows_budget:
+            blockers.append("business_validation_missing")
+
         hard_blockers = {
             "incomplete_horizon",
             "missing_feature_freshness",
@@ -265,7 +312,7 @@ class RegionalLiveShiftSnapshotService:
             budget_release_status = "blocked"
         elif not increase_detected:
             budget_release_status = "watch"
-        elif inline_model:
+        elif inline_model or not quality_allows_budget or not business_allows_budget:
             budget_release_status = "candidate_only"
         else:
             budget_release_status = "go"
@@ -274,6 +321,10 @@ class RegionalLiveShiftSnapshotService:
             warnings.append(f"features_are_{feature_gap_days}_days_old")
         if inline_model:
             warnings.append("inline_fallback_model_not_promoted")
+        if not quality_allows_budget:
+            warnings.append("model_quality_gate_not_passed")
+        if not business_allows_budget:
+            warnings.append("business_validation_missing")
 
         return {
             "virus_typ": virus_typ,
@@ -284,6 +335,12 @@ class RegionalLiveShiftSnapshotService:
             "forecast_end_date": last.forecast_date.date().isoformat(),
             "created_at": last.created_at.isoformat() if last.created_at else None,
             "model_version": model_version or None,
+            "model_quality_gate_passed": (
+                bool(model_quality_gate_passed)
+                if model_quality_gate_passed is not None
+                else None
+            ),
+            "model_forecast_readiness": model_forecast_readiness,
             "start_value": _round_or_none(start_value, 1),
             "end_value": _round_or_none(end_value, 1),
             "absolute_delta": _round_or_none(absolute_delta, 1),
@@ -335,6 +392,67 @@ class RegionalLiveShiftSnapshotService:
             ),
             reverse=True,
         )
+
+    def _business_validation_status(
+        self,
+        *,
+        brand: str,
+        required: bool,
+        min_weeks: int,
+        min_regions: int,
+    ) -> dict[str, Any]:
+        brand_key = str(brand or "gelo").strip().lower()
+        rows = (
+            self.db.query(
+                func.count(MediaOutcomeRecord.id).label("rows"),
+                func.count(func.distinct(MediaOutcomeRecord.week_start)).label("weeks"),
+                func.count(func.distinct(MediaOutcomeRecord.region_code)).label("regions"),
+                func.sum(MediaOutcomeRecord.sales_units).label("sales_units"),
+                func.sum(MediaOutcomeRecord.media_spend_eur).label("media_spend_eur"),
+            )
+            .filter(func.lower(MediaOutcomeRecord.brand) == brand_key)
+            .one()
+        )
+        row_count = int(rows.rows or 0)
+        weeks = int(rows.weeks or 0)
+        regions = int(rows.regions or 0)
+        sales_units = float(rows.sales_units or 0.0)
+        media_spend_eur = float(rows.media_spend_eur or 0.0)
+        has_sales = sales_units > 0.0
+        has_spend = media_spend_eur > 0.0
+        validated = (
+            not required
+            or (
+                row_count > 0
+                and weeks >= max(1, int(min_weeks))
+                and regions >= max(1, int(min_regions))
+                and has_sales
+                and has_spend
+            )
+        )
+        missing: list[str] = []
+        if required:
+            if weeks < max(1, int(min_weeks)):
+                missing.append("insufficient_outcome_weeks")
+            if regions < max(1, int(min_regions)):
+                missing.append("insufficient_outcome_regions")
+            if not has_sales:
+                missing.append("missing_sales_units")
+            if not has_spend:
+                missing.append("missing_media_spend")
+        return {
+            "brand": brand_key,
+            "required_for_budget_release": required,
+            "validated_for_budget_activation": validated,
+            "rows": row_count,
+            "weeks": weeks,
+            "regions": regions,
+            "sales_units": round(sales_units, 2),
+            "media_spend_eur": round(media_spend_eur, 2),
+            "min_weeks": max(1, int(min_weeks)),
+            "min_regions": max(1, int(min_regions)),
+            "missing_requirements": missing,
+        }
 
     @staticmethod
     def _budget_gate_status(*, status_counts: Counter[str], top_regions: list[dict[str, Any]]) -> str:

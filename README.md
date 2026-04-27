@@ -11,6 +11,55 @@ Live: [fluxengine.labpulse.ai/cockpit](https://fluxengine.labpulse.ai/cockpit)
 
 ---
 
+## Seriöser Leistungsumfang (April 2026)
+
+ViralFlux ist aktuell ein **Decision-Support-System**, kein Media-Autopilot.
+Das Tool kann heute Regionen priorisieren, Risiken erklären und Budget-
+Kandidaten markieren. Es darf aber noch nicht behaupten, dass eine
+Budgetverschiebung bereits kausal Umsatz, Absatz oder ROI hebt.
+
+### Was das Tool heute belastbar kann
+
+- regionale Frühwarnsignale pro Bundesland aus mehreren Quellen bauen
+- H5 lesen als kurzfristige Kurvenfrage: *steigt die Lage in den nächsten
+  Tagen?*
+- H7 lesen als Wochenbestätigung: *trägt der Trend auch auf Wochenbasis und
+  sind die Daten frisch genug?*
+- H5 und H7 zusammen bewerten, ohne Wahrscheinlichkeiten blind zu mitteln
+- Regionen mit alter oder unvollständiger Datenlage blockieren statt sie
+  künstlich gut aussehen zu lassen
+- klare Labels ausgeben: `Activate`, `Prepare`, `Watch`
+- Budget-Freigaben an echte Business-Evidenz koppeln, nicht nur an ein
+  epidemiologisches Signal
+
+### Was das Tool bewusst nicht behauptet
+
+- keine automatische Budgetumschichtung ohne menschliche Prüfung
+- kein nachgewiesener Media-Uplift, solange Spend-, Outcome- und Holdout-
+  Daten fehlen
+- keine exakten Zukunftswerte; Prognosen bleiben Erwartungen mit
+  Unsicherheit
+- keine seriöse Aussage, wenn Quelle, Frische oder Coverage fehlen
+
+### Aktueller Live-Stand
+
+- H7 liefert für Influenza A, Influenza B, RSV A und SARS-CoV-2 wieder alle
+  16 Bundesländer.
+- Hamburg ist aktuell bewusst auf `Watch`, weil die regionale Datenfrische
+  blockiert.
+- Der H5/H7-Abgleich über Influenza A, Influenza B und RSV A erzeugt aktuell
+  48 regionale Zeilen: 4 bestätigte Richtungen, 5 kurzfristige Signale, 2
+  aufbauende Wochensignale, 3 Coverage-Blocker und 34 ohne alignierten
+  Anstieg.
+- Der Business-Gate-Status ist aktuell `candidate_only`: Es gibt Signale,
+  aber noch keine seriös freigebbaren Budget-Regionen, weil echte Outcome-,
+  Spend- und Vergleichsdaten fehlen.
+- Bekannte technische Grenze: ältere H7-Modelle für Influenza A/B enthalten
+  noch Legacy-`sars_*`-Feature-Spalten. Diese werden kompatibel gefüllt, aber
+  sollten im nächsten Retraining aus den Artefakten entfernt werden.
+
+---
+
 ## Das Cockpit
 
 Eine einzige user-facing Surface (`/cockpit`), umgebaut im April 2026 von
@@ -219,7 +268,29 @@ relativ zum letzten beobachteten Punkt. Das löst die Skalen-
 Inkompatibilität zwischen SURVSTAT-Meldewesen (~500/100k) und Modell-
 Q50 (~1200 abs) — beide Serien treffen sich am HEUTE-Anchor auf 100.
 
-### 5. Regionale Priorisierung
+### 5. H5/H7-Alignment
+
+H5 und H7 werden nicht zu einer einzelnen Misch-Wahrscheinlichkeit
+zusammengerechnet. Sie beantworten zwei unterschiedliche Fragen:
+
+- **H5**: kurzfristige Kurvendynamik, also ob eine Region jetzt anzieht
+- **H7**: Wochenbestätigung, also ob der Trend auf einem robusteren
+  Horizont frisch und tragfähig bleibt
+
+Die Alignment-Logik liest beide Horizonte als Ampel:
+
+- `confirmed_direction` — kurzfristiger Anstieg und H7 bestätigt die Richtung
+- `short_term_only` — H5 steigt, H7 bestätigt noch nicht
+- `weekly_building` — H7 baut sich auf, H5 ist noch nicht stark genug
+- `coverage_blocked` — Signal wird wegen Datenfrische oder Coverage blockiert
+- `no_aligned_rise` — kein gemeinsam belastbarer Anstieg
+
+Wichtig: Eine Budget-Empfehlung braucht mehr als H5/H7. Sie braucht zusätzlich
+frische Daten, ausreichende Quellenlage und Business-Evidenz. Der Snapshot
+kann mit `backend/scripts/run_horizon_alignment_snapshot.py` reproduziert
+werden.
+
+### 6. Regionale Priorisierung
 
 Die Entscheidungs-Engine kombiniert Wahrscheinlichkeit, Trendrichtung,
 Datenfrische, Quellabdeckung, Cross-Source-Agreement, Unsicherheit und
@@ -249,7 +320,9 @@ Das System hält sich an vier Regeln:
    Time-Features)
 3. Epidemiologischer Forecast und Business-Entscheidung werden nicht
    verwechselt (eigene Gates, eigene Labels)
-4. Wo keine belastbare Zahl vorhanden ist, steht ein `—` mit italic-
+4. H5 und H7 werden als zwei Horizonte gelesen, nicht als gemittelte
+   Schein-Genauigkeit
+5. Wo keine belastbare Zahl vorhanden ist, steht ein `—` mit italic-
    Note — nie eine erfundene Zahl
 
 ---
@@ -274,9 +347,15 @@ Backend:
   Impact, Backtest-Builder, Timeline-Snapshot-Persistenz
 - `backend/app/services/ml/` — Regional-Forecast, XGBoost-Stack,
   Walk-forward-Backtest, Kalibrierung
+- `backend/app/services/ml/regional_horizon_alignment.py` — H5/H7-Abgleich
+  pro Virus und Bundesland
 - `backend/app/services/data_ingest/` — Quellen-Importer
 - `backend/scripts/backfill_cockpit_timeline_snapshots.py` — einmaliges
   Backfill-Script für die historische Vintage-Migration
+- `backend/scripts/run_horizon_alignment_snapshot.py` — reproduzierbarer
+  H5/H7-Live-Snapshot
+- `backend/scripts/run_gelo_respiratory_demand_snapshot.py` — Business-
+  Validierungs-Snapshot für Outcome-/Spend-Gates
 
 ---
 

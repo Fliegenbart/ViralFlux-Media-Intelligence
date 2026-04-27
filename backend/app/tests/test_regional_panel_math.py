@@ -684,6 +684,76 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
         self.assertEqual(sorted(panel["bundesland"].tolist()), ["BE", "BY"])
         self.assertTrue((panel["as_of_date"] == pd.Timestamp("2026-03-12")).all())
 
+    def test_inference_panel_keeps_stale_region_for_explicit_coverage_decision(self) -> None:
+        class _FakeBuilder(RegionalFeatureBuilder):
+            def __init__(self):
+                self.db = None
+
+            def _load_wastewater_daily(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                for state, dates in {
+                    "BY": pd.date_range("2026-03-10", periods=10, freq="D"),
+                    "HH": pd.date_range("2026-02-20", periods=10, freq="D"),
+                }.items():
+                    for offset, value_date in enumerate(dates, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "datum": pd.Timestamp(value_date),
+                                "available_time": pd.Timestamp(value_date),
+                                "viral_load": float(10 + offset),
+                                "site_count": 5,
+                                "under_bg_share": 0.2,
+                                "viral_std": 1.0,
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_truth_series(self, virus_typ: str, start_date: pd.Timestamp) -> pd.DataFrame:
+                del virus_typ, start_date
+                rows = []
+                weeks = pd.date_range("2025-12-22", periods=14, freq="7D")
+                for state in ("BY", "HH"):
+                    for idx, week_start in enumerate(weeks, start=1):
+                        rows.append(
+                            {
+                                "bundesland": state,
+                                "week_start": pd.Timestamp(week_start),
+                                "available_date": pd.Timestamp(week_start),
+                                "incidence": float(idx * 3),
+                                "truth_source": "survstat_weekly",
+                            }
+                        )
+                return pd.DataFrame(rows)
+
+            def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_pollen(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+                del start_date, end_date
+                return pd.DataFrame()
+
+            def _load_holidays(self) -> dict[str, list[tuple[pd.Timestamp, pd.Timestamp]]]:
+                return {}
+
+            def _load_state_population_map(self) -> dict[str, float]:
+                return {"BY": 13_500_000.0, "HH": 1_900_000.0}
+
+        builder = _FakeBuilder()
+        panel = builder.build_inference_panel(
+            virus_typ="Influenza A",
+            as_of_date=datetime(2026, 3, 20),
+            lookback_days=90,
+            horizon_days=7,
+        )
+
+        self.assertEqual(sorted(panel["bundesland"].tolist()), ["BY", "HH"])
+        as_of_by_state = dict(zip(panel["bundesland"], panel["as_of_date"], strict=True))
+        self.assertEqual(as_of_by_state["BY"], pd.Timestamp("2026-03-19"))
+        self.assertEqual(as_of_by_state["HH"], pd.Timestamp("2026-03-01"))
+
     def test_inference_panel_exposes_quality_spillover_and_cross_virus_features(self) -> None:
         class _FakeBuilder(RegionalFeatureBuilder):
             def __init__(self):
@@ -863,6 +933,15 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
                     }
                 )
 
+            def _load_notaufnahme_syndrome(
+                self,
+                start_date: pd.Timestamp,
+                end_date: pd.Timestamp,
+                syndrome: str,
+            ) -> pd.DataFrame:
+                del syndrome
+                return self._load_notaufnahme_covid(start_date, end_date)
+
             def _load_corona_test_trends(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
                 del start_date, end_date
                 days = pd.date_range("2026-02-15", periods=29, freq="D")
@@ -875,6 +954,15 @@ class RegionalFeatureBuilderInferenceTests(unittest.TestCase):
                         "interest_score": scores,
                     }
                 )
+
+            def _load_trends_keywords(
+                self,
+                start_date: pd.Timestamp,
+                end_date: pd.Timestamp,
+                keywords: tuple[str, ...],
+            ) -> pd.DataFrame:
+                del keywords
+                return self._load_corona_test_trends(start_date, end_date)
 
             def _load_weather(self, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
                 del start_date, end_date

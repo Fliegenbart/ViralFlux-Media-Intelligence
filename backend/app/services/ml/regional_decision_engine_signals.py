@@ -340,6 +340,22 @@ def policy_stage(
     if signal_stage == "watch":
         return "watch", overrides
 
+    event_probability = safe_float(
+        prediction.get("event_probability")
+        or prediction.get("event_probability_calibrated")
+    )
+    change_pct = safe_float(prediction.get("change_pct"))
+    if (
+        event_probability is not None
+        and event_probability >= 0.65
+        and change_pct is not None
+        and change_pct <= -10.0
+    ):
+        overrides.append(
+            "Forecast is inconsistent: high event probability but expected change is negative, so final stage is Watch."
+        )
+        return "watch", overrides
+
     if activation_policy == "watch_only":
         overrides.append("Activation policy 'watch_only' keeps the region in Prepare until budget release is allowed.")
         return "prepare", overrides

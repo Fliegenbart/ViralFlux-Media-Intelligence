@@ -409,6 +409,40 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertTrue(top["reason_trace"]["uncertainty"])
         self.assertIn("Remaining uncertainty", top["uncertainty_summary"])
 
+    def test_predict_all_regions_blocks_stale_regional_rows_from_activation(self) -> None:
+        panel = self._decision_ready_panel()
+        panel.loc[0, "bundesland"] = "HH"
+        panel.loc[0, "bundesland_name"] = "Hamburg"
+        panel.loc[0, "as_of_date"] = pd.Timestamp("2026-02-25")
+        panel.loc[1, "bundesland"] = "BY"
+        panel.loc[1, "bundesland_name"] = "Bayern"
+        panel.loc[1, "as_of_date"] = pd.Timestamp("2026-03-14")
+        service = self._make_service(
+            inference_panel=panel,
+            probabilities=[0.99, 0.82],
+            median_values=[30.0, 28.0],
+            lower_values=[24.0, 24.0],
+            upper_values=[34.0, 32.0],
+            aggregate_metrics={
+                "pr_auc": 0.71,
+                "ece": 0.05,
+                "brier_score": 0.09,
+            },
+        )
+
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
+
+        stale = next(item for item in result["predictions"] if item["bundesland"] == "HH")
+        fresh = next(item for item in result["predictions"] if item["bundesland"] == "BY")
+        self.assertFalse(stale["regional_data_fresh"])
+        self.assertEqual(stale["regional_as_of_lag_days"], 17)
+        self.assertIn("regional_data_stale", stale["coverage_blockers"])
+        self.assertFalse(stale["activation_candidate"])
+        self.assertEqual(stale["decision_label"], "Watch")
+        self.assertEqual(stale["decision"]["stage"], "watch")
+        self.assertTrue(fresh["regional_data_fresh"])
+        self.assertIn("HH", result["regional_coverage"]["stale_regions"])
+
     def test_media_activation_exposes_prepare_when_quality_gate_blocks_spend(self) -> None:
         service = self._make_service(
             quality_gate_passed=False,
@@ -645,6 +679,30 @@ class RegionalForecastServiceTests(unittest.TestCase):
         self.assertEqual(result["status"], "no_model")
         self.assertEqual(result["predictions"], [])
         self.assertIn("target_incidence", result["message"])
+
+    def test_predict_all_regions_fills_legacy_sars_context_columns_for_non_sars_artifacts(self) -> None:
+        service = self._make_service()
+        service._load_artifacts = lambda virus_typ, horizon_days=7: {
+            "classifier": _DummyClassifier([0.82, 0.41]),
+            "regressor_median": _DummyRegressor(np.log1p([28.0, 12.0])),
+            "regressor_lower": _DummyRegressor(np.log1p([24.0, 10.0])),
+            "regressor_upper": _DummyRegressor(np.log1p([32.0, 15.0])),
+            "calibration": None,
+            "metadata": {
+                "feature_columns": ["f1", "f2", "sars_are_level"],
+                "event_feature_columns": ["f1", "f2", "sars_are_level"],
+                "horizon_days": horizon_days,
+                "target_window_days": [horizon_days, horizon_days],
+                "supported_horizon_days": [3, 5, 7],
+                "quality_gate": {"overall_passed": True, "forecast_readiness": "GO"},
+            },
+        }
+
+        result = service.predict_all_regions(virus_typ="Influenza A", brand="gelo", horizon_days=7)
+
+        self.assertNotEqual(result.get("status"), "no_model")
+        self.assertIn("sars_are_level", result["artifact_feature_compatibility_fills"])
+        self.assertEqual(result["total_regions"], 2)
 
     def test_media_activation_exposes_prepare_when_business_gate_blocks_spend(self) -> None:
         service = self._make_service(

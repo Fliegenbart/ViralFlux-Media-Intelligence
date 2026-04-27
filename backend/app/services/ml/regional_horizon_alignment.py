@@ -63,6 +63,10 @@ def classify_horizon_alignment(
             "blockers": blockers or ["h7_missing"],
             "statistical_read": "H5 ist vorhanden, aber H7 fehlt fuer diese Region.",
             "budget_read": "Keine Budgetfreigabe; erst H7-Abdeckung herstellen.",
+            "media_action": "do_not_shift",
+            "budget_permission": "blocked",
+            "risk_level": "high",
+            "decision_weight": 0.0,
         }
     if not h7_fresh:
         return {
@@ -72,6 +76,10 @@ def classify_horizon_alignment(
             "blockers": blockers or ["regional_data_stale"],
             "statistical_read": "H7 ist vorhanden, aber regional zu alt fuer eine saubere Bestaetigung.",
             "budget_read": "Keine Budgetfreigabe; erst Datenfrische reparieren.",
+            "media_action": "do_not_shift",
+            "budget_permission": "blocked",
+            "risk_level": "high",
+            "decision_weight": 0.0,
         }
     if h5_rise and h7_support:
         return {
@@ -81,6 +89,10 @@ def classify_horizon_alignment(
             "blockers": blockers,
             "statistical_read": "H5 kurzfristig hoch, H7 frisch bestaetigt die Richtung.",
             "budget_read": "Kandidat, aber Budgetfreigabe bleibt an Business- und Spend-Gates gekoppelt.",
+            "media_action": "controlled_shift_candidate",
+            "budget_permission": "blocked_until_business_truth",
+            "risk_level": "medium",
+            "decision_weight": 0.85,
         }
     if h5_rise and not h7_support:
         return {
@@ -90,6 +102,10 @@ def classify_horizon_alignment(
             "blockers": blockers,
             "statistical_read": "H5 steigt kurzfristig, H7 bestaetigt noch nicht.",
             "budget_read": "Nur beobachten oder vorbereiten; keine automatische Budgetverschiebung.",
+            "media_action": "prepare_creative_hold_budget",
+            "budget_permission": "blocked_until_h7_confirmation",
+            "risk_level": "medium_high",
+            "decision_weight": 0.45,
         }
     if not h5_rise and h7_support:
         return {
@@ -99,6 +115,10 @@ def classify_horizon_alignment(
             "blockers": blockers,
             "statistical_read": "H7 zeigt Richtung, H5 zeigt noch keinen kurzfristigen Anstieg.",
             "budget_read": "Planungssignal, aber noch kein kurzfristiger Shift.",
+            "media_action": "prepare_watchlist",
+            "budget_permission": "blocked_until_h5_or_business_truth",
+            "risk_level": "medium_high",
+            "decision_weight": 0.55,
         }
     return {
         "alignment_status": "no_aligned_rise",
@@ -107,6 +127,10 @@ def classify_horizon_alignment(
         "blockers": blockers,
         "statistical_read": "H5 und H7 zeigen gemeinsam keinen belastbaren Anstieg.",
         "budget_read": "Watch.",
+        "media_action": "watch",
+        "budget_permission": "not_requested",
+        "risk_level": "low",
+        "decision_weight": 0.15,
     }
 
 

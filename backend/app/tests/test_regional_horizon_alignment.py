@@ -27,6 +27,9 @@ class RegionalHorizonAlignmentTests(unittest.TestCase):
         self.assertEqual(result["budget_read"], "Kandidat, aber Budgetfreigabe bleibt an Business- und Spend-Gates gekoppelt.")
         self.assertTrue(result["h5_rise"])
         self.assertTrue(result["h7_support"])
+        self.assertEqual(result["media_action"], "controlled_shift_candidate")
+        self.assertEqual(result["budget_permission"], "blocked_until_business_truth")
+        self.assertEqual(result["risk_level"], "medium")
 
     def test_stale_h7_blocks_alignment_even_when_h5_rises(self) -> None:
         h5 = {
@@ -50,6 +53,29 @@ class RegionalHorizonAlignmentTests(unittest.TestCase):
         self.assertEqual(result["budget_read"], "Keine Budgetfreigabe; erst Datenfrische reparieren.")
         self.assertTrue(result["h5_rise"])
         self.assertFalse(result["h7_support"])
+        self.assertEqual(result["media_action"], "do_not_shift")
+        self.assertEqual(result["budget_permission"], "blocked")
+        self.assertEqual(result["risk_level"], "high")
+
+    def test_weekly_building_is_prepare_not_budget_shift(self) -> None:
+        h5 = {
+            "increase_detected": False,
+            "change_pct": 3.0,
+            "blockers": [],
+        }
+        h7 = {
+            "decision": {"stage": "prepare"},
+            "regional_data_fresh": True,
+            "quality_gate": {"overall_passed": True},
+            "change_pct": 16.0,
+        }
+
+        result = classify_horizon_alignment(h5, h7)
+
+        self.assertEqual(result["alignment_status"], "weekly_building")
+        self.assertEqual(result["media_action"], "prepare_watchlist")
+        self.assertEqual(result["budget_permission"], "blocked_until_h5_or_business_truth")
+        self.assertEqual(result["risk_level"], "medium_high")
 
 
 if __name__ == "__main__":

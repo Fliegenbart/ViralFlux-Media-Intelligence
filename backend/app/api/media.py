@@ -9,6 +9,7 @@ from app.api.media_routes_cockpit_forecast_vintage import router as cockpit_fore
 from app.api.media_routes_cockpit_impact import router as cockpit_impact_router
 from app.api.media_routes_cockpit_media_plan import router as cockpit_media_plan_router
 from app.api.media_routes_cockpit_snapshot import router as cockpit_snapshot_router
+from app.api.media_routes_cockpit_truth_scoreboard import router as cockpit_truth_scoreboard_router
 from app.api.media_routes_outcomes import router as outcomes_router
 from app.api.media_routes_recommendations import router as recommendations_router
 from app.api.media_routes_weekly_brief import router as weekly_brief_router
@@ -24,6 +25,7 @@ router.include_router(recommendations_router)
 router.include_router(cockpit_snapshot_router)
 router.include_router(cockpit_impact_router)
 router.include_router(cockpit_backtest_router)
+router.include_router(cockpit_truth_scoreboard_router)
 router.include_router(cockpit_forecast_vintage_router)
 router.include_router(cockpit_media_plan_router)
 

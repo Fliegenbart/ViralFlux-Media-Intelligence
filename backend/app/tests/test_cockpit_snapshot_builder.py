@@ -139,6 +139,16 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         return [
             patch.object(snapshot_builder, "build_source_status", return_value={"items": []}),
             patch.object(snapshot_builder, "build_data_freshness", return_value={}),
+            patch.object(
+                snapshot_builder,
+                "build_truth_scoreboard",
+                return_value={
+                    "summary": {"overall_readiness": "mixed", "readiness_counts": {"go": 1}},
+                    "scorecards": [],
+                    "combined_by_virus": {},
+                    "policy": {"budget_rule": "never_auto_release_without_business_truth"},
+                },
+            ),
             patch.object(snapshot_builder, "_read_ranking_metrics", return_value=dict(ranking_metrics)),
             patch.object(snapshot_builder, "_read_training_panel", return_value=dict(training_panel)),
             patch.object(snapshot_builder, "_read_latest_accuracy", return_value={}),
@@ -524,9 +534,11 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self.assertEqual(evidence["releaseStatus"], "blocked")
         self.assertIn("media_plan_not_connected", evidence["blockers"])
         self.assertIn("business_gate", [c["key"] for c in evidence["components"]])
+        self.assertIn("truth_scoreboard", [c["key"] for c in evidence["components"]])
         business_component = next(c for c in evidence["components"] if c["key"] == "business_gate")
         self.assertEqual(business_component["status"], "block")
         self.assertIn("horizonAlignment", payload)
+        self.assertIn("truthScoreboard", payload)
 
     # ---------- timeline ----------
 

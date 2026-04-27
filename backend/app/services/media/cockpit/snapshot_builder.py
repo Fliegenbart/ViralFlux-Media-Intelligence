@@ -46,6 +46,7 @@ from app.services.media.cockpit.freshness import (
     build_data_freshness,
     build_source_status,
 )
+from app.services.media.cockpit.truth_scoreboard import build_truth_scoreboard
 
 logger = logging.getLogger(__name__)
 
@@ -1612,6 +1613,7 @@ def _build_evidence_score(
     media_plan_connected: bool,
     h5_shift_snapshot: dict[str, Any] | None,
     horizon_alignment: dict[str, Any] | None,
+    truth_scoreboard: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Summarise whether the weekly recommendation is evidence-backed.
 
@@ -1724,6 +1726,42 @@ def _build_evidence_score(
             status=alignment_status,
             detail=alignment_detail,
             blockers=alignment_blockers,
+        )
+    )
+
+    truth_summary = ((truth_scoreboard or {}).get("summary") or {})
+    readiness_counts = truth_summary.get("readiness_counts") or {}
+    truth_blocked = int(readiness_counts.get("blocked") or 0)
+    truth_candidate = int(readiness_counts.get("candidate") or 0)
+    truth_go = int(readiness_counts.get("go") or 0)
+    truth_total = int(truth_summary.get("total_scorecards") or 0)
+    if truth_total:
+        truth_score = max(0.0, min(100.0, (truth_go * 100.0 + truth_candidate * 70.0) / truth_total))
+        if truth_blocked:
+            truth_status = "warn"
+            truth_detail = f"{truth_blocked}/{truth_total} H5/H7-Scorecards sind noch blockiert."
+            truth_blockers = ["forecast_truth_scoreboard_blocked"]
+        elif truth_candidate:
+            truth_status = "warn"
+            truth_detail = f"{truth_candidate}/{truth_total} H5/H7-Scorecards sind Kandidaten mit Warnhinweisen."
+            truth_blockers = []
+        else:
+            truth_status = "pass"
+            truth_detail = "H5/H7-Backtest-Scoreboard ist gruen."
+            truth_blockers = []
+    else:
+        truth_score = None
+        truth_status = "unknown"
+        truth_detail = "Truth-Scoreboard ist fuer diesen Snapshot nicht verfuegbar."
+        truth_blockers = []
+    components.append(
+        _evidence_component(
+            key="truth_scoreboard",
+            label="Truth-Scoreboard",
+            score=truth_score,
+            status=truth_status,
+            detail=truth_detail,
+            blockers=truth_blockers,
         )
     )
 
@@ -1898,6 +1936,16 @@ def build_cockpit_snapshot(
     except Exception:  # noqa: BLE001
         logger.exception("cockpit h5/h7 evidence build failed (non-fatal)")
         notes.append("H5/H7-Evidence-Block konnte für diesen Snapshot nicht berechnet werden.")
+
+    truth_scoreboard: dict[str, Any] | None = None
+    try:
+        truth_scoreboard = build_truth_scoreboard(
+            virus_types=[virus_typ],
+            horizons=[5, 7],
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("cockpit truth scoreboard build failed (non-fatal)")
+        notes.append("Truth-Scoreboard konnte für diesen Snapshot nicht berechnet werden.")
 
     timeline = _build_timeline_from_national(db, virus_typ, horizon_days)
 
@@ -2076,6 +2124,7 @@ def build_cockpit_snapshot(
         media_plan_connected=plan_connected,
         h5_shift_snapshot=h5_shift_snapshot,
         horizon_alignment=horizon_alignment,
+        truth_scoreboard=truth_scoreboard,
     )
 
     return {
@@ -2102,6 +2151,7 @@ def build_cockpit_snapshot(
         "modelStatus": model_status,
         "evidenceScore": evidence_score,
         "horizonAlignment": horizon_alignment,
+        "truthScoreboard": truth_scoreboard,
         "mediaPlan": {
             "connected": plan_connected,
             "totalWeeklySpendEur": total_weekly_spend,

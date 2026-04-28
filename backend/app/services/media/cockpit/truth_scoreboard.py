@@ -22,6 +22,13 @@ MIN_PR_AUC_LIFT = 1.05
 MAX_ECE = 0.05
 MIN_HIT_LIFT_VS_PERSISTENCE_PP = 0.05
 MIN_HIT_LIFT_VS_RANDOM_PP = 0.05
+DECISION_SCOPE_NATIONAL = "national_16_state_universe"
+DECISION_SCOPE_COVERED = "covered_region_universe"
+LIMITED_UNIVERSE_WARNINGS = {
+    "limited_region_universe",
+    "not_valid_for_full_national_top3",
+    "missing_regions_excluded_from_recommendation",
+}
 
 
 def _safe_float(value: Any, default: float | None = None) -> float | None:
@@ -111,6 +118,8 @@ def build_horizon_truth_card(
     min_pr_auc_lift: float = MIN_PR_AUC_LIFT,
     max_ece: float = MAX_ECE,
     min_regions_for_top3: int = 14,
+    decision_scope: str = DECISION_SCOPE_NATIONAL,
+    min_covered_regions_for_top3: int = 12,
 ) -> dict[str, Any]:
     payload = build_backtest_summary(
         virus_typ=virus_typ,
@@ -118,6 +127,8 @@ def build_horizon_truth_card(
         models_dir=models_dir,
         weeks_to_surface=weeks_to_surface,
         min_regions_for_top3=min_regions_for_top3,
+        decision_scope=decision_scope,
+        min_covered_regions_for_top3=min_covered_regions_for_top3,
     )
     if not payload.get("available"):
         return {
@@ -134,6 +145,11 @@ def build_horizon_truth_card(
         }
 
     weekly = payload.get("weekly_hits") or []
+    coverage_policy = payload.get("coverage_policy") or {}
+    decision_scope = str(coverage_policy.get("decision_scope") or decision_scope)
+    covered_regions = [str(code) for code in coverage_policy.get("covered_regions") or []]
+    covered_region_set = set(covered_regions)
+    expected_region_count = int(coverage_policy.get("expected_region_count") or 0)
     evaluable = [row for row in weekly if row.get("is_evaluable_top3_panel")]
     coverage_rejected = [
         row
@@ -204,6 +220,20 @@ def build_horizon_truth_card(
 
     blockers: list[str] = []
     warnings: list[str] = []
+    if decision_scope == DECISION_SCOPE_COVERED:
+        warnings.extend(sorted(LIMITED_UNIVERSE_WARNINGS))
+        if not coverage_policy.get("covered_region_universe_declared"):
+            blockers.append("covered_region_universe_not_explicitly_declared")
+        if expected_region_count < int(min_covered_regions_for_top3):
+            blockers.append("covered_region_count_below_minimum")
+        if not coverage_policy.get("missing_regions_from_national_universe"):
+            warnings.remove("missing_regions_excluded_from_recommendation")
+        if any(
+            set(row.get("scored_regions") or []) != covered_region_set
+            or int(row.get("scored_region_count") or 0) != expected_region_count
+            for row in evaluable
+        ):
+            blockers.append("covered_region_universe_unstable")
     if len(evaluable) < int(min_evaluable_weeks):
         blockers.append("too_few_evaluable_weeks")
     if hit_rate is None:
@@ -242,8 +272,18 @@ def build_horizon_truth_card(
     if not quality_gate_passed:
         blockers.append("artifact_quality_gate_not_passed")
 
+    gating_warnings = [
+        warning
+        for warning in warnings
+        if not (
+            decision_scope == DECISION_SCOPE_COVERED
+            and warning in LIMITED_UNIVERSE_WARNINGS
+        )
+    ]
     if blockers:
         readiness = "blocked"
+    elif decision_scope == DECISION_SCOPE_COVERED:
+        readiness = "covered_universe_candidate" if gating_warnings else "covered_universe_go"
     elif warnings:
         readiness = "candidate"
     else:
@@ -258,10 +298,13 @@ def build_horizon_truth_card(
     )
     if blockers:
         score = min(score, 49.0)
-    elif warnings:
+    elif gating_warnings:
         score = min(score, 79.0)
     else:
         score = max(score, 80.0)
+    budget_permission = None
+    if decision_scope == DECISION_SCOPE_COVERED and readiness != "blocked":
+        budget_permission = "covered_regions_only"
 
     return {
         "virus_typ": virus_typ,
@@ -270,8 +313,11 @@ def build_horizon_truth_card(
         "readiness": readiness,
         "score": score,
         "score_interpretation": "heuristic_readiness_score_not_statistical_confidence",
+        "decision_scope": decision_scope,
+        "metric_scope": decision_scope,
+        "budget_permission": budget_permission,
         "window": payload.get("window") or {},
-        "coverage_policy": payload.get("coverage_policy") or {},
+        "coverage_policy": coverage_policy,
         "evaluable_weeks": len(evaluable),
         "hit_weeks": len(hits),
         "miss_weeks": len(misses),
@@ -279,6 +325,9 @@ def build_horizon_truth_card(
         "pending_truth_weeks": non_event_or_unscored,
         "non_event_or_unscored_weeks": non_event_or_unscored,
         "hit_rate": _round(hit_rate),
+        "covered_universe_hit_rate": (
+            _round(hit_rate) if decision_scope == DECISION_SCOPE_COVERED else None
+        ),
         "baseline_hit_rates": {
             "persistence_hit_rate": _round(persistence_hit_rate),
             "random_expected_hit_rate": _round(random_expected_hit_rate),
@@ -365,6 +414,8 @@ def build_truth_scoreboard(
     weeks_to_surface: int = 400,
     min_evaluable_weeks: int = MIN_EVALUABLE_WEEKS,
     min_regions_for_top3: int = 14,
+    decision_scope: str = DECISION_SCOPE_NATIONAL,
+    min_covered_regions_for_top3: int = 12,
 ) -> dict[str, Any]:
     scorecards: list[dict[str, Any]] = []
     for virus_typ in virus_types:
@@ -377,6 +428,8 @@ def build_truth_scoreboard(
                     weeks_to_surface=weeks_to_surface,
                     min_evaluable_weeks=min_evaluable_weeks,
                     min_regions_for_top3=min_regions_for_top3,
+                    decision_scope=decision_scope,
+                    min_covered_regions_for_top3=min_covered_regions_for_top3,
                 )
             )
 
@@ -421,6 +474,8 @@ def build_truth_scoreboard(
         "gates": {
             "min_evaluable_weeks": int(min_evaluable_weeks),
             "min_regions_for_top3": int(min_regions_for_top3),
+            "decision_scope": decision_scope,
+            "min_covered_regions_for_top3": int(min_covered_regions_for_top3),
             "min_hit_rate": MIN_HIT_RATE,
             "min_hit_lift_vs_persistence_pp": MIN_HIT_LIFT_VS_PERSISTENCE_PP,
             "min_hit_lift_vs_random_pp": MIN_HIT_LIFT_VS_RANDOM_PP,

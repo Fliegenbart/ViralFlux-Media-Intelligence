@@ -92,6 +92,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         include_current_known_incidence: bool = True,
         delta_ci_95: dict | None = None,
         include_delta_ci_95: bool = True,
+        region_universe: dict | None = None,
+        skip_timeline_entries: dict[str, set[int]] | None = None,
     ) -> None:
         path = root / virus_dir / f"horizon_{horizon_days}"
         path.mkdir(parents=True)
@@ -119,17 +121,23 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         }
         if include_delta_ci_95:
             artifact["delta_ci_95"] = delta_ci_95 or DEFAULT_DELTA_CI_95
+        if region_universe is not None:
+            artifact["region_universe"] = region_universe
         for rank, code in enumerate(region_codes or DEFAULT_REGION_CODES):
+            timeline = _timeline(
+                weeks=weeks,
+                hit_weeks=hit_weeks,
+                observed_weeks=observed_weeks,
+                decoy_rank=rank,
+                persistence_hit_weeks=persistence_hit_weeks,
+                include_current_known_incidence=include_current_known_incidence,
+            )
+            skipped = (skip_timeline_entries or {}).get(code) or set()
+            if skipped:
+                timeline = [row for idx, row in enumerate(timeline) if idx not in skipped]
             artifact["details"][code] = {
                 "bundesland_name": code,
-                "timeline": _timeline(
-                    weeks=weeks,
-                    hit_weeks=hit_weeks,
-                    observed_weeks=observed_weeks,
-                    decoy_rank=rank,
-                    persistence_hit_weeks=persistence_hit_weeks,
-                    include_current_known_incidence=include_current_known_incidence,
-                ),
+                "timeline": timeline,
             }
         (path / "backtest.json").write_text(json.dumps(artifact), encoding="utf-8")
 
@@ -401,6 +409,171 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         card = payload["scorecards"][0]
         self.assertGreaterEqual(card["evaluable_weeks"], 12)
         self.assertNotIn("too_few_evaluable_weeks", card["blockers"])
+
+    def test_thirteen_region_stable_covered_universe_can_be_covered_universe_go(self) -> None:
+        covered = DEFAULT_REGION_CODES[:13]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=covered,
+                region_universe={
+                    "decision_scope": "covered_region_universe",
+                    "expected_region_count": 13,
+                    "covered_regions": covered,
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+                decision_scope="covered_region_universe",
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "covered_universe_go")
+        self.assertEqual(card["metric_scope"], "covered_region_universe")
+        self.assertEqual(card["budget_permission"], "covered_regions_only")
+        self.assertEqual(card["evaluable_weeks"], 20)
+        self.assertEqual(card["coverage_policy"]["expected_region_count"], 13)
+        self.assertEqual(card["coverage_policy"]["covered_regions"], covered)
+        self.assertEqual(
+            card["coverage_policy"]["missing_regions_from_national_universe"],
+            ["BB", "MV", "TH"],
+        )
+        self.assertAlmostEqual(card["coverage_policy"]["region_coverage_share"], 13 / 16)
+        self.assertEqual(card["covered_universe_hit_rate"], card["hit_rate"])
+        self.assertIn("limited_region_universe", card["warnings"])
+        self.assertIn("not_valid_for_full_national_top3", card["warnings"])
+        self.assertIn("missing_regions_excluded_from_recommendation", card["warnings"])
+
+    def test_covered_universe_week_with_fewer_scored_regions_is_not_evaluable(self) -> None:
+        covered = DEFAULT_REGION_CODES[:13]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=covered,
+                region_universe={
+                    "decision_scope": "covered_region_universe",
+                    "expected_region_count": 13,
+                    "covered_regions": covered,
+                },
+                skip_timeline_entries={covered[-1]: {0}, covered[-2]: {0}},
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+                decision_scope="covered_region_universe",
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["evaluable_weeks"], 19)
+        self.assertEqual(card["coverage_rejected_weeks"], 1)
+
+    def test_unstable_covered_region_set_blocks(self) -> None:
+        covered = DEFAULT_REGION_CODES[:13]
+        declared = DEFAULT_REGION_CODES[:12] + ["TH"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=covered,
+                region_universe={
+                    "decision_scope": "covered_region_universe",
+                    "expected_region_count": 13,
+                    "covered_regions": declared,
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+                decision_scope="covered_region_universe",
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertIn("covered_region_universe_unstable", card["blockers"])
+
+    def test_covered_universe_go_never_uses_national_budget_permission(self) -> None:
+        covered = DEFAULT_REGION_CODES[:13]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=covered,
+                region_universe={
+                    "decision_scope": "covered_region_universe",
+                    "expected_region_count": 13,
+                    "covered_regions": covered,
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+                decision_scope="covered_region_universe",
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "covered_universe_go")
+        self.assertEqual(card["budget_permission"], "covered_regions_only")
+        self.assertNotEqual(card["budget_permission"], "allowed_national")
+
+    def test_national_sixteen_state_behavior_remains_unchanged_for_thirteen_regions(self) -> None:
+        covered = DEFAULT_REGION_CODES[:13]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=covered,
+                region_universe={
+                    "decision_scope": "covered_region_universe",
+                    "expected_region_count": 13,
+                    "covered_regions": covered,
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertIn("too_few_evaluable_weeks", card["blockers"])
 
     def test_high_hit_rate_blocked_when_not_better_than_persistence_hit_rate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -184,6 +184,11 @@ def build_horizon_truth_card(
     precision_pp = None
     if precision is not None and baseline_precision is not None:
         precision_pp = precision - baseline_precision
+    evaluation_source = payload.get("evaluation_source")
+    scoreboard_precision_at_top3 = hit_rate
+    panel_metric_delta = None
+    if precision is not None and scoreboard_precision_at_top3 is not None:
+        panel_metric_delta = abs(precision - scoreboard_precision_at_top3)
     ci = payload.get("delta_ci_95") or {}
     event_model_ci: dict[str, Any] = {}
     if isinstance(ci, dict):
@@ -231,6 +236,12 @@ def build_horizon_truth_card(
         blockers.append("pr_auc_lift_ci_not_positive")
     if precision_delta_ci_low is not None and precision_delta_ci_low <= 0:
         warnings.append("precision_top3_lift_ci_not_positive")
+    if (
+        evaluation_source == "native_panel_evaluation"
+        and panel_metric_delta is not None
+        and panel_metric_delta > 0.05
+    ):
+        warnings.append("quality_gate_scoreboard_panel_metric_mismatch")
     if precision_pp is None:
         warnings.append("persistence_precision_missing")
     elif precision_pp < 0:
@@ -270,6 +281,7 @@ def build_horizon_truth_card(
         "readiness": readiness,
         "score": score,
         "score_interpretation": "heuristic_readiness_score_not_statistical_confidence",
+        "evaluation_source": evaluation_source,
         "window": payload.get("window") or {},
         "coverage_policy": payload.get("coverage_policy") or {},
         "evaluable_weeks": len(evaluable),
@@ -305,6 +317,11 @@ def build_horizon_truth_card(
         "lift_confidence": {
             "pr_auc_delta_ci_95": pr_auc_delta_ci,
             "precision_at_top3_delta_ci_95": precision_top3_delta_ci,
+        },
+        "panel_metric_consistency": {
+            "quality_gate_precision_at_top3": _round(precision),
+            "scoreboard_precision_at_top3": _round(scoreboard_precision_at_top3),
+            "absolute_delta": _round(panel_metric_delta),
         },
         "quality_gate": quality_gate,
         "blockers": sorted(set(blockers)),

@@ -178,6 +178,99 @@ def _quality_gate(artifact: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _codes(items: Any) -> list[str]:
+    codes: list[str] = []
+    if not isinstance(items, list):
+        return codes
+    for item in items:
+        if isinstance(item, dict):
+            code = item.get("code") or item.get("bundesland")
+        else:
+            code = item
+        if code is not None:
+            codes.append(str(code))
+    return codes
+
+
+def _weekly_hits_from_panel_evaluation(
+    panel_evaluation: dict[str, Any],
+    *,
+    limit: int = 52,
+    min_regions_for_top3: int = 14,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    expected_region_count = int(
+        panel_evaluation.get("expected_region_count")
+        or len(panel_evaluation.get("region_universe") or [])
+    )
+    for source in panel_evaluation.get("rows") or []:
+        if not isinstance(source, dict):
+            continue
+        predicted_top = source.get("predicted_top3") or source.get("predicted_top") or []
+        persistence_top = source.get("persistence_top3") or source.get("persistence_top") or []
+        observed_top = (
+            source.get("observed_event_regions")
+            or source.get("observed_top")
+            or []
+        )
+        predicted_codes = set(_codes(predicted_top))
+        observed_codes = set(_codes(observed_top))
+        persistence_codes = set(_codes(persistence_top))
+        scored_region_count = int(source.get("scored_region_count") or 0)
+        observed_event_count = int(
+            source.get("observed_event_count") or len(observed_codes)
+        )
+        is_evaluable = bool(
+            source.get("is_evaluable_top3_panel")
+            and scored_region_count >= int(min_regions_for_top3)
+            and observed_event_count > 0
+        )
+        persistence_was_hit = source.get("persistence_was_hit")
+        if persistence_was_hit is not None:
+            persistence_was_hit = bool(persistence_was_hit)
+        rows.append(
+            {
+                "as_of_date": (
+                    source.get("forecast_issue_date")
+                    or source.get("forecast_issue_week")
+                    or source.get("as_of_date")
+                ),
+                "target_date": source.get("target_week_start") or source.get("target_date"),
+                "target_week_start": source.get("target_week_start"),
+                "predicted_top": predicted_top,
+                "observed_top": sorted(observed_codes),
+                "scored_regions": source.get("scored_regions") or [],
+                "missing_regions": source.get("missing_regions") or [],
+                "scored_region_count": scored_region_count,
+                "observed_event_count": observed_event_count,
+                "expected_region_count": int(
+                    source.get("expected_region_count") or expected_region_count
+                ),
+                "is_full_panel": scored_region_count >= int(min_regions_for_top3),
+                "is_evaluable_top3_panel": is_evaluable,
+                "random_expected_hit_probability": source.get(
+                    "random_expected_hit_probability"
+                ),
+                "random_expected_hit_rate_top3": source.get(
+                    "random_expected_hit_probability"
+                ),
+                "persistence_top": persistence_top,
+                "persistence_hits": sorted(persistence_codes & observed_codes),
+                "persistence_was_hit": persistence_was_hit,
+                "hits": sorted(predicted_codes & observed_codes),
+                "misses": sorted(predicted_codes - observed_codes),
+                "false_negatives": sorted(observed_codes - predicted_codes),
+                "was_hit": bool(source.get("model_was_hit"))
+                if source.get("model_was_hit") is not None
+                else bool(predicted_codes & observed_codes),
+            }
+        )
+    rows.sort(key=lambda row: (row.get("as_of_date") or "", row.get("target_date") or ""))
+    if limit and len(rows) > limit:
+        rows = rows[-limit:]
+    return rows
+
+
 def _weekly_hits(
     details: dict[str, Any],
     *,
@@ -336,11 +429,28 @@ def build_backtest_summary(
     headline = _headline_metrics(aggregate)
     per_bl = _per_bl_metrics(details)
     gate = _quality_gate(artifact)
-    weekly = _weekly_hits(
-        details,
-        limit=weeks_to_surface,
-        min_regions_for_top3=min_regions_for_top3,
-    )
+    panel_evaluation = artifact.get("panel_evaluation") or {}
+    if isinstance(panel_evaluation, dict) and panel_evaluation.get("rows"):
+        weekly = _weekly_hits_from_panel_evaluation(
+            panel_evaluation,
+            limit=weeks_to_surface,
+            min_regions_for_top3=min_regions_for_top3,
+        )
+        evaluation_source = "native_panel_evaluation"
+        expected_region_count = int(
+            panel_evaluation.get("expected_region_count")
+            or len(panel_evaluation.get("region_universe") or [])
+        )
+        region_universe = panel_evaluation.get("region_universe") or []
+    else:
+        weekly = _weekly_hits(
+            details,
+            limit=weeks_to_surface,
+            min_regions_for_top3=min_regions_for_top3,
+        )
+        evaluation_source = "legacy_reconstructed_weekly_hits"
+        expected_region_count = len(details)
+        region_universe = sorted(details.keys())
 
     # Baselines — we mostly care whether the model beat persistence
     baseline_precision_top3 = None
@@ -356,9 +466,12 @@ def build_backtest_summary(
         "event_definition_version": event_version,
         "available": True,
         "window": window,
+        "evaluation_source": evaluation_source,
         "coverage_policy": {
             "min_regions_for_top3": int(min_regions_for_top3),
-            "expected_region_count": len(details),
+            "national_region_count": len(_BUNDESLAND_NAMES),
+            "expected_region_count": expected_region_count,
+            "region_universe": region_universe,
         },
         "headline": headline,
         "baselines": {

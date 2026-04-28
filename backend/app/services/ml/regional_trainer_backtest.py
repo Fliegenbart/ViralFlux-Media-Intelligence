@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
+from math import comb
 from pathlib import Path
 from typing import Any
 
@@ -807,6 +808,176 @@ def baseline_metrics(trainer, frame: pd.DataFrame, *, action_threshold: float) -
     return baselines
 
 
+def _date_key(value: Any) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+    try:
+        return pd.to_datetime(value).date().isoformat()
+    except (TypeError, ValueError):
+        return str(value)[:10]
+
+
+def _random_expected_hit_probability(
+    *,
+    scored_region_count: int,
+    observed_event_count: int,
+    k: int = 3,
+) -> float | None:
+    if scored_region_count <= 0 or observed_event_count <= 0:
+        return None
+    top_k = min(int(k), int(scored_region_count))
+    non_event_count = max(int(scored_region_count) - int(observed_event_count), 0)
+    no_hit_combinations = comb(non_event_count, top_k) if non_event_count >= top_k else 0
+    return 1.0 - (no_hit_combinations / comb(int(scored_region_count), top_k))
+
+
+def _build_panel_evaluation(
+    frame: pd.DataFrame,
+    *,
+    min_regions_for_top3: int = 14,
+    region_universe: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build common weekly panel rows before per-region timeline truncation."""
+    universe = list(region_universe or ALL_BUNDESLAENDER)
+    universe_set = set(universe)
+    rows: list[dict[str, Any]] = []
+    if frame.empty or "bundesland" not in frame.columns or "as_of_date" not in frame.columns:
+        return {
+            "schema_version": "panel_evaluation_v1",
+            "region_universe": universe,
+            "expected_region_count": len(universe),
+            "rows": rows,
+        }
+
+    working = frame.copy()
+    working["_forecast_issue_date"] = working["as_of_date"].map(_date_key)
+    if "target_week_start" in working.columns:
+        working["_target_week_start"] = working["target_week_start"].map(_date_key)
+    else:
+        working["_target_week_start"] = working["_forecast_issue_date"]
+
+    for (issue_date, target_week_start), panel in working.groupby(
+        ["_forecast_issue_date", "_target_week_start"],
+        dropna=False,
+    ):
+        if not issue_date:
+            continue
+        panel = panel.copy()
+        panel["bundesland"] = panel["bundesland"].astype(str)
+        scored_panel = panel.loc[panel["bundesland"].isin(universe_set)].copy()
+        scored_regions = sorted(
+            scored_panel["bundesland"].dropna().astype(str).unique().tolist()
+        )
+        scored_region_set = set(scored_regions)
+        missing_regions = [code for code in universe if code not in scored_region_set]
+
+        score_col = (
+            "event_probability_calibrated"
+            if "event_probability_calibrated" in scored_panel.columns
+            else "event_probability_raw"
+        )
+        scored_for_rank = (
+            scored_panel.loc[scored_panel[score_col].notna()].copy()
+            if score_col in scored_panel.columns
+            else scored_panel.iloc[0:0].copy()
+        )
+        predicted_top3: list[dict[str, Any]] = []
+        if not scored_for_rank.empty and score_col in scored_for_rank.columns:
+            top_model = scored_for_rank.sort_values(score_col, ascending=False).head(3)
+            predicted_top3 = [
+                {
+                    "code": str(row["bundesland"]),
+                    "probability": float(row[score_col]),
+                }
+                for _, row in top_model.iterrows()
+            ]
+
+        observed_event_regions: list[str] = []
+        if "event_label" in scored_panel.columns:
+            observed_event_regions = sorted(
+                scored_panel.loc[
+                    scored_panel["event_label"].astype(int) == 1,
+                    "bundesland",
+                ]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
+            )
+
+        persistence_top3: list[dict[str, Any]] = []
+        persistence_was_hit: bool | None = None
+        if "current_known_incidence" in scored_panel.columns:
+            persistence_scored = scored_panel.loc[
+                scored_panel["current_known_incidence"].notna()
+            ].copy()
+            if len(persistence_scored) == len(scored_regions):
+                top_persistence = persistence_scored.sort_values(
+                    "current_known_incidence",
+                    ascending=False,
+                ).head(3)
+                persistence_top3 = [
+                    {
+                        "code": str(row["bundesland"]),
+                        "current_known_incidence": float(row["current_known_incidence"]),
+                    }
+                    for _, row in top_persistence.iterrows()
+                ]
+                persistence_codes = {item["code"] for item in persistence_top3}
+                persistence_was_hit = bool(persistence_codes & set(observed_event_regions))
+
+        predicted_codes = {item["code"] for item in predicted_top3}
+        observed_codes = set(observed_event_regions)
+        scored_region_count = len(scored_regions)
+        observed_event_count = len(observed_event_regions)
+        rows.append(
+            {
+                "virus": str(scored_panel["virus_typ"].iloc[0])
+                if "virus_typ" in scored_panel.columns and not scored_panel.empty
+                else None,
+                "horizon_days": int(scored_panel["horizon_days"].iloc[0])
+                if "horizon_days" in scored_panel.columns and not scored_panel.empty
+                else None,
+                "forecast_issue_date": str(issue_date)[:10],
+                "forecast_issue_week": str(issue_date)[:10],
+                "target_week_start": str(target_week_start or issue_date)[:10],
+                "region_universe": universe,
+                "scored_regions": scored_regions,
+                "missing_regions": missing_regions,
+                "scored_region_count": scored_region_count,
+                "expected_region_count": len(universe),
+                "observed_event_regions": observed_event_regions,
+                "observed_event_count": observed_event_count,
+                "predicted_top3": predicted_top3,
+                "persistence_top3": persistence_top3,
+                "model_was_hit": bool(predicted_codes & observed_codes),
+                "persistence_was_hit": persistence_was_hit,
+                "random_expected_hit_probability": _random_expected_hit_probability(
+                    scored_region_count=scored_region_count,
+                    observed_event_count=observed_event_count,
+                    k=3,
+                ),
+                "is_evaluable_top3_panel": bool(
+                    scored_region_count >= int(min_regions_for_top3)
+                    and observed_event_count > 0
+                ),
+            }
+        )
+
+    rows.sort(
+        key=lambda row: (
+            row.get("forecast_issue_date") or "",
+            row.get("target_week_start") or "",
+        )
+    )
+    return {
+        "schema_version": "panel_evaluation_v1",
+        "region_universe": universe,
+        "expected_region_count": len(universe),
+        "rows": _json_safe(rows),
+    }
+
+
 def build_backtest_payload(
     trainer,
     *,
@@ -968,6 +1139,7 @@ def build_backtest_payload(
         delta_vs_amelag_only["forecast_implied"] = forecast_implied_deltas["amelag_only"]
         delta_ci_95["forecast_implied"] = forecast_implied_ci
         fold_metric_deltas["forecast_implied"] = forecast_implied_fold_deltas
+    panel_evaluation = _build_panel_evaluation(frame)
     return {
         "virus_typ": str(frame["virus_typ"].iloc[0]),
         "horizon_days": horizon,
@@ -991,6 +1163,7 @@ def build_backtest_payload(
         "delta_vs_amelag_only": _json_safe(delta_vs_amelag_only),
         "delta_ci_95": _json_safe(delta_ci_95),
         "fold_metric_deltas": _json_safe(fold_metric_deltas),
+        "panel_evaluation": panel_evaluation,
         "details": _json_safe(details),
         "generated_at": utc_now().isoformat(),
     }

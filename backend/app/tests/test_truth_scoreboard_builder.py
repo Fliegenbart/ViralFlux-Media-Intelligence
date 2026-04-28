@@ -1,10 +1,35 @@
 import json
 import tempfile
 import unittest
+import datetime as _datetime
+import sys
+import types
 from pathlib import Path
 
+import pandas as pd
+
+from app.services.media.cockpit.backtest_builder import build_backtest_summary
 from app.services.media.cockpit.truth_scoreboard import build_truth_scoreboard
 
+
+NATIONAL_REGION_CODES = [
+    "BW",
+    "BY",
+    "BE",
+    "BB",
+    "HB",
+    "HH",
+    "HE",
+    "MV",
+    "NI",
+    "NW",
+    "RP",
+    "SL",
+    "SN",
+    "ST",
+    "SH",
+    "TH",
+]
 
 DEFAULT_REGION_CODES = [
     "BY",
@@ -31,6 +56,62 @@ DEFAULT_DELTA_CI_95 = {
         }
     }
 }
+
+
+def _native_panel_evaluation(
+    *,
+    weeks: int,
+    hit_weeks: int,
+    region_codes: list[str] | None = None,
+    missing_by_week: dict[int, list[str]] | None = None,
+    include_events: bool = True,
+) -> dict:
+    universe = NATIONAL_REGION_CODES
+    available_regions = region_codes or universe
+    rows = []
+    for idx in range(weeks):
+        missing = set((missing_by_week or {}).get(idx, []))
+        scored = [code for code in available_regions if code not in missing]
+        observed = ["BY"] if include_events else []
+        predicted = ["BY", "BW", "BE"] if idx < hit_weeks else ["NW", "HE", "NI"]
+        predicted_top3 = [
+            {"code": code, "probability": 0.9 - rank * 0.1}
+            for rank, code in enumerate(predicted)
+            if code in scored
+        ]
+        persistence_top3 = [
+            {"code": code, "current_known_incidence": 100.0 - rank}
+            for rank, code in enumerate(["NW", "HE", "NI"])
+            if code in scored
+        ]
+        rows.append(
+            {
+                "virus": "Influenza A",
+                "horizon_days": 7,
+                "forecast_issue_date": f"2026-01-{idx + 1:02d}",
+                "forecast_issue_week": f"2026-01-{idx + 1:02d}",
+                "target_week_start": f"2026-01-{idx + 8:02d}",
+                "region_universe": universe,
+                "scored_regions": scored,
+                "missing_regions": [code for code in universe if code not in set(scored)],
+                "scored_region_count": len(scored),
+                "expected_region_count": len(universe),
+                "observed_event_regions": observed,
+                "observed_event_count": len(observed),
+                "predicted_top3": predicted_top3,
+                "persistence_top3": persistence_top3,
+                "model_was_hit": bool(set(predicted) & set(observed)),
+                "persistence_was_hit": False,
+                "random_expected_hit_probability": 3 / len(scored) if scored and observed else None,
+                "is_evaluable_top3_panel": len(scored) >= 14 and bool(observed),
+            }
+        )
+    return {
+        "schema_version": "panel_evaluation_v1",
+        "region_universe": universe,
+        "expected_region_count": len(universe),
+        "rows": rows,
+    }
 
 
 def _timeline(
@@ -92,6 +173,7 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         include_current_known_incidence: bool = True,
         delta_ci_95: dict | None = None,
         include_delta_ci_95: bool = True,
+        panel_evaluation: dict | None = None,
     ) -> None:
         path = root / virus_dir / f"horizon_{horizon_days}"
         path.mkdir(parents=True)
@@ -117,6 +199,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
             },
             "details": {},
         }
+        if panel_evaluation is not None:
+            artifact["panel_evaluation"] = panel_evaluation
         if include_delta_ci_95:
             artifact["delta_ci_95"] = delta_ci_95 or DEFAULT_DELTA_CI_95
         for rank, code in enumerate(region_codes or DEFAULT_REGION_CODES):
@@ -401,6 +485,263 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         card = payload["scorecards"][0]
         self.assertGreaterEqual(card["evaluable_weeks"], 12)
         self.assertNotIn("too_few_evaluable_weeks", card["blockers"])
+
+    def test_native_panel_evaluation_rows_are_used_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=3,
+                hit_weeks=3,
+                observed_weeks=3,
+                region_codes=["BY", "HB", "HH"],
+                precision_at_top3=0.9,
+                panel_evaluation=_native_panel_evaluation(weeks=20, hit_weeks=18),
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["evaluation_source"], "native_panel_evaluation")
+        self.assertEqual(card["readiness"], "go")
+        self.assertEqual(card["evaluable_weeks"], 20)
+        self.assertAlmostEqual(card["hit_rate"], 0.9)
+
+    def test_legacy_weekly_hits_fallback_still_works_without_native_panel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["evaluation_source"], "legacy_reconstructed_weekly_hits")
+        self.assertEqual(card["readiness"], "go")
+
+    def test_native_sixteen_region_panels_produce_evaluable_weeks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=1,
+                hit_weeks=1,
+                panel_evaluation=_native_panel_evaluation(weeks=12, hit_weeks=12),
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["evaluable_weeks"], 12)
+        self.assertNotIn("too_few_evaluable_weeks", card["blockers"])
+
+    def test_native_panel_zero_evaluable_rows_blocks_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=1,
+                hit_weeks=1,
+                panel_evaluation=_native_panel_evaluation(
+                    weeks=20,
+                    hit_weeks=20,
+                    region_codes=NATIONAL_REGION_CODES[:13],
+                ),
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertEqual(card["evaluable_weeks"], 0)
+        self.assertIn("no_evaluable_full_panel_truth_weeks", card["blockers"])
+
+    def test_dynamic_region_sets_do_not_create_covered_universe_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            panel = _native_panel_evaluation(
+                weeks=20,
+                hit_weeks=20,
+                missing_by_week={0: ["BW", "BY", "BE"], 1: ["NW", "HE", "NI"]},
+            )
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=1,
+                hit_weeks=1,
+                panel_evaluation=panel,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertNotIn(card["readiness"], {"covered_universe_go", "covered_universe_candidate"})
+        self.assertNotIn("covered_regions_only", str(payload))
+
+    def test_native_panel_missing_regions_are_preserved_in_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=1,
+                hit_weeks=1,
+                panel_evaluation=_native_panel_evaluation(
+                    weeks=2,
+                    hit_weeks=2,
+                    missing_by_week={0: ["BW", "BE"]},
+                ),
+            )
+
+            summary = build_backtest_summary(
+                virus_typ="Influenza A",
+                horizon_days=7,
+                models_dir=root,
+            )
+
+        self.assertEqual(summary["evaluation_source"], "native_panel_evaluation")
+        self.assertEqual(summary["weekly_hits"][0]["missing_regions"], ["BW", "BE"])
+
+    def test_native_panel_precision_metric_consistency_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=1,
+                hit_weeks=1,
+                precision_at_top3=0.9,
+                panel_evaluation=_native_panel_evaluation(weeks=20, hit_weeks=18),
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(
+            card["panel_metric_consistency"]["quality_gate_precision_at_top3"],
+            card["panel_metric_consistency"]["scoreboard_precision_at_top3"],
+        )
+        self.assertNotIn("quality_gate_scoreboard_panel_metric_mismatch", card["warnings"])
+
+    def test_native_panel_precision_metric_mismatch_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=1,
+                hit_weeks=1,
+                precision_at_top3=0.4,
+                panel_evaluation=_native_panel_evaluation(weeks=20, hit_weeks=18),
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertIn("quality_gate_scoreboard_panel_metric_mismatch", card["warnings"])
+
+    def test_backtest_payload_writes_native_panel_evaluation_schema(self) -> None:
+        if not hasattr(_datetime, "UTC"):
+            _datetime.UTC = _datetime.timezone.utc
+        sys.modules.setdefault(
+            "xgboost",
+            types.SimpleNamespace(XGBClassifier=object, XGBRegressor=object),
+        )
+        from app.services.ml.regional_trainer_backtest import build_backtest_payload
+
+        rows = []
+        for week in range(2):
+            for rank, code in enumerate(NATIONAL_REGION_CODES):
+                rows.append(
+                    {
+                        "virus_typ": "Influenza A",
+                        "horizon_days": 7,
+                        "bundesland": code,
+                        "as_of_date": pd.Timestamp(f"2026-01-{week + 1:02d}"),
+                        "target_week_start": pd.Timestamp(f"2026-01-{week + 8:02d}"),
+                        "event_label": 1 if code == "BY" else 0,
+                        "event_probability_calibrated": 0.95 if code == "BY" else 0.5 - rank * 0.01,
+                        "event_probability_raw": 0.95 if code == "BY" else 0.5 - rank * 0.01,
+                        "persistence_probability": 0.1,
+                        "climatology_probability": 0.1,
+                        "amelag_only_probability": 0.1,
+                        "current_known_incidence": float(rank),
+                        "action_threshold": 0.5,
+                        "fold": week,
+                        "absolute_error": 0.0,
+                        "residual": 0.0,
+                        "calibration_mode": "test",
+                    }
+                )
+        frame = pd.DataFrame(rows)
+
+        payload = build_backtest_payload(
+            None,
+            frame=frame,
+            aggregate_metrics={
+                "precision_at_top3": 1.0,
+                "pr_auc": 1.0,
+                "brier_score": 0.01,
+                "ece": 0.01,
+            },
+            baselines={"persistence": {"precision_at_top3": 0.1, "pr_auc": 0.1}},
+            quality_gate={"overall_passed": True},
+            tau=1.0,
+            kappa=1.0,
+            action_threshold=0.5,
+            fold_selection_summary=[],
+        )
+
+        panel = payload["panel_evaluation"]
+        self.assertEqual(panel["schema_version"], "panel_evaluation_v1")
+        self.assertEqual(panel["expected_region_count"], 16)
+        self.assertEqual(len(panel["rows"]), 2)
+        self.assertEqual(panel["rows"][0]["scored_region_count"], 16)
+        self.assertEqual(panel["rows"][0]["missing_regions"], [])
+        self.assertTrue(panel["rows"][0]["is_evaluable_top3_panel"])
 
     def test_high_hit_rate_blocked_when_not_better_than_persistence_hit_rate(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

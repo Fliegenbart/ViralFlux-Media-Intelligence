@@ -98,12 +98,14 @@ def build_horizon_truth_card(
     min_hit_rate: float = MIN_HIT_RATE,
     min_pr_auc_lift: float = MIN_PR_AUC_LIFT,
     max_ece: float = MAX_ECE,
+    min_regions_for_top3: int = 14,
 ) -> dict[str, Any]:
     payload = build_backtest_summary(
         virus_typ=virus_typ,
         horizon_days=horizon_days,
         models_dir=models_dir,
         weeks_to_surface=weeks_to_surface,
+        min_regions_for_top3=min_regions_for_top3,
     )
     if not payload.get("available"):
         return {
@@ -119,10 +121,15 @@ def build_horizon_truth_card(
         }
 
     weekly = payload.get("weekly_hits") or []
-    evaluable = [row for row in weekly if row.get("observed_top")]
+    evaluable = [row for row in weekly if row.get("is_evaluable_top3_panel")]
+    coverage_rejected = [
+        row
+        for row in weekly
+        if row.get("observed_top") and not row.get("is_evaluable_top3_panel")
+    ]
     hits = [row for row in evaluable if row.get("was_hit")]
     misses = [row for row in evaluable if not row.get("was_hit")]
-    non_event_or_unscored = max(0, len(weekly) - len(evaluable))
+    non_event_or_unscored = max(0, len(weekly) - len(evaluable) - len(coverage_rejected))
     hit_rate = (len(hits) / len(evaluable)) if evaluable else None
 
     headline = payload.get("headline") or {}
@@ -146,9 +153,11 @@ def build_horizon_truth_card(
     if len(evaluable) < int(min_evaluable_weeks):
         blockers.append("too_few_evaluable_weeks")
     if hit_rate is None:
-        blockers.append("no_evaluable_truth_weeks")
+        blockers.append("no_evaluable_full_panel_truth_weeks")
     elif hit_rate < float(min_hit_rate):
         blockers.append("hit_rate_below_gate")
+    if coverage_rejected:
+        warnings.append("some_truth_weeks_rejected_for_insufficient_panel_coverage")
     if pr_auc_multiplier is None:
         warnings.append("persistence_pr_auc_missing")
     elif pr_auc_multiplier < float(min_pr_auc_lift):
@@ -190,9 +199,11 @@ def build_horizon_truth_card(
         "readiness": readiness,
         "score": score,
         "window": payload.get("window") or {},
+        "coverage_policy": payload.get("coverage_policy") or {},
         "evaluable_weeks": len(evaluable),
         "hit_weeks": len(hits),
         "miss_weeks": len(misses),
+        "coverage_rejected_weeks": len(coverage_rejected),
         "pending_truth_weeks": non_event_or_unscored,
         "non_event_or_unscored_weeks": non_event_or_unscored,
         "hit_rate": _round(hit_rate),
@@ -260,6 +271,7 @@ def build_truth_scoreboard(
     models_dir: Path | None = None,
     weeks_to_surface: int = 400,
     min_evaluable_weeks: int = MIN_EVALUABLE_WEEKS,
+    min_regions_for_top3: int = 14,
 ) -> dict[str, Any]:
     scorecards: list[dict[str, Any]] = []
     for virus_typ in virus_types:
@@ -271,6 +283,7 @@ def build_truth_scoreboard(
                     models_dir=models_dir,
                     weeks_to_surface=weeks_to_surface,
                     min_evaluable_weeks=min_evaluable_weeks,
+                    min_regions_for_top3=min_regions_for_top3,
                 )
             )
 
@@ -314,6 +327,7 @@ def build_truth_scoreboard(
         },
         "gates": {
             "min_evaluable_weeks": int(min_evaluable_weeks),
+            "min_regions_for_top3": int(min_regions_for_top3),
             "min_hit_rate": MIN_HIT_RATE,
             "min_pr_auc_lift": MIN_PR_AUC_LIFT,
             "max_ece": MAX_ECE,

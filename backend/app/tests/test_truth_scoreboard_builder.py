@@ -6,6 +6,24 @@ from pathlib import Path
 from app.services.media.cockpit.truth_scoreboard import build_truth_scoreboard
 
 
+DEFAULT_REGION_CODES = [
+    "BY",
+    "HB",
+    "HH",
+    "BE",
+    "BW",
+    "NW",
+    "HE",
+    "NI",
+    "SN",
+    "ST",
+    "SH",
+    "RP",
+    "SL",
+    "TH",
+]
+
+
 def _timeline(
     *,
     weeks: int,
@@ -50,6 +68,7 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         persistence_precision_at_top3: float = 0.55,
         ece: float = 0.02,
         quality_gate: dict | None = None,
+        region_codes: list[str] | None = None,
     ) -> None:
         path = root / virus_dir / f"horizon_{horizon_days}"
         path.mkdir(parents=True)
@@ -75,7 +94,7 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
             },
             "details": {},
         }
-        for rank, code in enumerate(["BY", "HB", "HH", "BE"]):
+        for rank, code in enumerate(region_codes or DEFAULT_REGION_CODES):
             artifact["details"][code] = {
                 "bundesland_name": code,
                 "timeline": _timeline(
@@ -173,3 +192,51 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         self.assertEqual(card["quality_gate"]["checks"]["precision_at_top3_passed"], False)
         self.assertEqual(card["quality_gate"]["failed_checks"], ["precision_at_top3_passed"])
         self.assertEqual(card["quality_gate"]["thresholds"]["precision_at_top3"], 0.7)
+
+    def test_weeks_with_too_few_regions_do_not_count_as_evaluable_top3_panels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=20,
+                observed_weeks=20,
+                region_codes=["BY", "HB", "HH"],
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertIn("too_few_evaluable_weeks", card["blockers"])
+        self.assertEqual(card["evaluable_weeks"], 0)
+        self.assertGreater(card["coverage_rejected_weeks"], 0)
+
+    def test_weeks_with_fourteen_regions_count_as_evaluable_top3_panels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=DEFAULT_REGION_CODES,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertGreaterEqual(card["evaluable_weeks"], 12)
+        self.assertNotIn("too_few_evaluable_weeks", card["blockers"])

@@ -181,6 +181,7 @@ def _weekly_hits(
     details: dict[str, Any],
     *,
     limit: int = 52,
+    min_regions_for_top3: int = 14,
 ) -> list[dict[str, Any]]:
     """Build a master weekly timeline: for each as_of_date, which BL
     did we call as top-k and which actually landed.
@@ -195,6 +196,7 @@ def _weekly_hits(
     #   "activated"                 -> bool: model flagged this BL
     #   "event_label"               -> 0/1 int: BL actually saw an event
     #   "event_probability_calibrated" / "_raw" -> the score used for Top-K
+    expected_region_count = len(details)
     per_week: dict[str, dict[str, Any]] = {}
     for code, info in details.items():
         for entry in info.get("timeline") or []:
@@ -229,10 +231,19 @@ def _weekly_hits(
 
     for row in rows:
         all_scored = row.pop("all_scored")
+        scored_region_count = len(all_scored)
         all_scored.sort(key=lambda p: -(p.get("probability") or 0.0))
         row["predicted_top"] = all_scored[:3]
         predicted_codes = {p["code"] for p in row["predicted_top"]}
         observed_codes = set(row["observed_top"])
+        observed_event_count = len(observed_codes)
+        row["scored_region_count"] = scored_region_count
+        row["observed_event_count"] = observed_event_count
+        row["expected_region_count"] = expected_region_count
+        row["is_full_panel"] = scored_region_count >= int(min_regions_for_top3)
+        row["is_evaluable_top3_panel"] = bool(
+            row["is_full_panel"] and observed_event_count > 0
+        )
         row["hits"] = sorted(predicted_codes & observed_codes)
         row["misses"] = sorted(predicted_codes - observed_codes)
         row["false_negatives"] = sorted(observed_codes - predicted_codes)
@@ -249,6 +260,7 @@ def build_backtest_summary(
     horizon_days: int = 7,
     models_dir: Path | None = None,
     weeks_to_surface: int = 52,
+    min_regions_for_top3: int = 14,
 ) -> dict[str, Any]:
     """Return the pitch-friendly backtest payload for Drawer V."""
     artifact = _load_artifact(virus_typ, horizon_days, models_dir)
@@ -275,7 +287,11 @@ def build_backtest_summary(
     headline = _headline_metrics(aggregate)
     per_bl = _per_bl_metrics(details)
     gate = _quality_gate(artifact)
-    weekly = _weekly_hits(details, limit=weeks_to_surface)
+    weekly = _weekly_hits(
+        details,
+        limit=weeks_to_surface,
+        min_regions_for_top3=min_regions_for_top3,
+    )
 
     # Baselines — we mostly care whether the model beat persistence
     baseline_precision_top3 = None
@@ -291,6 +307,10 @@ def build_backtest_summary(
         "event_definition_version": event_version,
         "available": True,
         "window": window,
+        "coverage_policy": {
+            "min_regions_for_top3": int(min_regions_for_top3),
+            "expected_region_count": len(details),
+        },
         "headline": headline,
         "baselines": {
             "persistence_precision_at_top3": baseline_precision_top3,

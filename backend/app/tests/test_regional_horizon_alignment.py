@@ -77,6 +77,58 @@ class RegionalHorizonAlignmentTests(unittest.TestCase):
         self.assertEqual(result["budget_permission"], "blocked_until_h5_or_business_truth")
         self.assertEqual(result["risk_level"], "medium_high")
 
+    def test_h7_without_regional_data_fresh_blocks_alignment(self) -> None:
+        h5 = {
+            "increase_detected": True,
+            "change_pct": 24.0,
+            "blockers": [],
+        }
+        h7 = {
+            "decision": {"stage": "activate"},
+            "quality_gate": {"overall_passed": True},
+            "change_pct": 18.0,
+        }
+
+        result = classify_horizon_alignment(h5, h7)
+
+        self.assertEqual(result["alignment_status"], "coverage_blocked")
+        self.assertFalse(result["h7_support"])
+        self.assertIn("regional_data_fresh_missing", result["blockers"])
+        self.assertEqual(result["media_action"], "do_not_shift")
+        self.assertEqual(result["budget_permission"], "blocked")
+
+    def test_h7_quality_gate_failure_is_reported_as_blocker(self) -> None:
+        h5 = {
+            "increase_detected": True,
+            "change_pct": 24.0,
+            "blockers": [],
+        }
+        h7 = {
+            "decision": {"stage": "activate"},
+            "regional_data_fresh": True,
+            "quality_gate": {"overall_passed": False},
+            "change_pct": 18.0,
+        }
+
+        result = classify_horizon_alignment(h5, h7)
+
+        self.assertFalse(result["h7_support"])
+        self.assertIn("h7_quality_gate_not_passed", result["blockers"])
+
+    def test_missing_h5_is_reported_when_h7_is_present(self) -> None:
+        h7 = {
+            "decision": {"stage": "activate"},
+            "regional_data_fresh": True,
+            "quality_gate": {"overall_passed": True},
+            "change_pct": 18.0,
+        }
+
+        result = classify_horizon_alignment(None, h7)
+
+        self.assertFalse(result["h5_rise"])
+        self.assertTrue(result["h7_support"])
+        self.assertIn("h5_missing", result["blockers"])
+
 
 if __name__ == "__main__":
     unittest.main()

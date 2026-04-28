@@ -157,6 +157,86 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         self.assertEqual(combined["budget_permission"], "blocked_until_h5_or_business_truth")
         self.assertEqual(payload["policy"]["budget_rule"], "never_auto_release_without_business_truth")
 
+    def test_combined_decision_does_not_treat_candidate_and_go_as_fully_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=5,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                include_delta_ci_95=False,
+            )
+            self._write_artifact(root, horizon_days=7, weeks=20, hit_weeks=18, observed_weeks=20)
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[5, 7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        combined = payload["combined_by_virus"]["Influenza A"]
+        self.assertEqual(combined["h5"]["readiness"], "candidate")
+        self.assertEqual(combined["h7"]["readiness"], "go")
+        self.assertEqual(combined["decision_class"], "weekly_only_prepare")
+        self.assertNotEqual(combined["decision_class"], "short_and_weekly_supported")
+        self.assertNotEqual(combined["media_action"], "controlled_shift_candidate")
+
+    def test_combined_decision_candidate_and_candidate_requires_manual_watch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=5,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                include_delta_ci_95=False,
+            )
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                include_delta_ci_95=False,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[5, 7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        combined = payload["combined_by_virus"]["Influenza A"]
+        self.assertEqual(combined["h5"]["readiness"], "candidate")
+        self.assertEqual(combined["h7"]["readiness"], "candidate")
+        self.assertEqual(combined["decision_class"], "forecast_watch_candidate")
+        self.assertEqual(combined["media_action"], "watch_with_manual_review")
+        self.assertEqual(combined["budget_permission"], "blocked")
+
+    def test_combined_decision_only_go_and_go_allows_controlled_shift_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(root, horizon_days=5, weeks=20, hit_weeks=18, observed_weeks=20)
+            self._write_artifact(root, horizon_days=7, weeks=20, hit_weeks=18, observed_weeks=20)
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[5, 7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        combined = payload["combined_by_virus"]["Influenza A"]
+        self.assertEqual(combined["h5"]["readiness"], "go")
+        self.assertEqual(combined["h7"]["readiness"], "go")
+        self.assertEqual(combined["decision_class"], "short_and_weekly_supported")
+        self.assertEqual(combined["media_action"], "controlled_shift_candidate")
+
     def test_scoreboard_blocks_when_model_does_not_beat_persistence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

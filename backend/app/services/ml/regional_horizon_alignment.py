@@ -38,29 +38,42 @@ def classify_horizon_alignment(
     h7 is a directional confirmation and freshness gate.
     """
 
+    h5_missing = not h5_region
+    h7_missing = not h7_region
     h5_region = dict(h5_region or {})
     h7_region = dict(h7_region or {})
     h5_change = _safe_float(h5_region.get("change_pct"))
     h7_change = _safe_float(h7_region.get("change_pct"))
     h5_rise = bool(h5_region.get("increase_detected")) and h5_change >= float(min_h5_change_pct)
-    h7_fresh = bool(h7_region.get("regional_data_fresh", True))
+    h7_has_freshness = "regional_data_fresh" in h7_region
+    h7_fresh = bool(h7_region.get("regional_data_fresh", False))
     h7_quality = dict(h7_region.get("quality_gate") or {})
     h7_quality_ok = bool(h7_quality.get("overall_passed"))
     h7_stage = _stage(h7_region)
     h7_support = h7_fresh and h7_quality_ok and h7_stage in {"prepare", "activate"}
 
-    blockers = sorted(
-        {
-            *[str(item) for item in h5_region.get("blockers") or []],
-            *[str(item) for item in h7_region.get("coverage_blockers") or []],
-        }
-    )
-    if not h7_region:
+    blocker_set = {
+        *[str(item) for item in h5_region.get("blockers") or []],
+        *[str(item) for item in h7_region.get("coverage_blockers") or []],
+    }
+    if h5_missing:
+        blocker_set.add("h5_missing")
+    if h7_missing:
+        blocker_set.add("h7_missing")
+    elif not h7_has_freshness:
+        blocker_set.add("regional_data_fresh_missing")
+    elif not h7_fresh:
+        blocker_set.add("regional_data_stale")
+    if h7_region and h7_quality.get("overall_passed") is False:
+        blocker_set.add("h7_quality_gate_not_passed")
+    blockers = sorted(blocker_set)
+
+    if h7_missing:
         return {
             "alignment_status": "h7_missing",
             "h5_rise": h5_rise,
             "h7_support": False,
-            "blockers": blockers or ["h7_missing"],
+            "blockers": blockers,
             "statistical_read": "H5 ist vorhanden, aber H7 fehlt fuer diese Region.",
             "budget_read": "Keine Budgetfreigabe; erst H7-Abdeckung herstellen.",
             "media_action": "do_not_shift",

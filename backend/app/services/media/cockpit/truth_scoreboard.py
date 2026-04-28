@@ -312,29 +312,38 @@ def build_horizon_truth_card(
 def _combined_decision(h5: dict[str, Any] | None, h7: dict[str, Any] | None) -> dict[str, Any]:
     h5_ready = (h5 or {}).get("readiness")
     h7_ready = (h7 or {}).get("readiness")
-    h5_ok = h5_ready in {"go", "candidate"}
-    h7_ok = h7_ready in {"go", "candidate"}
+    h5_go = h5_ready == "go"
+    h7_go = h7_ready == "go"
+    h5_candidate = h5_ready == "candidate"
+    h7_candidate = h7_ready == "candidate"
 
-    if h5_ok and h7_ok:
+    if h5_go and h7_go:
         return {
             "decision_class": "short_and_weekly_supported",
             "media_action": "controlled_shift_candidate",
             "budget_permission": "blocked_until_business_truth",
             "plain_language": "H5 und H7 liefern beide nutzbare Evidenz; Budget bleibt trotzdem vom Business-Truth-Gate abhaengig.",
         }
-    if h7_ok and not h5_ok:
+    if h7_go and not h5_go:
         return {
             "decision_class": "weekly_only_prepare",
             "media_action": "prepare_watchlist",
             "budget_permission": "blocked_until_h5_or_business_truth",
             "plain_language": "H7 sieht ein Wochen-Signal, H5 ist noch nicht hart genug; vorbereiten, nicht schieben.",
         }
-    if h5_ok and not h7_ok:
+    if h5_go and not h7_go:
         return {
             "decision_class": "short_term_only_unconfirmed",
             "media_action": "prepare_creative_hold_budget",
             "budget_permission": "blocked_until_h7_confirmation",
             "plain_language": "H5 sieht kurzfristig etwas, H7 bestaetigt nicht; kein automatischer Shift.",
+        }
+    if h5_candidate or h7_candidate:
+        return {
+            "decision_class": "forecast_watch_candidate",
+            "media_action": "watch_with_manual_review",
+            "budget_permission": "blocked",
+            "plain_language": "Mindestens ein Horizont ist nur Candidate; nur manuell pruefen, keine operative Freigabe.",
         }
     return {
         "decision_class": "insufficient_forecast_evidence",

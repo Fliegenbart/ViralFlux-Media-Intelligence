@@ -49,6 +49,7 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         precision_at_top3: float = 0.72,
         persistence_precision_at_top3: float = 0.55,
         ece: float = 0.02,
+        quality_gate: dict | None = None,
     ) -> None:
         path = root / virus_dir / f"horizon_{horizon_days}"
         path.mkdir(parents=True)
@@ -67,7 +68,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
                     "pr_auc": persistence_pr_auc,
                 }
             },
-            "quality_gate": {
+            "quality_gate": quality_gate
+            or {
                 "forecast_readiness": "GO" if quality_passed else "WATCH",
                 "overall_passed": quality_passed,
             },
@@ -133,3 +135,41 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         self.assertEqual(card["readiness"], "blocked")
         self.assertIn("does_not_beat_persistence_pr_auc", card["blockers"])
         self.assertLess(card["score"], 70)
+
+    def test_quality_gate_nested_checks_are_preserved_and_failed_gate_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                quality_gate={
+                    "forecast_readiness": "WATCH",
+                    "overall_passed": False,
+                    "profile": "strict_v1",
+                    "checks": {
+                        "precision_at_top3_passed": False,
+                        "pr_auc_passed": True,
+                    },
+                    "failed_checks": ["precision_at_top3_passed"],
+                    "thresholds": {
+                        "precision_at_top3": 0.7,
+                    },
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertIn("artifact_quality_gate_not_passed", card["blockers"])
+        self.assertEqual(card["quality_gate"]["checks"]["precision_at_top3_passed"], False)
+        self.assertEqual(card["quality_gate"]["failed_checks"], ["precision_at_top3_passed"])
+        self.assertEqual(card["quality_gate"]["thresholds"]["precision_at_top3"], 0.7)

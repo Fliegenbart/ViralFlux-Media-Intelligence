@@ -159,14 +159,21 @@ def _quality_gate(artifact: dict[str, Any]) -> dict[str, Any] | None:
     gate = artifact.get("quality_gate")
     if not gate:
         return None
-    return {
-        "forecast_readiness": gate.get("forecast_readiness"),
-        "overall_passed": gate.get("overall_passed"),
-        "checks": {
+    checks = gate.get("checks")
+    if not isinstance(checks, dict):
+        checks = {
             k: v
             for k, v in gate.items()
             if k.endswith("_passed") and k != "overall_passed"
-        },
+        }
+    return {
+        "forecast_readiness": gate.get("forecast_readiness"),
+        "overall_passed": bool(gate.get("overall_passed")),
+        "profile": gate.get("profile"),
+        "checks": checks,
+        "failed_checks": gate.get("failed_checks") or [],
+        "thresholds": gate.get("thresholds") or {},
+        "baseline_metrics": gate.get("baseline_metrics") or {},
     }
 
 

@@ -160,7 +160,7 @@ def build_horizon_truth_card(
     if ece is not None and ece > float(max_ece):
         warnings.append("calibration_ece_above_gate")
     if not quality_gate_passed:
-        warnings.append("artifact_quality_gate_not_passed")
+        blockers.append("artifact_quality_gate_not_passed")
 
     if blockers:
         readiness = "blocked"

@@ -20,6 +20,8 @@ MIN_EVALUABLE_WEEKS = 12
 MIN_HIT_RATE = 0.60
 MIN_PR_AUC_LIFT = 1.05
 MAX_ECE = 0.05
+MIN_HIT_LIFT_VS_PERSISTENCE_PP = 0.05
+MIN_HIT_LIFT_VS_RANDOM_PP = 0.05
 
 
 def _safe_float(value: Any, default: float | None = None) -> float | None:
@@ -131,6 +133,33 @@ def build_horizon_truth_card(
     misses = [row for row in evaluable if not row.get("was_hit")]
     non_event_or_unscored = max(0, len(weekly) - len(evaluable) - len(coverage_rejected))
     hit_rate = (len(hits) / len(evaluable)) if evaluable else None
+    persistence_evaluable = [
+        row for row in evaluable if row.get("persistence_was_hit") is not None
+    ]
+    persistence_hit_rate = (
+        sum(1 for row in persistence_evaluable if row.get("persistence_was_hit"))
+        / len(persistence_evaluable)
+        if persistence_evaluable
+        else None
+    )
+    random_expected_values: list[float] = []
+    for row in evaluable:
+        random_value = _safe_float(row.get("random_expected_hit_probability"))
+        if random_value is None:
+            random_value = _safe_float(row.get("random_expected_hit_rate_top3"))
+        if random_value is not None:
+            random_expected_values.append(random_value)
+    random_expected_hit_rate = (
+        sum(random_expected_values) / len(random_expected_values)
+        if random_expected_values
+        else None
+    )
+    hit_lift_vs_persistence_pp = None
+    if hit_rate is not None and persistence_hit_rate is not None:
+        hit_lift_vs_persistence_pp = hit_rate - persistence_hit_rate
+    hit_lift_vs_random_pp = None
+    if hit_rate is not None and random_expected_hit_rate is not None:
+        hit_lift_vs_random_pp = hit_rate - random_expected_hit_rate
 
     headline = payload.get("headline") or {}
     baselines = payload.get("baselines") or {}
@@ -156,6 +185,15 @@ def build_horizon_truth_card(
         blockers.append("no_evaluable_full_panel_truth_weeks")
     elif hit_rate < float(min_hit_rate):
         blockers.append("hit_rate_below_gate")
+    if hit_rate is not None:
+        if persistence_hit_rate is None:
+            warnings.append("persistence_hit_rate_missing")
+        elif hit_lift_vs_persistence_pp < MIN_HIT_LIFT_VS_PERSISTENCE_PP:
+            blockers.append("hit_rate_not_better_than_persistence")
+        if random_expected_hit_rate is None:
+            warnings.append("random_expected_hit_rate_missing")
+        elif hit_lift_vs_random_pp < MIN_HIT_LIFT_VS_RANDOM_PP:
+            warnings.append("hit_rate_not_better_than_random_expected")
     if coverage_rejected:
         warnings.append("some_truth_weeks_rejected_for_insufficient_panel_coverage")
     if pr_auc_multiplier is None:
@@ -207,6 +245,14 @@ def build_horizon_truth_card(
         "pending_truth_weeks": non_event_or_unscored,
         "non_event_or_unscored_weeks": non_event_or_unscored,
         "hit_rate": _round(hit_rate),
+        "baseline_hit_rates": {
+            "persistence_hit_rate": _round(persistence_hit_rate),
+            "random_expected_hit_rate": _round(random_expected_hit_rate),
+        },
+        "lift_vs_baseline_hit_rate": {
+            "persistence_pp": _round(hit_lift_vs_persistence_pp),
+            "random_expected_pp": _round(hit_lift_vs_random_pp),
+        },
         "headline": {
             "precision_at_top3": _round(precision),
             "pr_auc": _round(pr_auc),
@@ -329,6 +375,8 @@ def build_truth_scoreboard(
             "min_evaluable_weeks": int(min_evaluable_weeks),
             "min_regions_for_top3": int(min_regions_for_top3),
             "min_hit_rate": MIN_HIT_RATE,
+            "min_hit_lift_vs_persistence_pp": MIN_HIT_LIFT_VS_PERSISTENCE_PP,
+            "min_hit_lift_vs_random_pp": MIN_HIT_LIFT_VS_RANDOM_PP,
             "min_pr_auc_lift": MIN_PR_AUC_LIFT,
             "max_ece": MAX_ECE,
         },

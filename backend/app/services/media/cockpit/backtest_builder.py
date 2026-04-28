@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+from math import comb
 from pathlib import Path
 from typing import Any
 
@@ -212,6 +213,8 @@ def _weekly_hits(
                     "target_date": target[:10],
                     "all_scored": [],
                     "observed_top": [],
+                    "persistence_scored": [],
+                    "persistence_missing_count": 0,
                 },
             )
             # Every BL has a per-fold score — we rebuild Top-K here
@@ -223,6 +226,19 @@ def _weekly_hits(
             bucket["all_scored"].append(
                 {"code": code, "probability": prob}
             )
+            persistence_score = entry.get("current_known_incidence")
+            if persistence_score is None:
+                bucket["persistence_missing_count"] += 1
+            else:
+                try:
+                    bucket["persistence_scored"].append(
+                        {
+                            "code": code,
+                            "current_known_incidence": float(persistence_score),
+                        }
+                    )
+                except (TypeError, ValueError):
+                    bucket["persistence_missing_count"] += 1
             if int(entry.get("event_label") or 0) == 1:
                 bucket["observed_top"].append(code)
 
@@ -231,6 +247,8 @@ def _weekly_hits(
 
     for row in rows:
         all_scored = row.pop("all_scored")
+        persistence_scored = row.pop("persistence_scored")
+        persistence_missing_count = int(row.pop("persistence_missing_count") or 0)
         scored_region_count = len(all_scored)
         all_scored.sort(key=lambda p: -(p.get("probability") or 0.0))
         row["predicted_top"] = all_scored[:3]
@@ -244,6 +262,35 @@ def _weekly_hits(
         row["is_evaluable_top3_panel"] = bool(
             row["is_full_panel"] and observed_event_count > 0
         )
+        k = min(3, scored_region_count)
+        random_expected_hit_probability = None
+        if scored_region_count > 0 and observed_event_count > 0:
+            non_event_count = max(scored_region_count - observed_event_count, 0)
+            no_hit_combinations = (
+                comb(non_event_count, k) if non_event_count >= k else 0
+            )
+            random_expected_hit_probability = 1.0 - (
+                no_hit_combinations / comb(scored_region_count, k)
+            )
+        row["random_expected_hit_probability"] = random_expected_hit_probability
+        row["random_expected_hit_rate_top3"] = random_expected_hit_probability
+
+        if (
+            scored_region_count > 0
+            and persistence_missing_count == 0
+            and len(persistence_scored) == scored_region_count
+        ):
+            persistence_scored.sort(
+                key=lambda p: -(p.get("current_known_incidence") or 0.0)
+            )
+            row["persistence_top"] = persistence_scored[:3]
+            persistence_codes = {p["code"] for p in row["persistence_top"]}
+            row["persistence_hits"] = sorted(persistence_codes & observed_codes)
+            row["persistence_was_hit"] = len(row["persistence_hits"]) > 0
+        else:
+            row["persistence_top"] = []
+            row["persistence_hits"] = []
+            row["persistence_was_hit"] = None
         row["hits"] = sorted(predicted_codes & observed_codes)
         row["misses"] = sorted(predicted_codes - observed_codes)
         row["false_negatives"] = sorted(observed_codes - predicted_codes)

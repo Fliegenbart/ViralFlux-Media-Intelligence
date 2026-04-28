@@ -30,24 +30,34 @@ def _timeline(
     hit_weeks: int,
     observed_weeks: int | None = None,
     decoy_rank: int = 0,
+    persistence_hit_weeks: int | None = None,
+    include_current_known_incidence: bool = True,
 ) -> list[dict]:
     observed = weeks if observed_weeks is None else observed_weeks
+    persistence_hits = (
+        max(0, hit_weeks - 3)
+        if persistence_hit_weeks is None
+        else persistence_hit_weeks
+    )
     rows: list[dict] = []
     for idx in range(weeks):
         as_of = f"2026-01-{(idx % 28) + 1:02d}"
         event_label = 1 if idx < observed and decoy_rank == 0 else 0
         if decoy_rank == 0:
             probability = 0.9 if idx < hit_weeks else 0.05
+            current_known_incidence = 100.0 if idx < persistence_hits else 0.1
         else:
             probability = 0.1 if idx < hit_weeks else 0.8 - decoy_rank * 0.05
-        rows.append(
-            {
-                "as_of_date": as_of,
-                "target_date": as_of,
-                "event_label": event_label,
-                "event_probability_calibrated": probability,
-            }
-        )
+            current_known_incidence = 1.0 - decoy_rank * 0.01
+        row = {
+            "as_of_date": as_of,
+            "target_date": as_of,
+            "event_label": event_label,
+            "event_probability_calibrated": probability,
+        }
+        if include_current_known_incidence:
+            row["current_known_incidence"] = current_known_incidence
+        rows.append(row)
     return rows
 
 
@@ -69,6 +79,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         ece: float = 0.02,
         quality_gate: dict | None = None,
         region_codes: list[str] | None = None,
+        persistence_hit_weeks: int | None = None,
+        include_current_known_incidence: bool = True,
     ) -> None:
         path = root / virus_dir / f"horizon_{horizon_days}"
         path.mkdir(parents=True)
@@ -102,6 +114,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
                     hit_weeks=hit_weeks,
                     observed_weeks=observed_weeks,
                     decoy_rank=rank,
+                    persistence_hit_weeks=persistence_hit_weeks,
+                    include_current_known_incidence=include_current_known_incidence,
                 ),
             }
         (path / "backtest.json").write_text(json.dumps(artifact), encoding="utf-8")
@@ -240,3 +254,78 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         card = payload["scorecards"][0]
         self.assertGreaterEqual(card["evaluable_weeks"], 12)
         self.assertNotIn("too_few_evaluable_weeks", card["blockers"])
+
+    def test_high_hit_rate_blocked_when_not_better_than_persistence_hit_rate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                persistence_hit_weeks=18,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertAlmostEqual(card["hit_rate"], 0.9)
+        self.assertEqual(card["baseline_hit_rates"]["persistence_hit_rate"], 0.9)
+        self.assertEqual(card["lift_vs_baseline_hit_rate"]["persistence_pp"], 0.0)
+        self.assertIn("hit_rate_not_better_than_persistence", card["blockers"])
+
+    def test_missing_current_known_incidence_keeps_persistence_hit_rate_empty_and_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                include_current_known_incidence=False,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertIsNone(card["baseline_hit_rates"]["persistence_hit_rate"])
+        self.assertIn("persistence_hit_rate_missing", card["warnings"])
+
+    def test_random_expected_hit_rate_uses_panel_size_events_and_top_k(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                region_codes=DEFAULT_REGION_CODES,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertAlmostEqual(
+            card["baseline_hit_rates"]["random_expected_hit_rate"],
+            3 / 14,
+            places=4,
+        )

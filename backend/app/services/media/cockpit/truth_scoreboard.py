@@ -75,7 +75,7 @@ def _score_from_metrics(
         else min(max((precision_pp + 0.05) / 0.25, 0.0), 1.0) * 20.0
     )
     calibration_component = (
-        10.0
+        0.0
         if ece is None
         else max(0.0, min(1.0, (MAX_ECE * 2.0 - ece) / (MAX_ECE * 2.0))) * 10.0
     )
@@ -92,7 +92,7 @@ def _score_from_metrics(
 
 def _plain_read(readiness: str, *, horizon_days: int) -> str:
     if readiness == "go":
-        return f"H{horizon_days} ist als Forecast-Signal belastbar."
+        return f"H{horizon_days} ist als Forecast-Signal nutzbar; Media-Budget bleibt Business-Truth-gated."
     if readiness == "candidate":
         return f"H{horizon_days} ist nutzbar, aber nur mit sichtbaren Warnhinweisen."
     if readiness == "blocked":
@@ -126,6 +126,7 @@ def build_horizon_truth_card(
             "available": False,
             "readiness": "blocked",
             "score": 0.0,
+            "score_interpretation": "heuristic_readiness_score_not_statistical_confidence",
             "blockers": ["artifact_missing"],
             "warnings": [],
             "reason": payload.get("reason"),
@@ -234,7 +235,9 @@ def build_horizon_truth_card(
         warnings.append("persistence_precision_missing")
     elif precision_pp < 0:
         blockers.append("precision_below_persistence")
-    if ece is not None and ece > float(max_ece):
+    if ece is None:
+        warnings.append("calibration_ece_missing")
+    elif ece > float(max_ece):
         warnings.append("calibration_ece_above_gate")
     if not quality_gate_passed:
         blockers.append("artifact_quality_gate_not_passed")
@@ -254,11 +257,11 @@ def build_horizon_truth_card(
         quality_gate_passed=quality_gate_passed,
     )
     if blockers:
-        score = min(score, 69.0)
+        score = min(score, 49.0)
     elif warnings:
-        score = min(score, 84.0)
+        score = min(score, 79.0)
     else:
-        score = max(score, 70.0)
+        score = max(score, 80.0)
 
     return {
         "virus_typ": virus_typ,
@@ -266,6 +269,7 @@ def build_horizon_truth_card(
         "available": True,
         "readiness": readiness,
         "score": score,
+        "score_interpretation": "heuristic_readiness_score_not_statistical_confidence",
         "window": payload.get("window") or {},
         "coverage_policy": payload.get("coverage_policy") or {},
         "evaluable_weeks": len(evaluable),

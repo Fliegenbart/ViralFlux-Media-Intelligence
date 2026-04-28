@@ -85,7 +85,7 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         persistence_pr_auc: float = 0.3,
         precision_at_top3: float = 0.72,
         persistence_precision_at_top3: float = 0.55,
-        ece: float = 0.02,
+        ece: float | None = 0.02,
         quality_gate: dict | None = None,
         region_codes: list[str] | None = None,
         persistence_hit_weeks: int | None = None,
@@ -260,7 +260,61 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         card = payload["scorecards"][0]
         self.assertEqual(card["readiness"], "blocked")
         self.assertIn("does_not_beat_persistence_pr_auc", card["blockers"])
-        self.assertLess(card["score"], 70)
+        self.assertLess(card["score"], 50)
+
+    def test_missing_ece_warns_and_does_not_receive_go_score(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                ece=None,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "candidate")
+        self.assertIn("calibration_ece_missing", card["warnings"])
+        self.assertLess(card["score"], 80)
+
+    def test_go_score_requires_no_blockers_or_warnings_and_uses_defensive_language(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "go")
+        self.assertEqual(card["blockers"], [])
+        self.assertEqual(card["warnings"], [])
+        self.assertGreaterEqual(card["score"], 80)
+        self.assertEqual(
+            card["score_interpretation"],
+            "heuristic_readiness_score_not_statistical_confidence",
+        )
+        self.assertIn("Business-Truth-gated", card["plain_language"])
+        self.assertNotIn("belastbar", card["plain_language"])
 
     def test_quality_gate_nested_checks_are_preserved_and_failed_gate_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

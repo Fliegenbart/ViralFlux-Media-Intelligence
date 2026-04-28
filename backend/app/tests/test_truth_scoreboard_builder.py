@@ -23,6 +23,15 @@ DEFAULT_REGION_CODES = [
     "TH",
 ]
 
+DEFAULT_DELTA_CI_95 = {
+    "event_model": {
+        "persistence": {
+            "pr_auc": [0.02, 0.25],
+            "precision_at_top3": [0.04, 0.22],
+        }
+    }
+}
+
 
 def _timeline(
     *,
@@ -81,6 +90,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
         region_codes: list[str] | None = None,
         persistence_hit_weeks: int | None = None,
         include_current_known_incidence: bool = True,
+        delta_ci_95: dict | None = None,
+        include_delta_ci_95: bool = True,
     ) -> None:
         path = root / virus_dir / f"horizon_{horizon_days}"
         path.mkdir(parents=True)
@@ -106,6 +117,8 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
             },
             "details": {},
         }
+        if include_delta_ci_95:
+            artifact["delta_ci_95"] = delta_ci_95 or DEFAULT_DELTA_CI_95
         for rank, code in enumerate(region_codes or DEFAULT_REGION_CODES):
             artifact["details"][code] = {
                 "bundesland_name": code,
@@ -329,3 +342,97 @@ class TruthScoreboardBuilderTests(unittest.TestCase):
             3 / 14,
             places=4,
         )
+
+    def test_pr_auc_positive_point_estimate_blocks_when_ci_lower_bound_not_positive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                pr_auc=0.7,
+                persistence_pr_auc=0.3,
+                delta_ci_95={
+                    "event_model": {
+                        "persistence": {
+                            "pr_auc": [0.0, 0.3],
+                            "precision_at_top3": [0.04, 0.22],
+                        }
+                    }
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "blocked")
+        self.assertIn("pr_auc_lift_ci_not_positive", card["blockers"])
+        self.assertEqual(card["lift_confidence"]["pr_auc_delta_ci_95"], [0.0, 0.3])
+
+    def test_precision_positive_point_estimate_warns_when_ci_lower_bound_not_positive(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                precision_at_top3=0.72,
+                persistence_precision_at_top3=0.55,
+                delta_ci_95={
+                    "event_model": {
+                        "persistence": {
+                            "pr_auc": [0.02, 0.25],
+                            "precision_at_top3": [0.0, 0.22],
+                        }
+                    }
+                },
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "candidate")
+        self.assertIn("precision_top3_lift_ci_not_positive", card["warnings"])
+        self.assertNotIn("precision_top3_lift_ci_not_positive", card["blockers"])
+        self.assertEqual(
+            card["lift_confidence"]["precision_at_top3_delta_ci_95"], [0.0, 0.22]
+        )
+
+    def test_missing_lift_confidence_interval_warns_without_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_artifact(
+                root,
+                horizon_days=7,
+                weeks=20,
+                hit_weeks=18,
+                observed_weeks=20,
+                include_delta_ci_95=False,
+            )
+
+            payload = build_truth_scoreboard(
+                virus_types=["Influenza A"],
+                horizons=[7],
+                models_dir=root,
+                min_evaluable_weeks=12,
+            )
+
+        card = payload["scorecards"][0]
+        self.assertEqual(card["readiness"], "candidate")
+        self.assertIsNone(card["lift_confidence"]["pr_auc_delta_ci_95"])
+        self.assertIsNone(card["lift_confidence"]["precision_at_top3_delta_ci_95"])
+        self.assertIn("lift_confidence_interval_missing", card["warnings"])

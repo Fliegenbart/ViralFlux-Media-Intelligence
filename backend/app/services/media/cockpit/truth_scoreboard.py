@@ -45,6 +45,16 @@ def _round(value: float | None, digits: int = 4) -> float | None:
     return round(float(value), digits)
 
 
+def _ci_pair(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    low = _safe_float(value[0])
+    high = _safe_float(value[1])
+    if low is None or high is None:
+        return None
+    return [low, high]
+
+
 def _score_from_metrics(
     *,
     hit_rate: float | None,
@@ -173,6 +183,20 @@ def build_horizon_truth_card(
     precision_pp = None
     if precision is not None and baseline_precision is not None:
         precision_pp = precision - baseline_precision
+    ci = payload.get("delta_ci_95") or {}
+    event_model_ci: dict[str, Any] = {}
+    if isinstance(ci, dict):
+        event_model = ci.get("event_model") or {}
+        if isinstance(event_model, dict):
+            persistence_ci = event_model.get("persistence") or {}
+            if isinstance(persistence_ci, dict):
+                event_model_ci = persistence_ci
+    pr_auc_delta_ci = _ci_pair(event_model_ci.get("pr_auc"))
+    precision_top3_delta_ci = _ci_pair(event_model_ci.get("precision_at_top3"))
+    pr_auc_delta_ci_low = pr_auc_delta_ci[0] if pr_auc_delta_ci else None
+    precision_delta_ci_low = (
+        precision_top3_delta_ci[0] if precision_top3_delta_ci else None
+    )
 
     quality_gate = payload.get("quality_gate") or {}
     quality_gate_passed = bool(quality_gate.get("overall_passed"))
@@ -200,6 +224,12 @@ def build_horizon_truth_card(
         warnings.append("persistence_pr_auc_missing")
     elif pr_auc_multiplier < float(min_pr_auc_lift):
         blockers.append("does_not_beat_persistence_pr_auc")
+    if pr_auc_delta_ci is None or precision_top3_delta_ci is None:
+        warnings.append("lift_confidence_interval_missing")
+    if pr_auc_delta_ci_low is not None and pr_auc_delta_ci_low <= 0:
+        blockers.append("pr_auc_lift_ci_not_positive")
+    if precision_delta_ci_low is not None and precision_delta_ci_low <= 0:
+        warnings.append("precision_top3_lift_ci_not_positive")
     if precision_pp is None:
         warnings.append("persistence_precision_missing")
     elif precision_pp < 0:
@@ -267,6 +297,10 @@ def build_horizon_truth_card(
         "lift_vs_persistence": {
             "pr_auc_multiplier": _round(pr_auc_multiplier),
             "precision_pp": _round(precision_pp),
+        },
+        "lift_confidence": {
+            "pr_auc_delta_ci_95": pr_auc_delta_ci,
+            "precision_at_top3_delta_ci_95": precision_top3_delta_ci,
         },
         "quality_gate": quality_gate,
         "blockers": sorted(set(blockers)),

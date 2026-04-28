@@ -329,6 +329,8 @@ def build_backtest_summary(
     selected_kappa = artifact.get("selected_kappa")
     action_threshold = artifact.get("action_threshold")
     event_version = artifact.get("event_definition_version")
+    delta_vs_persistence = artifact.get("delta_vs_persistence") or {}
+    delta_ci_95 = artifact.get("delta_ci_95") or {}
 
     window = _window_span(details)
     headline = _headline_metrics(aggregate)
@@ -362,6 +364,12 @@ def build_backtest_summary(
         "baselines": {
             "persistence_precision_at_top3": baseline_precision_top3,
             "persistence_pr_auc": baseline_pr_auc,
+        },
+        "delta_vs_persistence": delta_vs_persistence,
+        "delta_ci_95": delta_ci_95,
+        "baseline_deltas": {
+            "delta_vs_persistence": delta_vs_persistence,
+            "delta_ci_95": delta_ci_95,
         },
         "calibration": {
             "tau": selected_tau,

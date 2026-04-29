@@ -147,6 +147,9 @@ EXCLUDED_MODEL_COLUMNS = {
     "bundesland",
     "bundesland_name",
     "as_of_date",
+    "forecast_issue_date",
+    "forecast_issue_week_start",
+    "forecast_issue_cutoff_date",
     "target_date",
     "target_week_start",
     "target_window_days",
@@ -453,24 +456,77 @@ class RegionalModelTrainer:
 
         working = panel.copy()
         working["as_of_date"] = pd.to_datetime(working["as_of_date"]).dt.normalize()
+        if "forecast_issue_cutoff_date" in working.columns:
+            working["forecast_issue_cutoff_date"] = pd.to_datetime(
+                working["forecast_issue_cutoff_date"]
+            ).dt.normalize()
+            issue_cutoff = working["forecast_issue_cutoff_date"]
+        else:
+            issue_cutoff = working["as_of_date"]
         if "target_date" not in working.columns:
-            working["target_date"] = working["as_of_date"] + pd.Timedelta(days=horizon)
+            working["target_date"] = issue_cutoff + pd.Timedelta(days=horizon)
         working["target_date"] = pd.to_datetime(working["target_date"]).dt.normalize()
+        if "target_week_start" in working.columns:
+            working["target_week_start"] = pd.to_datetime(
+                working["target_week_start"]
+            ).dt.normalize()
+        else:
+            working["target_week_start"] = (
+                working["target_date"]
+                - pd.to_timedelta(working["target_date"].dt.weekday, unit="D")
+            ).dt.normalize()
         working["target_window_days"] = [_target_window_for_horizon(horizon)] * len(working)
         working["horizon_days"] = float(horizon)
+
+        if "next_week_incidence" in working.columns:
+            if "target_incidence" in working.columns:
+                working["target_incidence"] = working["target_incidence"].where(
+                    working["target_incidence"].notna(),
+                    working["next_week_incidence"],
+                )
+            else:
+                working["target_incidence"] = working["next_week_incidence"]
+            if "target_truth_source" in working.columns:
+                working["target_truth_source"] = working["target_truth_source"].fillna(
+                    working.get("truth_source")
+                )
+            elif "truth_source" in working.columns:
+                working["target_truth_source"] = working["truth_source"]
+            if "target_truth_source" in working.columns and "truth_source" in working.columns:
+                working["truth_source"] = working["target_truth_source"].fillna(
+                    working["truth_source"]
+                )
+            working = working.loc[working["target_incidence"].notna()].copy()
+            return working.reset_index(drop=True)
 
         future_targets = working[
             ["bundesland", "as_of_date", "current_known_incidence", "truth_source"]
         ].rename(
             columns={
-                "as_of_date": "target_date",
                 "current_known_incidence": "target_incidence",
                 "truth_source": "target_truth_source",
             }
         )
+        future_targets["target_week_start"] = (
+            future_targets["as_of_date"]
+            - pd.to_timedelta(future_targets["as_of_date"].dt.weekday, unit="D")
+        ).dt.normalize()
+        future_targets = (
+            future_targets.sort_values(["bundesland", "target_week_start", "as_of_date"])
+            .groupby(["bundesland", "target_week_start"], as_index=False)
+            .tail(1)
+            .drop(columns=["as_of_date"])
+        )
+        working = working.drop(
+            columns=[
+                column
+                for column in ("target_incidence", "target_truth_source")
+                if column in working.columns
+            ]
+        )
         merged = working.merge(
             future_targets,
-            on=["bundesland", "target_date"],
+            on=["bundesland", "target_week_start"],
             how="left",
         )
         merged["next_week_incidence"] = merged["target_incidence"]

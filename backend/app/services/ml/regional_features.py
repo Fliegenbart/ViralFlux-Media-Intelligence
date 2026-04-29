@@ -357,6 +357,19 @@ class RegionalFeatureBuilder:
     def point_in_time_snapshot_manifest(self, virus_typ: str, panel: pd.DataFrame) -> dict[str, Any]:
         return regional_features_manifests.point_in_time_snapshot_manifest(self, virus_typ, panel)
 
+    def signal_bundle_metadata(
+        self,
+        *,
+        virus_typ: str,
+        panel: pd.DataFrame,
+        feature_columns: list[str],
+    ) -> dict[str, Any]:
+        return regional_features_manifests.signal_bundle_metadata(
+            virus_typ=virus_typ,
+            panel=panel,
+            feature_columns=feature_columns,
+        )
+
     def live_source_readiness_frames(
         self,
         *,
@@ -948,6 +961,18 @@ class RegionalFeatureBuilder:
             features.update(self._nowcast_feature_family("sars_trends", trends_nowcast))
         return features
 
+    def _are_context_features(
+        self,
+        *,
+        as_of: pd.Timestamp,
+        visible_are: pd.DataFrame | None,
+    ) -> dict[str, float]:
+        return self._lagged_incidence_feature_family(
+            prefix="are_consult",
+            frame=visible_are,
+            as_of=as_of,
+        )
+
     @staticmethod
     def _visible_signal_frame(frame: pd.DataFrame | None, *, as_of: pd.Timestamp) -> pd.DataFrame:
         if frame is None or frame.empty:
@@ -1001,6 +1026,8 @@ class RegionalFeatureBuilder:
             )
             national_level = self._latest_value_as_of(national_frame, as_of, "incidence")
             state_level = self._latest_value_as_of(state_frame, as_of, "incidence")
+            lag_1 = self._latest_value_as_of(primary_frame, as_of - pd.Timedelta(days=7), "incidence")
+            lag_2 = self._latest_value_as_of(primary_frame, as_of - pd.Timedelta(days=14), "incidence")
             features[f"grippeweb_{signal_slug}_national_level"] = float(national_level)
             features[f"grippeweb_{signal_slug}_national_momentum_1w"] = float(
                 self._relative_delta(
@@ -1009,6 +1036,24 @@ class RegionalFeatureBuilder:
                 )
             )
             features[f"grippeweb_{signal_slug}_state_vs_national"] = float(state_level - national_level)
+            features[f"grippeweb_{signal_slug}_lag_1"] = float(lag_1)
+            features[f"grippeweb_{signal_slug}_lag_2"] = float(lag_2)
+            features[f"grippeweb_{signal_slug}_delta_1w"] = float(lag_1 - lag_2)
+            features[f"grippeweb_{signal_slug}_missing"] = float(primary_frame.empty)
+        features["grippeweb_delta_1w"] = float(
+            features.get("grippeweb_are_delta_1w", 0.0)
+        )
+        features["grippeweb_missing"] = float(
+            bool(features.get("grippeweb_are_missing", 1.0))
+            and bool(features.get("grippeweb_ili_missing", 1.0))
+        )
+        features["grippeweb_region_cluster"] = float(
+            any(
+                visible_state_signals.get(signal_type) is not None
+                and not visible_state_signals.get(signal_type).empty
+                for signal_type in ("ARE", "ILI")
+            )
+        )
         return features
 
     def _virus_specific_ifsg_features(
@@ -1028,38 +1073,31 @@ class RegionalFeatureBuilder:
         source_revision_policy: dict[str, str] | None,
     ) -> dict[str, float]:
         if virus_typ in {"Influenza A", "Influenza B"}:
-            return self._signal_feature_family(
+            return self._lagged_incidence_feature_family(
                 prefix="ifsg_influenza",
                 frame=visible_influenza_ifsg,
                 as_of=as_of,
-                current_known_incidence=current_known_incidence,
-                seasonal_baseline=seasonal_baseline,
-                seasonal_mad=seasonal_mad,
-                source_id="ifsg_influenza",
-                signal_id="Influenza",
-                region_code=state,
-                include_nowcast=include_nowcast,
-                use_revision_adjusted=use_revision_adjusted,
-                revision_policy=revision_policy,
-                source_revision_policy=source_revision_policy,
             )
         if virus_typ == "RSV A":
-            return self._signal_feature_family(
+            return self._lagged_incidence_feature_family(
                 prefix="ifsg_rsv",
                 frame=visible_rsv_ifsg,
                 as_of=as_of,
-                current_known_incidence=current_known_incidence,
-                seasonal_baseline=seasonal_baseline,
-                seasonal_mad=seasonal_mad,
-                source_id="ifsg_rsv",
-                signal_id="RSV",
-                region_code=state,
-                include_nowcast=include_nowcast,
-                use_revision_adjusted=use_revision_adjusted,
-                revision_policy=revision_policy,
-                source_revision_policy=source_revision_policy,
             )
         return {}
+
+    def _lagged_incidence_feature_family(
+        self,
+        *,
+        prefix: str,
+        frame: pd.DataFrame | None,
+        as_of: pd.Timestamp,
+    ) -> dict[str, float]:
+        return regional_features_builders.lagged_incidence_feature_family(
+            prefix=prefix,
+            frame=frame,
+            as_of=as_of,
+        )
 
     def _signal_feature_family(
         self,

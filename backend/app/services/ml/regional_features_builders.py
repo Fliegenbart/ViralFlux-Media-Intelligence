@@ -9,12 +9,195 @@ from app.services.ml.exogenous_feature_contracts import observed_as_of_only_rows
 from app.services.ml.forecast_horizon_utils import ensure_supported_horizon
 from app.services.ml.nowcast_contracts import NowcastResult
 from app.services.ml.regional_panel_utils import (
+    ALL_BUNDESLAENDER,
     BUNDESLAND_NAMES,
     EVENT_DEFINITION_VERSION,
     REGIONAL_NEIGHBORS,
     event_definition_config_for_virus,
     seasonal_baseline_and_mad,
 )
+
+
+def _week_start(value: pd.Timestamp) -> pd.Timestamp:
+    ts = pd.Timestamp(value).normalize()
+    return (ts - pd.Timedelta(days=int(ts.weekday()))).normalize()
+
+
+def _build_issue_calendar(
+    *,
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    horizon_days: int,
+) -> pd.DataFrame:
+    horizon = ensure_supported_horizon(horizon_days)
+    start = pd.Timestamp(start_date).normalize()
+    end = pd.Timestamp(end_date).normalize()
+    if pd.isna(start) or pd.isna(end) or start > end:
+        return pd.DataFrame(
+            columns=[
+                "forecast_issue_week_start",
+                "forecast_issue_cutoff_date",
+                "target_week_start",
+            ]
+        )
+
+    first_week_start = _week_start(start)
+    last_week_start = _week_start(end)
+    issue_week_starts = pd.date_range(first_week_start, last_week_start, freq="7D")
+    rows: list[dict[str, pd.Timestamp]] = []
+    for issue_week_start in issue_week_starts:
+        cutoff = min(issue_week_start + pd.Timedelta(days=6), end)
+        if cutoff < start:
+            continue
+        target = _week_start(cutoff + pd.Timedelta(days=horizon))
+        rows.append(
+            {
+                "forecast_issue_week_start": pd.Timestamp(issue_week_start).normalize(),
+                "forecast_issue_cutoff_date": pd.Timestamp(cutoff).normalize(),
+                "target_week_start": pd.Timestamp(target).normalize(),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _build_state_issue_calendar(
+    *,
+    wastewater_by_state: dict[str, pd.DataFrame],
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    horizon_days: int,
+) -> pd.DataFrame:
+    horizon = ensure_supported_horizon(horizon_days)
+    start = pd.Timestamp(start_date).normalize()
+    end = pd.Timestamp(end_date).normalize()
+    if pd.isna(start) or pd.isna(end) or start > end:
+        return pd.DataFrame(
+            columns=[
+                "bundesland",
+                "forecast_issue_week_start",
+                "forecast_issue_cutoff_date",
+                "target_week_start",
+            ]
+        )
+
+    rows: list[dict[str, pd.Timestamp | str]] = []
+    for state, frame in wastewater_by_state.items():
+        if frame is None or frame.empty or "datum" not in frame.columns:
+            continue
+        candidate_dates = (
+            pd.to_datetime(frame["datum"], errors="coerce")
+            .dt.normalize()
+            .dropna()
+            .drop_duplicates()
+            .sort_values()
+        )
+        for cutoff in candidate_dates:
+            cutoff = pd.Timestamp(cutoff).normalize()
+            if cutoff < start or cutoff > end:
+                continue
+            rows.append(
+                {
+                    "bundesland": state,
+                    "forecast_issue_week_start": _week_start(cutoff),
+                    "forecast_issue_cutoff_date": cutoff,
+                    "target_week_start": _week_start(cutoff + pd.Timedelta(days=horizon)),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _visible_asof_frame(
+    frame: pd.DataFrame | None,
+    *,
+    cutoff: pd.Timestamp,
+    date_column: str = "datum",
+) -> pd.DataFrame:
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+    if date_column not in frame.columns:
+        return frame.iloc[0:0].copy()
+    visible = frame.copy()
+    normalized_cutoff = pd.Timestamp(cutoff).normalize()
+    visible = visible.loc[pd.to_datetime(visible[date_column]).dt.normalize() <= normalized_cutoff]
+    for availability_column in ("available_time", "available_date", "published_at", "fetched_at"):
+        if availability_column in visible.columns:
+            visible = visible.loc[
+                pd.to_datetime(visible[availability_column], errors="coerce").dt.normalize()
+                <= normalized_cutoff
+            ]
+    if visible.empty:
+        return visible.copy()
+    return visible.sort_values(date_column).reset_index(drop=True)
+
+
+def _feature_age_days(
+    frame: pd.DataFrame | None,
+    *,
+    cutoff: pd.Timestamp,
+    date_column: str = "datum",
+) -> float:
+    if frame is None or frame.empty or date_column not in frame.columns:
+        return float("nan")
+    latest = pd.to_datetime(frame[date_column], errors="coerce").dropna()
+    if latest.empty:
+        return float("nan")
+    return float(max((pd.Timestamp(cutoff).normalize() - pd.Timestamp(latest.max()).normalize()).days, 0))
+
+
+def _feature_missing(frame: pd.DataFrame | None) -> float:
+    return float(frame is None or frame.empty)
+
+
+def lagged_incidence_feature_family(
+    *,
+    prefix: str,
+    frame: pd.DataFrame | None,
+    as_of: pd.Timestamp,
+) -> dict[str, float]:
+    signal_frame = frame if frame is not None else pd.DataFrame()
+
+    def _latest(cutoff: pd.Timestamp) -> float:
+        if signal_frame.empty or "datum" not in signal_frame.columns or "incidence" not in signal_frame.columns:
+            return 0.0
+        visible = signal_frame.loc[
+            pd.to_datetime(signal_frame["datum"], errors="coerce").dt.normalize()
+            <= pd.Timestamp(cutoff).normalize()
+        ]
+        if visible.empty:
+            return 0.0
+        value = pd.to_numeric(visible.iloc[-1].get("incidence"), errors="coerce")
+        return float(value) if pd.notna(value) else 0.0
+
+    level = _latest(as_of)
+    lag_1 = _latest(as_of - pd.Timedelta(days=7))
+    lag_2 = _latest(as_of - pd.Timedelta(days=14))
+    lag_3 = _latest(as_of - pd.Timedelta(days=21))
+    baseline_frame = (
+        signal_frame.loc[
+            pd.to_datetime(signal_frame["datum"], errors="coerce").dt.normalize()
+            <= as_of - pd.Timedelta(days=7)
+        ]
+        if not signal_frame.empty and "datum" in signal_frame.columns
+        else signal_frame
+    )
+    values = (
+        pd.to_numeric(baseline_frame.get("incidence"), errors="coerce").dropna().to_numpy()
+        if not baseline_frame.empty and "incidence" in baseline_frame.columns
+        else np.array([], dtype=float)
+    )
+    baseline = float(np.median(values)) if len(values) else 0.0
+    mad = float(np.median(np.abs(values - baseline))) if len(values) else 1.0
+    return {
+        f"{prefix}_available": float(not signal_frame.empty),
+        f"{prefix}_level": float(level),
+        f"{prefix}_incidence_lag_1": float(lag_1),
+        f"{prefix}_incidence_lag_2": float(lag_2),
+        f"{prefix}_momentum_1w": float((level - lag_1) / max(abs(lag_1), 1.0)),
+        f"{prefix}_delta_1w": float(lag_1 - lag_2),
+        f"{prefix}_delta_2w": float(lag_2 - lag_3),
+        f"{prefix}_growth_z": float((lag_1 - baseline) / max(mad, 1.0)),
+        f"{prefix}_missing": float(signal_frame.empty),
+    }
 
 
 def build_rows(
@@ -104,74 +287,90 @@ def build_rows(
         for state, frame in wastewater_by_state.items()
     }
 
-    rows: list[dict[str, Any]] = []
-    for state in sorted(set(wastewater_by_state) & set(truth_by_state)):
-        ww_frame = wastewater_by_state[state]
-        truth_frame = truth_by_state[state]
-        candidate_dates = ww_frame.loc[
-            (ww_frame["datum"] >= start_date) & (ww_frame["datum"] <= end_date),
-            "datum",
-        ].drop_duplicates().sort_values()
+    if include_targets:
+        issue_calendar = _build_issue_calendar(
+            start_date=start_date,
+            end_date=end_date,
+            horizon_days=horizon,
+        )
+    else:
+        issue_calendar = _build_state_issue_calendar(
+            wastewater_by_state=wastewater_by_state,
+            start_date=start_date,
+            end_date=end_date,
+            horizon_days=horizon,
+        )
 
-        for as_of in candidate_dates:
-            visible_ww = ww_frame.loc[
-                (ww_frame["datum"] <= as_of) & (ww_frame["available_time"] <= as_of)
-            ].copy()
+    rows: list[dict[str, Any]] = []
+    for issue in issue_calendar.itertuples(index=False):
+        issue_week_start = pd.Timestamp(issue.forecast_issue_week_start).normalize()
+        cutoff = pd.Timestamp(issue.forecast_issue_cutoff_date).normalize()
+        target_week_start = pd.Timestamp(issue.target_week_start).normalize()
+        target_date = builder._target_date(cutoff, horizon)
+
+        latest_ww_snapshot = builder._latest_wastewater_snapshot_by_state(wastewater_by_state, cutoff)
+        latest_cross_virus_snapshots = {
+            candidate_virus: builder._latest_wastewater_snapshot_by_state(candidate_frames, cutoff)
+            for candidate_virus, candidate_frames in wastewater_context_by_virus_state.items()
+            if candidate_virus != virus_typ
+        }
+        issue_state = getattr(issue, "bundesland", None)
+        states = (
+            [str(issue_state)]
+            if issue_state is not None and not pd.isna(issue_state)
+            else ALL_BUNDESLAENDER
+        )
+
+        for state in states:
+            ww_frame = wastewater_by_state.get(state)
+            truth_frame = truth_by_state.get(state)
+            if ww_frame is None or truth_frame is None:
+                continue
+
+            visible_ww = _visible_asof_frame(ww_frame, cutoff=cutoff)
             if len(visible_ww) < 8:
                 continue
 
-            visible_truth = truth_frame.loc[truth_frame["available_date"] <= as_of].copy()
+            visible_truth = _visible_asof_frame(
+                truth_frame,
+                cutoff=cutoff,
+                date_column="week_start",
+            )
             if len(visible_truth) < 8:
                 continue
 
             visible_grippeweb_state = {
-                signal_type: builder._visible_signal_frame(
+                signal_type: _visible_asof_frame(
                     grippeweb_by_state.get((signal_type, state)),
-                    as_of=as_of,
+                    cutoff=cutoff,
                 )
                 for signal_type in ("ARE", "ILI")
             }
             visible_grippeweb_national = {
-                signal_type: builder._visible_signal_frame(
+                signal_type: _visible_asof_frame(
                     grippeweb_national.get(signal_type),
-                    as_of=as_of,
+                    cutoff=cutoff,
                 )
                 for signal_type in ("ARE", "ILI")
             }
-            visible_influenza_ifsg = builder._visible_signal_frame(
+            visible_influenza_ifsg = _visible_asof_frame(
                 influenza_by_state.get(state),
-                as_of=as_of,
+                cutoff=cutoff,
             )
-            visible_rsv_ifsg = builder._visible_signal_frame(
+            visible_rsv_ifsg = _visible_asof_frame(
                 rsv_by_state.get(state),
-                as_of=as_of,
+                cutoff=cutoff,
             )
-            are_frame = are_by_state.get(state)
-            if are_frame is not None and not are_frame.empty:
-                visible_are = are_frame.loc[
-                    (are_frame["datum"] <= as_of) & (are_frame["available_time"] <= as_of)
-                ].copy()
-            else:
-                visible_are = pd.DataFrame()
-
-            if national_notaufnahme is not None and not national_notaufnahme.empty:
-                visible_notaufnahme = national_notaufnahme.loc[
-                    (national_notaufnahme["datum"] <= as_of)
-                    & (national_notaufnahme["available_time"] <= as_of)
-                ].copy()
-            else:
-                visible_notaufnahme = pd.DataFrame()
+            visible_are = _visible_asof_frame(are_by_state.get(state), cutoff=cutoff)
+            visible_notaufnahme = _visible_asof_frame(national_notaufnahme, cutoff=cutoff)
 
             if national_trends is not None and not national_trends.empty:
                 visible_trends = observed_as_of_only_rows(
-                    national_trends,
-                    as_of=as_of,
+                    _visible_asof_frame(national_trends, cutoff=cutoff),
+                    as_of=cutoff,
                 )
             else:
                 visible_trends = pd.DataFrame()
-
-            target_date = builder._target_date(as_of, horizon)
-            target_week_start = builder._target_week_start(as_of, horizon)
 
             target_row = truth_frame.loc[truth_frame["week_start"] == target_week_start]
 
@@ -182,7 +381,7 @@ def build_rows(
                 source_id=truth_source,
                 signal_id=truth_source,
                 frame=visible_truth,
-                as_of_date=as_of,
+                as_of_date=cutoff,
                 value_column="incidence",
                 reference_column="week_start",
                 available_column="available_date",
@@ -205,16 +404,10 @@ def build_rows(
                 max_history_weeks=event_config.baseline_max_history_weeks,
                 upper_quantile_cap=event_config.baseline_upper_quantile_cap,
             )
-            latest_ww_snapshot = builder._latest_wastewater_snapshot_by_state(wastewater_by_state, as_of)
-            latest_cross_virus_snapshots = {
-                candidate_virus: builder._latest_wastewater_snapshot_by_state(candidate_frames, as_of)
-                for candidate_virus, candidate_frames in wastewater_context_by_virus_state.items()
-                if candidate_virus != virus_typ
-            }
             feature_row = builder._build_feature_row(
                 virus_typ=virus_typ,
                 state=state,
-                as_of=as_of,
+                as_of=cutoff,
                 visible_ww=visible_ww,
                 visible_truth=visible_truth,
                 visible_grippeweb_state=visible_grippeweb_state,
@@ -251,9 +444,11 @@ def build_rows(
                 "virus_typ": virus_typ,
                 "bundesland": state,
                 "bundesland_name": BUNDESLAND_NAMES.get(state, state),
-                "as_of_date": pd.Timestamp(as_of).normalize(),
+                "as_of_date": cutoff,
+                "forecast_issue_week_start": issue_week_start,
+                "forecast_issue_cutoff_date": cutoff,
                 "target_date": pd.Timestamp(target_date).normalize(),
-                "target_week_start": pd.Timestamp(target_week_start).normalize(),
+                "target_week_start": target_week_start,
                 "target_window_days": [horizon, horizon],
                 "horizon_days": horizon,
                 "event_definition_version": EVENT_DEFINITION_VERSION,
@@ -270,6 +465,61 @@ def build_rows(
                 ),
                 "seasonal_baseline": float(baseline),
                 "seasonal_mad": float(mad),
+                "ww_feature_age_days": _feature_age_days(visible_ww, cutoff=cutoff),
+                "truth_feature_age_days": _feature_age_days(
+                    visible_truth,
+                    cutoff=cutoff,
+                    date_column="week_start",
+                ),
+                "ww_feature_missing": float(visible_ww.empty),
+                "truth_feature_missing": float(visible_truth.empty),
+                "grippeweb_are_feature_age_days": _feature_age_days(
+                    visible_grippeweb_state.get("ARE"),
+                    cutoff=cutoff,
+                ),
+                "grippeweb_are_feature_missing": _feature_missing(
+                    visible_grippeweb_state.get("ARE")
+                ),
+                "grippeweb_ili_feature_age_days": _feature_age_days(
+                    visible_grippeweb_state.get("ILI"),
+                    cutoff=cutoff,
+                ),
+                "grippeweb_ili_feature_missing": _feature_missing(
+                    visible_grippeweb_state.get("ILI")
+                ),
+                "grippeweb_are_national_feature_age_days": _feature_age_days(
+                    visible_grippeweb_national.get("ARE"),
+                    cutoff=cutoff,
+                ),
+                "grippeweb_are_national_feature_missing": _feature_missing(
+                    visible_grippeweb_national.get("ARE")
+                ),
+                "grippeweb_ili_national_feature_age_days": _feature_age_days(
+                    visible_grippeweb_national.get("ILI"),
+                    cutoff=cutoff,
+                ),
+                "grippeweb_ili_national_feature_missing": _feature_missing(
+                    visible_grippeweb_national.get("ILI")
+                ),
+                "ifsg_influenza_feature_age_days": _feature_age_days(
+                    visible_influenza_ifsg,
+                    cutoff=cutoff,
+                ),
+                "ifsg_influenza_feature_missing": _feature_missing(visible_influenza_ifsg),
+                "ifsg_rsv_feature_age_days": _feature_age_days(
+                    visible_rsv_ifsg,
+                    cutoff=cutoff,
+                ),
+                "ifsg_rsv_feature_missing": _feature_missing(visible_rsv_ifsg),
+                "are_feature_age_days": _feature_age_days(visible_are, cutoff=cutoff),
+                "are_feature_missing": _feature_missing(visible_are),
+                "notaufnahme_feature_age_days": _feature_age_days(
+                    visible_notaufnahme,
+                    cutoff=cutoff,
+                ),
+                "notaufnahme_feature_missing": _feature_missing(visible_notaufnahme),
+                "trends_feature_age_days": _feature_age_days(visible_trends, cutoff=cutoff),
+                "trends_feature_missing": _feature_missing(visible_trends),
                 **feature_row,
             }
             rows.append(row_payload)
@@ -426,6 +676,10 @@ def build_feature_row(
         revision_policy=revision_policy,
         source_revision_policy=source_revision_policy,
     )
+    are_context_features = builder._are_context_features(
+        as_of=as_of,
+        visible_are=visible_are,
+    )
     sars_context_features = builder._sars_context_features(
         virus_typ=virus_typ,
         state=state,
@@ -540,6 +794,7 @@ def build_feature_row(
         **cross_virus_features,
         **grippeweb_features,
         **virus_specific_ifsg_features,
+        **are_context_features,
         **sars_context_features,
         **nowcast_features,
     }

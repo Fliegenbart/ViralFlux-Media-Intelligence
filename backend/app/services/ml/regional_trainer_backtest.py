@@ -62,6 +62,7 @@ LOSS_METRICS: frozenset[str] = frozenset(
 )
 BOOTSTRAP_RANDOM_SEED = 42
 BOOTSTRAP_ITERATIONS = 2000
+MIN_EVALUABLE_PANEL_WEEKS = 12
 
 
 def _json_safe(value: Any) -> Any:
@@ -507,6 +508,10 @@ def build_backtest_bundle(
         virus_typ=virus_typ,
         horizon_days=horizon_days,
     )
+    quality_gate = _quality_gate_with_panel_evaluation_check(
+        quality_gate,
+        panel_evaluation,
+    )
     backtest_payload = trainer._build_backtest_payload(
         frame=oof_frame,
         aggregate_metrics=aggregate,
@@ -852,46 +857,114 @@ def _build_panel_evaluation(
     universe = list(region_universe or ALL_BUNDESLAENDER)
     universe_set = set(universe)
     rows: list[dict[str, Any]] = []
+    diagnostics = {
+        "issue_calendar_type": "weekly_shared_issue_calendar",
+        "feature_asof_policy": "latest_available_at_or_before_cutoff",
+        "target_join_policy": "weekly_target_week_start",
+        "forecast_target_semantics": "day_horizon_to_weekly_target",
+        "target_week_start_formula": "week_start(forecast_issue_cutoff_date + horizon_days)",
+    }
     if frame.empty or "bundesland" not in frame.columns or "as_of_date" not in frame.columns:
         return {
             "schema_version": "panel_evaluation_v1",
+            **diagnostics,
             "region_universe": universe,
             "expected_region_count": len(universe),
             "rows": rows,
         }
 
     working = frame.copy()
-    working["_forecast_issue_date"] = working["as_of_date"].map(_date_key)
+    if "forecast_issue_cutoff_date" in working.columns:
+        working["_forecast_issue_cutoff_date"] = working["forecast_issue_cutoff_date"].map(_date_key)
+    elif "forecast_issue_date" in working.columns:
+        working["_forecast_issue_cutoff_date"] = working["forecast_issue_date"].map(_date_key)
+    else:
+        working["_forecast_issue_cutoff_date"] = working["as_of_date"].map(_date_key)
+
+    if "forecast_issue_week_start" in working.columns:
+        working["_forecast_issue_week_start"] = working["forecast_issue_week_start"].map(_date_key)
+    else:
+        working["_forecast_issue_week_start"] = working["_forecast_issue_cutoff_date"].map(
+            lambda value: _date_key(
+                pd.Timestamp(value) - pd.Timedelta(days=int(pd.Timestamp(value).weekday()))
+            )
+            if value
+            else None
+        )
+
     if "target_week_start" in working.columns:
         working["_target_week_start"] = working["target_week_start"].map(_date_key)
     else:
-        working["_target_week_start"] = working["_forecast_issue_date"]
+        working["_target_week_start"] = working["_forecast_issue_cutoff_date"]
 
-    for (issue_date, target_week_start), panel in working.groupby(
-        ["_forecast_issue_date", "_target_week_start"],
+    working["_virus"] = (
+        working["virus_typ"].astype(str)
+        if "virus_typ" in working.columns
+        else pd.Series([None] * len(working), index=working.index)
+    )
+    working["_horizon_days"] = (
+        working["horizon_days"].map(lambda value: int(value) if not pd.isna(value) else None)
+        if "horizon_days" in working.columns
+        else pd.Series([None] * len(working), index=working.index)
+    )
+
+    for (
+        virus,
+        horizon_days,
+        issue_week_start,
+        issue_cutoff_date,
+        target_week_start,
+    ), panel in working.groupby(
+        [
+            "_virus",
+            "_horizon_days",
+            "_forecast_issue_week_start",
+            "_forecast_issue_cutoff_date",
+            "_target_week_start",
+        ],
         dropna=False,
     ):
-        if not issue_date:
+        if not issue_cutoff_date:
             continue
         panel = panel.copy()
         panel["bundesland"] = panel["bundesland"].astype(str)
         scored_panel = panel.loc[panel["bundesland"].isin(universe_set)].copy()
-        scored_regions = sorted(
-            scored_panel["bundesland"].dropna().astype(str).unique().tolist()
-        )
-        scored_region_set = set(scored_regions)
-        missing_regions = [code for code in universe if code not in scored_region_set]
+        present_regions = set(scored_panel["bundesland"].dropna().astype(str).unique().tolist())
 
         score_col = (
             "event_probability_calibrated"
             if "event_probability_calibrated" in scored_panel.columns
             else "event_probability_raw"
         )
-        scored_for_rank = (
-            scored_panel.loc[scored_panel[score_col].notna()].copy()
+        has_score = (
+            scored_panel[score_col].notna()
             if score_col in scored_panel.columns
-            else scored_panel.iloc[0:0].copy()
+            else pd.Series(False, index=scored_panel.index)
         )
+        has_truth = (
+            scored_panel["event_label"].notna()
+            if "event_label" in scored_panel.columns
+            else pd.Series(False, index=scored_panel.index)
+        )
+        scored_for_rank = scored_panel.loc[has_score & has_truth].copy()
+        scored_regions = sorted(
+            scored_for_rank["bundesland"].dropna().astype(str).unique().tolist()
+        )
+        scored_region_set = set(scored_regions)
+        missing_regions = [code for code in universe if code not in scored_region_set]
+        missing_region_reasons = {}
+        for code in missing_regions:
+            if code not in present_regions:
+                missing_region_reasons[code] = "missing_panel_row"
+                continue
+            region_rows = scored_panel.loc[scored_panel["bundesland"] == code]
+            if score_col not in region_rows.columns or region_rows[score_col].isna().all():
+                missing_region_reasons[code] = "missing_model_score"
+            elif "event_label" not in region_rows.columns or region_rows["event_label"].isna().all():
+                missing_region_reasons[code] = "missing_truth_label"
+            else:
+                missing_region_reasons[code] = "not_scored"
+
         predicted_top3: list[dict[str, Any]] = []
         if not scored_for_rank.empty and score_col in scored_for_rank.columns:
             top_model = scored_for_rank.sort_values(score_col, ascending=False).head(3)
@@ -904,10 +977,10 @@ def _build_panel_evaluation(
             ]
 
         observed_event_regions: list[str] = []
-        if "event_label" in scored_panel.columns:
+        if "event_label" in scored_for_rank.columns:
             observed_event_regions = sorted(
-                scored_panel.loc[
-                    scored_panel["event_label"].astype(int) == 1,
+                scored_for_rank.loc[
+                    scored_for_rank["event_label"].astype(int) == 1,
                     "bundesland",
                 ]
                 .dropna()
@@ -918,9 +991,9 @@ def _build_panel_evaluation(
 
         persistence_top3: list[dict[str, Any]] = []
         persistence_was_hit: bool | None = None
-        if "current_known_incidence" in scored_panel.columns:
-            persistence_scored = scored_panel.loc[
-                scored_panel["current_known_incidence"].notna()
+        if "current_known_incidence" in scored_for_rank.columns:
+            persistence_scored = scored_for_rank.loc[
+                scored_for_rank["current_known_incidence"].notna()
             ].copy()
             if len(persistence_scored) == len(scored_regions):
                 top_persistence = persistence_scored.sort_values(
@@ -943,18 +1016,19 @@ def _build_panel_evaluation(
         observed_event_count = len(observed_event_regions)
         rows.append(
             {
-                "virus": str(scored_panel["virus_typ"].iloc[0])
-                if "virus_typ" in scored_panel.columns and not scored_panel.empty
+                "virus": str(virus) if virus is not None and not pd.isna(virus) else None,
+                "horizon_days": int(horizon_days)
+                if horizon_days is not None and not pd.isna(horizon_days)
                 else None,
-                "horizon_days": int(scored_panel["horizon_days"].iloc[0])
-                if "horizon_days" in scored_panel.columns and not scored_panel.empty
-                else None,
-                "forecast_issue_date": str(issue_date)[:10],
-                "forecast_issue_week": str(issue_date)[:10],
-                "target_week_start": str(target_week_start or issue_date)[:10],
+                "forecast_issue_date": str(issue_cutoff_date)[:10],
+                "forecast_issue_week": str(issue_week_start or issue_cutoff_date)[:10],
+                "forecast_issue_week_start": str(issue_week_start or issue_cutoff_date)[:10],
+                "forecast_issue_cutoff_date": str(issue_cutoff_date)[:10],
+                "target_week_start": str(target_week_start or issue_cutoff_date)[:10],
                 "region_universe": universe,
                 "scored_regions": scored_regions,
                 "missing_regions": missing_regions,
+                "missing_region_reasons": missing_region_reasons,
                 "scored_region_count": scored_region_count,
                 "expected_region_count": len(universe),
                 "observed_event_regions": observed_event_regions,
@@ -977,12 +1051,14 @@ def _build_panel_evaluation(
 
     rows.sort(
         key=lambda row: (
-            row.get("forecast_issue_date") or "",
+            row.get("forecast_issue_week_start") or "",
+            row.get("forecast_issue_cutoff_date") or "",
             row.get("target_week_start") or "",
         )
     )
     return {
         "schema_version": "panel_evaluation_v1",
+        **diagnostics,
         "region_universe": universe,
         "expected_region_count": len(universe),
         "rows": _json_safe(rows),
@@ -1007,6 +1083,43 @@ def _panel_precision_at_top3(
         sum(1 for row in evaluable if bool(row.get(hit_key))) / len(evaluable),
         6,
     )
+
+
+def _quality_gate_with_panel_evaluation_check(
+    quality_gate: dict[str, Any],
+    panel_evaluation: dict[str, Any],
+    *,
+    min_evaluable_panel_weeks: int = MIN_EVALUABLE_PANEL_WEEKS,
+) -> dict[str, Any]:
+    rows = [
+        row for row in panel_evaluation.get("rows") or []
+        if isinstance(row, dict)
+    ]
+    evaluable = [
+        row for row in rows
+        if row.get("is_evaluable_top3_panel")
+    ]
+    checks = dict(quality_gate.get("checks") or {})
+    checks["min_evaluable_panel_weeks_passed"] = (
+        len(evaluable) >= int(min_evaluable_panel_weeks)
+    )
+    thresholds = dict(quality_gate.get("thresholds") or {})
+    thresholds["min_evaluable_panel_weeks"] = int(min_evaluable_panel_weeks)
+    failed_checks = [key for key, passed in checks.items() if not bool(passed)]
+    overall_passed = all(bool(passed) for passed in checks.values())
+    return {
+        **quality_gate,
+        "overall_passed": bool(overall_passed),
+        "forecast_readiness": "GO" if overall_passed else "WATCH",
+        "checks": checks,
+        "failed_checks": failed_checks,
+        "thresholds": thresholds,
+        "panel_evaluation_summary": {
+            "evaluable_panel_weeks": len(evaluable),
+            "panel_rows": len(rows),
+            "min_evaluable_panel_weeks": int(min_evaluable_panel_weeks),
+        },
+    }
 
 
 def build_backtest_payload(

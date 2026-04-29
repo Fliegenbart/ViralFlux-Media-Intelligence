@@ -310,7 +310,11 @@ BUNDESLAND_NAMES: dict[str, str] = {
     "TH": "Thüringen",
 }
 
-STATE_NAME_TO_CODE = {name: code for code, name in BUNDESLAND_NAMES.items()}
+STATE_NAME_TO_CODE = {
+    **{name: code for code, name in BUNDESLAND_NAMES.items()},
+    "Baden-Wuerttemberg": "BW",
+    "Thueringen": "TH",
+}
 
 CITY_TO_BUNDESLAND: dict[str, str] = {
     "Berlin": "BE",

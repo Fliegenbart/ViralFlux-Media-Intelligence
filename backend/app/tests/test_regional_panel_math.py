@@ -17,6 +17,7 @@ from app.services.ml.regional_panel_utils import (
     event_definition_config_for_virus,
     first_week_start_in_window,
     median_lead_days,
+    normalize_state_code,
     precision_at_k,
     quality_gate_from_metrics,
     seasonal_baseline_and_mad,
@@ -33,6 +34,10 @@ class RegionalPanelMathTests(unittest.TestCase):
         reference = datetime(2026, 3, 3)
         effective = effective_available_time(reference, None, lag_days=7)
         self.assertEqual(str(effective.date()), "2026-03-10")
+
+    def test_normalize_state_code_accepts_ascii_umlaut_spellings(self) -> None:
+        self.assertEqual(normalize_state_code("Baden-Wuerttemberg"), "BW")
+        self.assertEqual(normalize_state_code("Thueringen"), "TH")
 
     def test_first_week_start_in_window_returns_week_inside_3_to_7_day_range(self) -> None:
         as_of = pd.Timestamp("2026-03-06")

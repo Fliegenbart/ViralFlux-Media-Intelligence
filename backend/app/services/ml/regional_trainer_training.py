@@ -143,6 +143,13 @@ def train_single_horizon(
             "horizon_days": horizon,
             "target_window_days": target_window_for_horizon_fn(horizon),
         }
+        signal_bundle_metadata = trainer.feature_builder.signal_bundle_metadata(
+            virus_typ=virus_typ,
+            panel=panel,
+            feature_columns=feature_columns,
+        )
+        dataset_manifest.update(json_safe_fn(signal_bundle_metadata))
+        point_in_time_manifest.update(json_safe_fn(signal_bundle_metadata))
         primary_weather_vintage_summary = trainer._weather_vintage_mode_summary(
             weather_forecast_vintage_mode=normalize_weather_forecast_vintage_mode_fn(
                 dataset_manifest.get("weather_forecast_vintage_mode")
@@ -241,7 +248,11 @@ def train_single_horizon(
             "horizon_days": horizon,
             "target_window_days": target_window_for_horizon_fn(horizon),
             "supported_horizon_days": list(supported_forecast_horizons),
-            "forecast_target_semantics": "current_known_incidence_at_as_of_plus_horizon_days",
+            "forecast_target_semantics": signal_bundle_metadata.get("forecast_target_semantics"),
+            "target_week_start_formula": signal_bundle_metadata.get("target_week_start_formula"),
+            "issue_calendar_type": signal_bundle_metadata.get("issue_calendar_type"),
+            "feature_asof_policy": signal_bundle_metadata.get("feature_asof_policy"),
+            "target_join_policy": signal_bundle_metadata.get("target_join_policy"),
             "metric_semantics_version": default_metric_semantics_version,
             "science_contract_version": science_contract_metadata["science_contract_version"],
             "quantile_grid_version": science_contract_metadata["quantile_grid_version"],
@@ -251,6 +262,11 @@ def train_single_horizon(
             "event_feature_columns": event_feature_columns,
             "hierarchy_feature_columns": hierarchy_feature_columns,
             "ww_only_feature_columns": ww_only_columns,
+            "active_feature_families": signal_bundle_metadata.get("active_feature_families") or [],
+            "feature_family_columns": signal_bundle_metadata.get("feature_family_columns") or {},
+            "source_lineage": signal_bundle_metadata.get("source_lineage") or {},
+            "max_source_week": signal_bundle_metadata.get("max_source_week"),
+            "max_data_age_days": signal_bundle_metadata.get("max_data_age_days"),
             "selected_tau": tau,
             "selected_kappa": kappa,
             "action_threshold": action_threshold,
@@ -377,6 +393,7 @@ def train_single_horizon(
         metadata["promotion_evidence"] = promotion_evidence
         metadata["registry_status"] = "champion" if promote else "challenger"
         metadata["registry_scope"] = registry_payload
+        backtest_bundle["backtest_payload"].update(json_safe_fn(signal_bundle_metadata))
         backtest_bundle["backtest_payload"]["hierarchy_reconciliation"] = json_safe_fn(hierarchy_metadata)
         backtest_bundle["backtest_payload"]["promotion_evidence"] = json_safe_fn(promotion_evidence)
         if weather_vintage_comparison_payload is not None:

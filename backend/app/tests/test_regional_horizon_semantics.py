@@ -60,34 +60,35 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
         self.assertFalse(sars["pilot_supported"])
         self.assertIn("shadow-only", sars["reason"])
 
-    def test_prepare_horizon_panel_uses_future_current_incidence_as_target(self) -> None:
+    def test_prepare_horizon_panel_keeps_weekly_target_incidence_without_exact_future_date(self) -> None:
         panel = pd.DataFrame(
             {
-                "bundesland": ["BY", "BY", "BY"],
+                "bundesland": ["BY"],
                 "as_of_date": [
                     pd.Timestamp("2026-03-01"),
-                    pd.Timestamp("2026-03-04"),
-                    pd.Timestamp("2026-03-07"),
                 ],
                 "target_date": [
-                    pd.Timestamp("2026-03-04"),
-                    pd.Timestamp("2026-03-07"),
-                    pd.Timestamp("2026-03-10"),
+                    pd.Timestamp("2026-03-08"),
                 ],
-                "target_window_days": [[3, 3], [3, 3], [3, 3]],
-                "current_known_incidence": [10.0, 16.0, 22.0],
-                "truth_source": ["survstat_kreis", "survstat_kreis", "survstat_kreis"],
-                "f1": [1.0, 2.0, 3.0],
+                "target_week_start": [
+                    pd.Timestamp("2026-03-02"),
+                ],
+                "target_window_days": [[7, 7]],
+                "current_known_incidence": [10.0],
+                "next_week_incidence": [22.0],
+                "truth_source": ["survstat_kreis"],
+                "f1": [1.0],
             }
         )
 
-        prepared = RegionalModelTrainer._prepare_horizon_panel(panel, horizon_days=3)
+        prepared = RegionalModelTrainer._prepare_horizon_panel(panel, horizon_days=7)
 
-        self.assertEqual(len(prepared), 2)
-        self.assertEqual(prepared.iloc[0]["next_week_incidence"], 16.0)
-        self.assertEqual(prepared.iloc[1]["next_week_incidence"], 22.0)
-        self.assertEqual(prepared.iloc[0]["target_window_days"], [3, 3])
-        self.assertEqual(prepared.iloc[0]["horizon_days"], 3.0)
+        self.assertEqual(len(prepared), 1)
+        self.assertEqual(prepared.iloc[0]["next_week_incidence"], 22.0)
+        self.assertEqual(prepared.iloc[0]["target_incidence"], 22.0)
+        self.assertEqual(prepared.iloc[0]["target_week_start"], pd.Timestamp("2026-03-02"))
+        self.assertEqual(prepared.iloc[0]["target_window_days"], [7, 7])
+        self.assertEqual(prepared.iloc[0]["horizon_days"], 7.0)
 
     def test_feature_columns_exclude_training_only_target_incidence(self) -> None:
         panel = pd.DataFrame(
@@ -95,6 +96,8 @@ class RegionalHorizonSemanticsTests(unittest.TestCase):
                 "bundesland": ["BY"],
                 "bundesland_name": ["Bayern"],
                 "as_of_date": [pd.Timestamp("2026-03-01")],
+                "forecast_issue_week_start": [pd.Timestamp("2026-02-23")],
+                "forecast_issue_cutoff_date": [pd.Timestamp("2026-03-01")],
                 "target_date": [pd.Timestamp("2026-03-04")],
                 "target_week_start": [pd.Timestamp("2026-03-02")],
                 "target_window_days": [[3, 3]],

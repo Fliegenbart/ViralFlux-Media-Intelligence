@@ -156,6 +156,125 @@ def _data_quality_label(predictions: Iterable[Mapping[str, Any]]) -> str:
     return "good"
 
 
+def _live_data_quality_passed(predictions: Iterable[Mapping[str, Any]]) -> bool:
+    rows = list(predictions)
+    if not rows:
+        return False
+    return all(row.get("regional_data_fresh", True) and not row.get("coverage_blockers") for row in rows)
+
+
+def _live_data_observed(predictions: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    rows = list(predictions)
+    stale_regions = [
+        str(row.get("bundesland") or row.get("region_code") or "")
+        for row in rows
+        if not row.get("regional_data_fresh", True)
+    ]
+    blocker_regions = [
+        str(row.get("bundesland") or row.get("region_code") or "")
+        for row in rows
+        if row.get("coverage_blockers")
+    ]
+    return {
+        "regions": len(rows),
+        "stale_regions": sorted(region for region in stale_regions if region),
+        "coverage_blocker_regions": sorted(region for region in blocker_regions if region),
+    }
+
+
+def _build_gate_evaluations(
+    *,
+    forecast_gate_passed: bool,
+    live_data_gate_passed: bool,
+    decision_backtest_passed: bool,
+    business_constraints_passed: bool,
+    insufficient_evidence: bool,
+    model_worse_than_persistence: bool,
+    readiness: str,
+    blockers: list[str],
+    warnings: list[str],
+    evaluable_weeks: int,
+    card: Mapping[str, Any],
+    predictions: list[Mapping[str, Any]],
+    decision_backtest: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    forecast_status = "passed" if forecast_gate_passed else "warning" if insufficient_evidence and not model_worse_than_persistence and not blockers else "failed"
+    backtest_threshold = _safe_float(decision_backtest.get("min_regret_reduction"), 0.03)
+    backtest_observed = {
+        "decision_backtest_passed": bool(decision_backtest_passed),
+        "regret_reduction_vs_static": decision_backtest.get("regret_reduction_vs_static"),
+        "regret_reduction_vs_current_incidence": decision_backtest.get("regret_reduction_vs_current_incidence"),
+        "model_rank_among_strategies": decision_backtest.get("model_rank_among_strategies"),
+    }
+    return [
+        {
+            "gate": "forecast_quality",
+            "status": forecast_status,
+            "threshold": {
+                "readiness": "go",
+                "min_evaluable_panel_weeks": MIN_EVALUABLE_PANEL_WEEKS,
+                "hard_blockers": "none",
+            },
+            "observed": {
+                "readiness": readiness,
+                "evaluable_panel_weeks": evaluable_weeks,
+                "blockers": blockers,
+                "warnings": warnings,
+                "quality_gate_overall_passed": _quality_gate_passed(card),
+            },
+            "explanation": "Forecast evidence is spendable only when readiness is go, enough panel weeks exist, and no hard blockers are present.",
+        },
+        {
+            "gate": "baseline_superiority",
+            "status": "failed" if model_worse_than_persistence else "passed",
+            "threshold": {"model_must_beat_persistence": True},
+            "observed": {
+                "model_worse_than_persistence": bool(model_worse_than_persistence),
+                "lift_vs_persistence": card.get("lift_vs_persistence") or {},
+                "lift_vs_baseline_hit_rate": card.get("lift_vs_baseline_hit_rate") or {},
+            },
+            "explanation": "Spending cannot increase when the regional policy does not beat simple persistence baselines.",
+        },
+        {
+            "gate": "live_data_quality",
+            "status": "passed" if live_data_gate_passed else "failed",
+            "threshold": {"regional_data_fresh": True, "coverage_blockers": "none"},
+            "observed": _live_data_observed(predictions),
+            "explanation": "Live regional data must be fresh and complete enough before budget shifts are allowed.",
+        },
+        {
+            "gate": "decision_backtest",
+            "status": "passed" if decision_backtest_passed else "failed",
+            "threshold": {"min_regret_reduction_vs_static": backtest_threshold},
+            "observed": backtest_observed,
+            "explanation": "The MediaSpendingTruth allocation must beat simple allocation baselines on decision backtests.",
+        },
+        {
+            "gate": "business_constraints",
+            "status": "passed" if business_constraints_passed else "blocked",
+            "threshold": {"max_weekly_shift_pct": 15.0, "uncertainty_shift_cap_pct": 5.0},
+            "observed": {"constraints_allow_budget_permission": bool(business_constraints_passed)},
+            "explanation": "Caps and business constraints must allow the recommendation before it becomes spendable.",
+        },
+    ]
+
+
+def _blocked_reasons_from_gates(gate_evaluations: list[Mapping[str, Any]]) -> list[str]:
+    reasons: list[str] = []
+    by_gate = {str(item.get("gate")): item for item in gate_evaluations}
+    if (by_gate.get("forecast_quality") or {}).get("status") == "failed":
+        _append_unique(reasons, "forecast_quality_gate_failed")
+    if (by_gate.get("baseline_superiority") or {}).get("status") == "failed":
+        _append_unique(reasons, "decision_backtest_not_better_than_persistence")
+    if (by_gate.get("live_data_quality") or {}).get("status") == "failed":
+        _append_unique(reasons, "data_quality_insufficient_for_budget_shift")
+    if (by_gate.get("decision_backtest") or {}).get("status") == "failed":
+        _append_unique(reasons, "decision_backtest_not_passed")
+    if (by_gate.get("business_constraints") or {}).get("status") == "blocked":
+        _append_unique(reasons, "business_constraints_block_budget_shift")
+    return reasons
+
+
 def _region_reason_codes(
     *,
     prediction: Mapping[str, Any],
@@ -211,6 +330,10 @@ def _empty_payload(
         "data_quality": "unknown",
         "forecast_evidence": "missing",
         "decision_backtest": {"decision_backtest_passed": False},
+        "blocked_because": [reason],
+        "blockedBecause": [reason],
+        "gate_evaluations": [],
+        "gateEvaluations": [],
         "regions": [],
         "limitations": [reason, "not_for_automatic_budget_execution"],
     }
@@ -259,7 +382,15 @@ def build_media_spending_truth(
     forecast_gate_passed = _quality_gate_passed(card) and not hard_blockers and not model_worse_than_persistence and not insufficient_evidence
     decision_backtest_payload = dict(decision_backtest or {})
     decision_backtest_passed = bool(decision_backtest_payload.get("decision_backtest_passed"))
-    full_spendable = forecast_gate_passed and decision_backtest_passed
+    live_data_gate_passed = _live_data_quality_passed(rows)
+    decision_backtest_hard_fail = forecast_gate_passed and not decision_backtest_passed
+    global_spending_blocked = bool(
+        hard_blockers
+        or model_worse_than_persistence
+        or not live_data_gate_passed
+        or decision_backtest_hard_fail
+    )
+    full_spendable = forecast_gate_passed and decision_backtest_passed and live_data_gate_passed
 
     preliminary_regions: list[dict[str, Any]] = []
     planner_candidates = 0
@@ -293,6 +424,10 @@ def build_media_spending_truth(
             action = "none"
             max_delta = 0.0
         elif model_worse_than_persistence:
+            media_truth = "watch_only"
+            action = "maintain"
+            max_delta = 0.0
+        elif global_spending_blocked:
             media_truth = "watch_only"
             action = "maintain"
             max_delta = 0.0
@@ -381,7 +516,7 @@ def build_media_spending_truth(
             }
         )
 
-    if hard_blockers or model_worse_than_persistence:
+    if global_spending_blocked:
         global_status = "blocked"
     elif full_spendable:
         global_status = "spendable"
@@ -396,6 +531,23 @@ def build_media_spending_truth(
         "planner_assist": "manual_approval_required",
         "spendable": "approved_with_cap",
     }[global_status]
+    business_constraints_passed = True
+    gate_evaluations = _build_gate_evaluations(
+        forecast_gate_passed=forecast_gate_passed,
+        live_data_gate_passed=live_data_gate_passed,
+        decision_backtest_passed=decision_backtest_passed,
+        business_constraints_passed=business_constraints_passed,
+        insufficient_evidence=insufficient_evidence,
+        model_worse_than_persistence=model_worse_than_persistence,
+        readiness=readiness,
+        blockers=blockers,
+        warnings=warnings,
+        evaluable_weeks=evaluable_weeks,
+        card=card,
+        predictions=rows,
+        decision_backtest=decision_backtest_payload,
+    )
+    blocked_because = _blocked_reasons_from_gates(gate_evaluations) if global_status == "blocked" else []
 
     allocation_input = [
         region
@@ -440,6 +592,10 @@ def build_media_spending_truth(
         "data_quality": _data_quality_label(rows),
         "forecast_evidence": "validated" if forecast_gate_passed else "limited" if not hard_blockers else "blocked",
         "decision_backtest": decision_backtest_payload,
+        "blocked_because": blocked_because,
+        "blockedBecause": blocked_because,
+        "gate_evaluations": gate_evaluations,
+        "gateEvaluations": gate_evaluations,
         "forecast_gate": {
             "readiness": readiness,
             "passed": bool(forecast_gate_passed),

@@ -103,6 +103,64 @@ class MediaSpendingTruthTests(unittest.TestCase):
         self.assertLessEqual(region["max_delta_pct"], 5.0)
         self.assertIn("manual_approval_required", region["reason_codes"])
 
+
+    def test_blocked_payload_exposes_gate_reason_matrix(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[_prediction(regional_data_fresh=False, coverage_blockers=["regional_data_stale"])],
+            truth_scoreboard=_scoreboard("blocked", ["artifact_quality_gate_not_passed"], evaluable_weeks=16),
+            decision_backtest={
+                "decision_backtest_passed": False,
+                "regret_reduction_vs_static": -0.02,
+                "min_regret_reduction": 0.05,
+            },
+        )
+
+        self.assertEqual(payload["global_status"], "blocked")
+        self.assertIn("forecast_quality_gate_failed", payload["blocked_because"])
+        self.assertIn("data_quality_insufficient_for_budget_shift", payload["blocked_because"])
+        self.assertIn("decision_backtest_not_passed", payload["blocked_because"])
+        self.assertEqual(payload["blockedBecause"], payload["blocked_because"])
+
+        by_gate = {item["gate"]: item for item in payload["gate_evaluations"]}
+        self.assertEqual(by_gate["forecast_quality"]["status"], "failed")
+        self.assertEqual(by_gate["live_data_quality"]["status"], "failed")
+        self.assertEqual(by_gate["decision_backtest"]["status"], "failed")
+        self.assertIn("threshold", by_gate["decision_backtest"])
+        self.assertIn("observed", by_gate["decision_backtest"])
+        self.assertEqual(payload["gateEvaluations"], payload["gate_evaluations"])
+
+    def test_golden_gate_matrix_blocks_good_forecast_when_decision_backtest_fails(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[_prediction()],
+            truth_scoreboard=_scoreboard("go", [], evaluable_weeks=18),
+            decision_backtest={"decision_backtest_passed": False, "regret_reduction_vs_static": -0.02},
+        )
+
+        region = payload["regions"][0]
+        self.assertEqual(payload["global_status"], "blocked")
+        self.assertIn("decision_backtest_not_passed", payload["blocked_because"])
+        self.assertEqual(region["recommended_delta_pct"], 0.0)
+        self.assertNotEqual(region["recommended_action"], "increase")
+
+    def test_golden_gate_matrix_blocks_bad_live_data_even_when_backtest_passes(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[_prediction(regional_data_fresh=False, coverage_blockers=["regional_data_stale"])],
+            truth_scoreboard=_scoreboard("go", [], evaluable_weeks=18),
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.12},
+        )
+
+        region = payload["regions"][0]
+        self.assertEqual(payload["global_status"], "blocked")
+        self.assertIn("data_quality_insufficient_for_budget_shift", payload["blocked_because"])
+        self.assertEqual(region["media_spending_truth"], "blocked")
+        self.assertEqual(region["recommended_delta_pct"], 0.0)
+
     def test_passed_gates_allow_increase_approved_with_reason_codes(self) -> None:
         payload = build_media_spending_truth(
             virus_typ="Influenza A",

@@ -4075,3 +4075,39 @@ html {
     grid-template-columns: 1fr;
   }
 }
+
+.peix-instr .media-truth-block-explain {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ink-20);
+}
+.peix-instr .media-truth-block-explain p {
+  max-width: 860px;
+  margin: 0;
+  color: var(--slate);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
+.peix-instr .media-truth-block-reasons,
+.peix-instr .media-truth-gates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+}
+.peix-instr .media-truth-block-reasons b,
+.peix-instr .media-truth-gates span {
+  border: 1px dashed var(--ink-20);
+  padding: 4px 7px;
+  color: var(--ink);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}

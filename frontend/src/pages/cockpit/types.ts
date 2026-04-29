@@ -453,6 +453,14 @@ export interface MediaSpendingTruthRegion {
   limitations?: string[];
 }
 
+export interface MediaSpendingTruthGateEvaluation {
+  gate: string;
+  status: 'passed' | 'failed' | 'warning' | 'blocked' | string;
+  threshold?: Record<string, unknown>;
+  observed?: Record<string, unknown>;
+  explanation?: string;
+}
+
 export interface MediaSpendingTruthPayload {
   schema_version: 'media_spending_truth_v1' | string;
   decision_date?: string;
@@ -466,6 +474,10 @@ export interface MediaSpendingTruthPayload {
   decision_policy?: Record<string, unknown>;
   forecast_gate?: Record<string, unknown>;
   decision_backtest?: Record<string, unknown>;
+  blocked_because?: string[];
+  blockedBecause?: string[];
+  gate_evaluations?: MediaSpendingTruthGateEvaluation[];
+  gateEvaluations?: MediaSpendingTruthGateEvaluation[];
   regions: MediaSpendingTruthRegion[];
   limitations?: string[];
 }

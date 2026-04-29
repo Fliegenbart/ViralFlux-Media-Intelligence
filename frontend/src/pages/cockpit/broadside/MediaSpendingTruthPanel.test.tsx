@@ -11,6 +11,19 @@ const basePayload: MediaSpendingTruthPayload = {
   budget_permission: 'blocked',
   forecast_evidence: 'blocked',
   data_quality: 'poor',
+  blocked_because: [
+    'forecast_quality_gate_failed',
+    'decision_backtest_not_passed',
+  ],
+  gate_evaluations: [
+    {
+      gate: 'forecast_quality',
+      status: 'failed',
+      threshold: { readiness: 'go' },
+      observed: { readiness: 'blocked' },
+      explanation: 'Forecast evidence is not spendable yet.',
+    },
+  ],
   regions: [
     {
       region_code: 'NW',
@@ -38,6 +51,9 @@ describe('MediaSpendingTruthPanel', () => {
     expect(screen.getByText('Keine Budgetfreigabe')).toBeInTheDocument();
     expect(screen.getByText('Nordrhein-Westfalen')).toBeInTheDocument();
     expect(screen.getByText('Daten zu alt')).toBeInTheDocument();
+    expect(screen.getByText('Blockiert durch')).toBeInTheDocument();
+    expect(screen.getByText('Forecast-Qualität nicht bestanden')).toBeInTheDocument();
+    expect(screen.getByText(/Regionale Signale werden angezeigt/)).toBeInTheDocument();
   });
 
   it('renders planner-assist suggestions with manual approval', () => {
@@ -49,7 +65,20 @@ describe('MediaSpendingTruthPanel', () => {
           budget_permission: 'manual_approval_required',
           forecast_evidence: 'limited',
           data_quality: 'good',
-          regions: [
+          blocked_because: [
+    'forecast_quality_gate_failed',
+    'decision_backtest_not_passed',
+  ],
+  gate_evaluations: [
+    {
+      gate: 'forecast_quality',
+      status: 'failed',
+      threshold: { readiness: 'go' },
+      observed: { readiness: 'blocked' },
+      explanation: 'Forecast evidence is not spendable yet.',
+    },
+  ],
+  regions: [
             {
               ...basePayload.regions[0],
               media_spending_truth: 'preposition_approved',
@@ -80,7 +109,20 @@ describe('MediaSpendingTruthPanel', () => {
           budget_permission: 'approved_with_cap',
           forecast_evidence: 'validated',
           data_quality: 'good',
-          regions: [
+          blocked_because: [
+    'forecast_quality_gate_failed',
+    'decision_backtest_not_passed',
+  ],
+  gate_evaluations: [
+    {
+      gate: 'forecast_quality',
+      status: 'failed',
+      threshold: { readiness: 'go' },
+      observed: { readiness: 'blocked' },
+      explanation: 'Forecast evidence is not spendable yet.',
+    },
+  ],
+  regions: [
             {
               ...basePayload.regions[0],
               media_spending_truth: 'increase_approved',

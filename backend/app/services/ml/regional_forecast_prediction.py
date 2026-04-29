@@ -11,6 +11,7 @@ from app.services.ml.forecast_science_contract import (
     SCIENCE_CONTRACT_VERSION,
 )
 from app.services.ml.regional_panel_utils import ALL_BUNDESLAENDER
+from app.services.ml.research.viral_pressure_features import build_prediction_viral_pressure_features
 
 
 def _regional_as_of_lag_days(*, run_as_of_date: Any, row_as_of_date: Any, pd_module: Any) -> int:
@@ -634,6 +635,10 @@ def predict_all_regions(
         )
         prediction["reason_trace"] = decision.get("reason_trace") or {}
         prediction["uncertainty_summary"] = str(decision.get("uncertainty_summary") or "")
+        prediction["viral_pressure_features"] = build_prediction_viral_pressure_features(
+            prediction=prediction,
+            feature_row=row.to_dict(),
+        )
         prediction["decision_rank"] = None
         predictions.append(prediction)
 

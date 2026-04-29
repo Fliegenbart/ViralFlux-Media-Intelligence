@@ -2127,6 +2127,44 @@ def build_cockpit_snapshot(
         truth_scoreboard=truth_scoreboard,
     )
 
+
+    media_spending_truth: dict[str, Any] | None = None
+    try:
+        from app.services.media.cockpit.media_spending_truth import build_media_spending_truth
+        from app.services.media.cockpit.spending_decision_backtest import evaluate_spending_decision_backtest_for_scope
+
+        decision_backtest = evaluate_spending_decision_backtest_for_scope(
+            virus_typ=virus_typ,
+            horizon_days=RANKING_HORIZON_DAYS,
+        )
+        if plan_connected:
+            base_budget_by_region = dict(per_bundesland_eur)
+        else:
+            base_budget_by_region = {
+                str(item.get("bundesland")): max(float(item.get("state_population_millions") or 1.0), 0.1) * 1000.0
+                for item in (regional_payload.get("predictions") or [])
+                if item.get("bundesland")
+            }
+        media_spending_truth = build_media_spending_truth(
+            virus_typ=virus_typ,
+            horizon_days=RANKING_HORIZON_DAYS,
+            predictions=list(regional_payload.get("predictions") or []),
+            truth_scoreboard=truth_scoreboard,
+            decision_backtest=decision_backtest,
+            base_budget_by_region=base_budget_by_region,
+            decision_date=generated_at.date(),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("cockpit media spending truth build failed (non-fatal)")
+        notes.append("Media-Spending-Truth konnte für diesen Snapshot nicht berechnet werden.")
+        media_spending_truth = {
+            "schema_version": "media_spending_truth_v1",
+            "global_status": "blocked",
+            "budget_permission": "blocked",
+            "regions": [],
+            "limitations": ["media_spending_truth_build_failed"],
+        }
+
     return {
         "client": client,
         "virusTyp": virus_typ,
@@ -2152,6 +2190,7 @@ def build_cockpit_snapshot(
         "evidenceScore": evidence_score,
         "horizonAlignment": horizon_alignment,
         "truthScoreboard": truth_scoreboard,
+        "mediaSpendingTruth": media_spending_truth,
         "mediaPlan": {
             "connected": plan_connected,
             "totalWeeklySpendEur": total_weekly_spend,

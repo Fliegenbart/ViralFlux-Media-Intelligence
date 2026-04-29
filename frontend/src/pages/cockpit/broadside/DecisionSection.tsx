@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { CockpitSnapshot } from '../types';
 import { fmtEurCompactOrDash, fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
+import MediaSpendingTruthPanel from './MediaSpendingTruthPanel';
 import type { GateTone } from './SectionHeader';
 
 // A region qualifies as a 'strong riser' when its 7-day delta crosses this
@@ -556,6 +557,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
       </div>
 
       <EvidenceScorePanel evidence={snapshot.evidenceScore} />
+      <MediaSpendingTruthPanel truth={snapshot.mediaSpendingTruth} />
 
       {!mediaPlanConnected ? (
         <div className="decision-evidence-row">

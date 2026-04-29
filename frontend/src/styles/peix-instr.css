@@ -3880,3 +3880,198 @@ html {
     min-width: 620px;
   }
 }
+
+
+.peix-instr .media-truth-panel {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--ink-20);
+  border-left: 3px solid var(--ink-40);
+  background: color-mix(in srgb, var(--ink) 2%, transparent);
+}
+.peix-instr .media-truth-panel.media-truth-spendable {
+  border-left-color: var(--oxide, #8b9788);
+}
+.peix-instr .media-truth-panel.media-truth-planner_assist {
+  border-left-color: var(--signal, #c2542a);
+}
+.peix-instr .media-truth-panel.media-truth-blocked,
+.peix-instr .media-truth-panel.media-truth-watch_only {
+  border-left-color: var(--ink);
+}
+.peix-instr .media-truth-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+.peix-instr .media-truth-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+  margin-bottom: 6px;
+}
+.peix-instr .media-truth-head h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.15;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+.peix-instr .media-truth-permission {
+  flex: 0 0 auto;
+  max-width: 240px;
+  padding: 7px 10px;
+  border: 1px solid var(--ink-20);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.25;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.peix-instr .media-truth-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0 0;
+}
+.peix-instr .media-truth-meta div {
+  border-top: 1px solid var(--ink-20);
+  padding-top: 10px;
+}
+.peix-instr .media-truth-meta dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+}
+.peix-instr .media-truth-meta dd {
+  margin: 4px 0 0;
+  font-size: var(--t-small);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.peix-instr .media-truth-regions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.peix-instr .media-truth-region {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--ink-20);
+  background: color-mix(in srgb, white 54%, transparent);
+}
+.peix-instr .media-truth-region.status-increase_approved,
+.peix-instr .media-truth-region.status-preposition_approved {
+  border-top: 3px solid var(--oxide, #8b9788);
+}
+.peix-instr .media-truth-region.status-decrease_approved,
+.peix-instr .media-truth-region.status-cap_or_reduce {
+  border-top: 3px solid var(--signal, #c2542a);
+}
+.peix-instr .media-truth-region.status-blocked,
+.peix-instr .media-truth-region.status-watch_only {
+  border-top: 3px solid var(--ink-40);
+}
+.peix-instr .media-truth-region-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+.peix-instr .media-truth-region-top strong {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.15;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.peix-instr .media-truth-code {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-40);
+}
+.peix-instr .media-truth-delta {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.peix-instr .media-truth-action,
+.peix-instr .media-truth-region-metrics {
+  margin-top: 10px;
+  font-size: var(--t-small);
+  line-height: 1.35;
+  color: var(--slate);
+}
+.peix-instr .media-truth-region-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.peix-instr .media-truth-reasons,
+.peix-instr .media-truth-limits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.peix-instr .media-truth-reasons span,
+.peix-instr .media-truth-limits b {
+  border: 1px dashed var(--ink-20);
+  padding: 4px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.peix-instr .media-truth-limits {
+  align-items: center;
+  color: var(--ink-40);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.peix-instr .media-truth-empty {
+  margin-top: 18px;
+  border-top: 1px solid var(--ink-20);
+  padding-top: 14px;
+  color: var(--slate);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+@media (max-width: 700px) {
+  .peix-instr .media-truth-head {
+    display: block;
+  }
+  .peix-instr .media-truth-permission {
+    margin-top: 12px;
+    max-width: none;
+    text-align: left;
+  }
+  .peix-instr .media-truth-meta {
+    grid-template-columns: 1fr;
+  }
+}

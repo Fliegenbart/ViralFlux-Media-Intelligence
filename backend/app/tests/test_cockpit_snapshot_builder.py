@@ -540,6 +540,15 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self.assertIn("horizonAlignment", payload)
         self.assertIn("truthScoreboard", payload)
 
+
+    def test_snapshot_contains_media_spending_truth_block(self) -> None:
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+        payload = self._build()
+
+        self.assertIn("mediaSpendingTruth", payload)
+        self.assertEqual(payload["mediaSpendingTruth"]["schema_version"], "media_spending_truth_v1")
+        self.assertIn(payload["mediaSpendingTruth"]["global_status"], {"blocked", "watch_only", "planner_assist", "spendable"})
+
     # ---------- timeline ----------
 
     def test_timeline_spans_minus14_to_lead_horizon(self) -> None:

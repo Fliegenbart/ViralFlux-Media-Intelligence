@@ -520,6 +520,27 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(body["batch_summary"]["status"], "failed")
         self.assertEqual(body["issues"][0]["issue_code"], "unsupported_metric_name")
 
+
+    def test_media_spending_truth_endpoint_returns_v1_schema(self) -> None:
+        expected = {
+            "schema_version": "media_spending_truth_v1",
+            "global_status": "watch_only",
+            "budget_permission": "blocked",
+            "regions": [],
+        }
+        with patch(
+            "app.api.media_routes_cockpit_media_spending_truth.build_media_spending_truth_from_forecast",
+            return_value=expected,
+        ) as build_mock:
+            response = self.client.get(
+                "/api/v1/media/cockpit/media-spending-truth?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["schema_version"], "media_spending_truth_v1")
+        build_mock.assert_called_once()
+
     def test_cockpit_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
         with patch(
             "app.services.media.cockpit_service.MediaCockpitService.get_cockpit_payload",

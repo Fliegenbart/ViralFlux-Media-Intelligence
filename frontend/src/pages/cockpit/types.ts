@@ -411,6 +411,65 @@ export interface EvidenceComponent {
   blockers: string[];
 }
 
+
+export type MediaSpendingGlobalStatus =
+  | 'blocked'
+  | 'watch_only'
+  | 'planner_assist'
+  | 'spendable';
+
+export type MediaSpendingBudgetPermission =
+  | 'blocked'
+  | 'manual_approval_required'
+  | 'approved_with_cap';
+
+export type MediaSpendingTruthStatus =
+  | 'increase_approved'
+  | 'preposition_approved'
+  | 'maintain'
+  | 'cap_or_reduce'
+  | 'decrease_approved'
+  | 'watch_only'
+  | 'blocked';
+
+export interface MediaSpendingTruthRegion {
+  region_code: Bundesland | string;
+  region_name: string;
+  media_spending_truth: MediaSpendingTruthStatus | string;
+  budget_permission?: MediaSpendingBudgetPermission | string;
+  recommended_action: string;
+  recommended_delta_pct: number;
+  max_delta_pct: number;
+  surge_probability_7d?: number | null;
+  expected_growth_score?: number | null;
+  confidence: number;
+  budget_opportunity_score: number;
+  forecast_class?: string | null;
+  reason_codes: string[];
+  limiting_factors: string[];
+  manual_approval_required: boolean;
+  planner_assist?: boolean;
+  research_only?: boolean;
+  limitations?: string[];
+}
+
+export interface MediaSpendingTruthPayload {
+  schema_version: 'media_spending_truth_v1' | string;
+  decision_date?: string;
+  valid_until?: string;
+  pathogen_scope?: string;
+  horizon_days?: number;
+  global_status: MediaSpendingGlobalStatus | string;
+  budget_permission: MediaSpendingBudgetPermission | string;
+  data_quality?: string;
+  forecast_evidence?: string;
+  decision_policy?: Record<string, unknown>;
+  forecast_gate?: Record<string, unknown>;
+  decision_backtest?: Record<string, unknown>;
+  regions: MediaSpendingTruthRegion[];
+  limitations?: string[];
+}
+
 export interface EvidenceScore {
   /** 0..100 decision-support score. Not a probability. */
   overallScore: number | null;
@@ -462,6 +521,8 @@ export interface CockpitSnapshot {
   modelStatus: ModelStatus;
   /** Decision-support trust layer: signal + freshness + H5/H7 + business gate. */
   evidenceScore?: EvidenceScore | null;
+  /** MediaSpendingTruth v1: final media-planning action layer. */
+  mediaSpendingTruth?: MediaSpendingTruthPayload | null;
   /** Raw H5/H7 alignment snapshot for future UI drilldowns. */
   horizonAlignment?: unknown;
   /** Always populated — UI uses this to decide whether to show EUR values or "—". */

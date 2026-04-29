@@ -1230,6 +1230,7 @@ class RegionalModelTrainer:
         kappa: float,
         action_threshold: float,
         fold_selection_summary: list[dict[str, Any]],
+        panel_evaluation: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return regional_trainer_backtest.build_backtest_payload(
             self,
@@ -1241,6 +1242,7 @@ class RegionalModelTrainer:
             kappa=kappa,
             action_threshold=action_threshold,
             fold_selection_summary=fold_selection_summary,
+            panel_evaluation=panel_evaluation,
         )
 
     @staticmethod

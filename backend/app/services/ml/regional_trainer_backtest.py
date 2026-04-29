@@ -371,6 +371,7 @@ def build_backtest_bundle(
         raise ValueError("Regional backtest produced no valid folds.")
 
     oof_frame = pd.concat(fold_frames, ignore_index=True)
+    panel_evaluation = _build_panel_evaluation(oof_frame)
     aggregate = trainer._aggregate_metrics(
         frame=oof_frame,
         action_threshold=action_threshold,
@@ -379,6 +380,15 @@ def build_backtest_bundle(
         frame=oof_frame,
         action_threshold=action_threshold,
     )
+    panel_model_precision = _panel_precision_at_top3(panel_evaluation)
+    if panel_model_precision is not None:
+        aggregate["precision_at_top3"] = panel_model_precision
+    panel_persistence_precision = _panel_precision_at_top3(
+        panel_evaluation,
+        hit_key="persistence_was_hit",
+    )
+    if panel_persistence_precision is not None:
+        baselines.setdefault("persistence", {})["precision_at_top3"] = panel_persistence_precision
     benchmark_frame = oof_frame.copy()
     benchmark_frame["candidate"] = "regional_pooled_panel"
     benchmark_frame["y_true"] = benchmark_frame["next_week_incidence"].astype(float)
@@ -506,6 +516,7 @@ def build_backtest_bundle(
         kappa=kappa,
         action_threshold=action_threshold,
         fold_selection_summary=fold_selection_summary,
+        panel_evaluation=panel_evaluation,
     )
     return {
         "oof_frame": oof_frame,
@@ -978,6 +989,26 @@ def _build_panel_evaluation(
     }
 
 
+def _panel_precision_at_top3(
+    panel_evaluation: dict[str, Any],
+    *,
+    hit_key: str = "model_was_hit",
+) -> float | None:
+    rows = [
+        row for row in panel_evaluation.get("rows") or []
+        if row.get("is_evaluable_top3_panel")
+    ]
+    if not rows:
+        return None
+    evaluable = [row for row in rows if row.get(hit_key) is not None]
+    if not evaluable:
+        return None
+    return round(
+        sum(1 for row in evaluable if bool(row.get(hit_key))) / len(evaluable),
+        6,
+    )
+
+
 def build_backtest_payload(
     trainer,
     *,
@@ -989,6 +1020,7 @@ def build_backtest_payload(
     kappa: float,
     action_threshold: float,
     fold_selection_summary: list[dict[str, Any]],
+    panel_evaluation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     details: dict[str, Any] = {}
     ranking = []
@@ -1139,7 +1171,7 @@ def build_backtest_payload(
         delta_vs_amelag_only["forecast_implied"] = forecast_implied_deltas["amelag_only"]
         delta_ci_95["forecast_implied"] = forecast_implied_ci
         fold_metric_deltas["forecast_implied"] = forecast_implied_fold_deltas
-    panel_evaluation = _build_panel_evaluation(frame)
+    panel_evaluation = panel_evaluation or _build_panel_evaluation(frame)
     return {
         "virus_typ": str(frame["virus_typ"].iloc[0]),
         "horizon_days": horizon,

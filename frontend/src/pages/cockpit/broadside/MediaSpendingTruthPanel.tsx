@@ -6,6 +6,9 @@ const STATUS_LABELS: Record<string, string> = {
   watch_only: 'Nur beobachten',
   planner_assist: 'Manuelle Prüfung',
   spendable: 'Freigegeben mit Cap',
+  shadow_only: 'Manuelle Prüfung',
+  limited: 'Limited',
+  approved: 'Freigegeben mit Cap',
   increase_approved: 'Erhöhen freigegeben',
   preposition_approved: 'Früh positionieren',
   maintain: 'Halten',
@@ -17,6 +20,13 @@ const PERMISSION_LABELS: Record<string, string> = {
   blocked: 'Keine Budgetfreigabe',
   manual_approval_required: 'Manuelle Freigabe nötig',
   approved_with_cap: 'Freigegeben mit Cap',
+};
+
+const RELEASE_HELP: Record<string, string> = {
+  blocked: 'Keine verwertbare Media-Empfehlung. Die Ausgabe ist Diagnose, nicht Planung.',
+  shadow_only: 'Empfehlungen werden berechnet, aber kein Budgetdelta ist freigegeben.',
+  limited: 'Kleine budgetneutrale Deltas sind freigegeben, maximal 5 Prozent.',
+  approved: 'Budgetneutrale Deltas sind innerhalb der normalen Caps freigegeben.',
 };
 
 const BLOCKED_REASON_LABELS: Record<string, string> = {
@@ -65,11 +75,28 @@ const reasonLabel = (reason: string): string =>
 const blockedReasonLabel = (reason: string): string =>
   BLOCKED_REASON_LABELS[reason] ?? reason.replace(/_/g, ' ');
 
+const releaseModeFromPayload = (truth: MediaSpendingTruthPayload): string => {
+  if (truth.release_mode || truth.releaseMode || truth.globalDecision) {
+    return truth.release_mode ?? truth.releaseMode ?? truth.globalDecision ?? 'blocked';
+  }
+  if (truth.global_status === 'spendable') return 'approved';
+  if (truth.global_status === 'planner_assist') return 'shadow_only';
+  return truth.global_status || 'blocked';
+};
+
+const approvedDelta = (region: MediaSpendingTruthRegion): number =>
+  region.approved_delta_pct ?? region.approvedDeltaPct ?? region.recommended_delta_pct ?? 0;
+
+const shadowDelta = (region: MediaSpendingTruthRegion): number =>
+  region.shadow_delta_pct ?? region.shadowDeltaPct ?? region.recommended_delta_pct ?? 0;
+
 const sortRegions = (regions: MediaSpendingTruthRegion[]): MediaSpendingTruthRegion[] =>
   [...regions]
     .sort((a, b) => {
-      const deltaGap = Math.abs(b.recommended_delta_pct ?? 0) - Math.abs(a.recommended_delta_pct ?? 0);
-      if (Math.abs(deltaGap) > 0.001) return deltaGap;
+      const approvedGap = Math.abs(approvedDelta(b)) - Math.abs(approvedDelta(a));
+      if (Math.abs(approvedGap) > 0.001) return approvedGap;
+      const shadowGap = Math.abs(shadowDelta(b)) - Math.abs(shadowDelta(a));
+      if (Math.abs(shadowGap) > 0.001) return shadowGap;
       return (b.budget_opportunity_score ?? 0) - (a.budget_opportunity_score ?? 0);
     })
     .slice(0, 5);
@@ -81,32 +108,38 @@ interface Props {
 const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
   if (!truth) return null;
 
-  const status = truth.global_status || 'blocked';
+  const releaseMode = releaseModeFromPayload(truth);
   const permission = truth.budget_permission || 'blocked';
   const regions = sortRegions(truth.regions ?? []);
   const blockedReasons = (truth.blocked_because ?? truth.blockedBecause ?? []).slice(0, 4);
-  const failedGates = (truth.gate_evaluations ?? truth.gateEvaluations ?? [])
-    .filter((gate) => ['failed', 'blocked'].includes(gate.status))
-    .slice(0, 3);
+  const gateTrace = truth.gateTrace ?? truth.gate_evaluations ?? truth.gateEvaluations ?? [];
+  const attentionGates = gateTrace
+    .filter((gate) => ['failed', 'blocked', 'warning', 'insufficient_evidence'].includes(gate.status))
+    .slice(0, 4);
   const hasActions = regions.some(
     (region) =>
       region.media_spending_truth !== 'watch_only' ||
-      Math.abs(region.recommended_delta_pct ?? 0) > 0,
+      Math.abs(approvedDelta(region)) > 0 ||
+      Math.abs(shadowDelta(region)) > 0,
   );
 
   return (
-    <section className={`media-truth-panel media-truth-${status}`} data-testid="media-spending-truth-panel">
+    <section className={`media-truth-panel media-truth-${releaseMode}`} data-testid="media-spending-truth-panel">
       <div className="media-truth-head">
         <div>
           <div className="media-truth-kicker">Media-Entscheidungsstatus</div>
-          <h3>{STATUS_LABELS[status] ?? status.replace(/_/g, ' ')}</h3>
+          <h3>{STATUS_LABELS[releaseMode] ?? releaseMode.replace(/_/g, ' ')}</h3>
         </div>
         <div className="media-truth-permission">
           {PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' ')}
         </div>
       </div>
 
-      {status === 'blocked' ? (
+      <div className="media-truth-release-copy">
+        {RELEASE_HELP[releaseMode] ?? 'Empfehlungen werden anhand der aktuellen Gates begrenzt.'}
+      </div>
+
+      {releaseMode === 'blocked' ? (
         <div className="media-truth-block-explain">
           <p>
             Die aktuelle Daten- und Entscheidungsqualität reicht nicht für eine geprüfte
@@ -121,26 +154,32 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
               ))}
             </div>
           ) : null}
-          {failedGates.length ? (
-            <div className="media-truth-gates">
-              {failedGates.map((gate) => (
-                <span key={gate.gate} title={gate.explanation}>
-                  {gate.gate.replace(/_/g, ' ')}: {gate.status}
-                </span>
-              ))}
-            </div>
-          ) : null}
+        </div>
+      ) : null}
+
+      {attentionGates.length ? (
+        <div className="media-truth-gates">
+          <span>Gate Trace</span>
+          {attentionGates.map((gate) => (
+            <b key={gate.gate} title={gate.explanation ?? gate.reason}>
+              {gate.gate.replace(/_/g, ' ')}: {gate.status}
+            </b>
+          ))}
         </div>
       ) : null}
 
       <dl className="media-truth-meta">
         <div>
-          <dt>Gültig bis</dt>
-          <dd>{formatDate(truth.valid_until)}</dd>
+          <dt>Freigabemodus</dt>
+          <dd>{releaseMode.replace(/_/g, ' ')}</dd>
         </div>
         <div>
-          <dt>Evidenz</dt>
-          <dd>{truth.forecast_evidence ?? '—'}</dd>
+          <dt>Max. Delta</dt>
+          <dd>{formatPct(truth.max_approved_delta_pct ?? truth.maxApprovedDeltaPct)}</dd>
+        </div>
+        <div>
+          <dt>Gültig bis</dt>
+          <dd>{formatDate(truth.valid_until)}</dd>
         </div>
         <div>
           <dt>Datenqualität</dt>
@@ -152,6 +191,14 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
         <div className="media-truth-regions">
           {regions.map((region) => {
             const reasons = (region.reason_codes ?? []).slice(0, 3);
+            const executionStatus = region.execution_status ?? region.executionStatus ?? releaseMode;
+            const regionActionLabel = STATUS_LABELS[region.media_spending_truth] ?? region.media_spending_truth.replace(/_/g, ' ');
+            const actionLabel =
+              executionStatus === 'blocked'
+                ? 'Nicht freigegeben'
+                : executionStatus === 'shadow_only'
+                  ? `Shadow only · ${regionActionLabel}`
+                  : regionActionLabel;
             return (
               <article className={`media-truth-region status-${region.media_spending_truth}`} key={region.region_code}>
                 <div className="media-truth-region-top">
@@ -159,13 +206,18 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
                     <span className="media-truth-code">{region.region_code}</span>
                     <strong>{region.region_name}</strong>
                   </div>
-                  <b className="media-truth-delta">{formatPct(region.recommended_delta_pct)}</b>
+                  <div className="media-truth-delta-stack">
+                    <b className="media-truth-delta">{formatPct(approvedDelta(region))}</b>
+                    <span>freigegeben</span>
+                  </div>
                 </div>
                 <div className="media-truth-action">
-                  {status === 'blocked'
-                    ? 'Nicht freigegeben'
-                    : STATUS_LABELS[region.media_spending_truth] ?? region.media_spending_truth.replace(/_/g, ' ')}
+                  {actionLabel}
                   {region.manual_approval_required ? ' · manuell' : ''}
+                </div>
+                <div className="media-truth-delta-pair">
+                  <span>Shadow {formatPct(shadowDelta(region))}</span>
+                  <span>Freigegeben {formatPct(approvedDelta(region))}</span>
                 </div>
                 <div className="media-truth-region-metrics">
                   <span>Confidence {formatConfidence(region.confidence)}</span>

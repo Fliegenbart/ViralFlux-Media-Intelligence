@@ -3889,10 +3889,13 @@ html {
   border-left: 3px solid var(--ink-40);
   background: color-mix(in srgb, var(--ink) 2%, transparent);
 }
-.peix-instr .media-truth-panel.media-truth-spendable {
+.peix-instr .media-truth-panel.media-truth-spendable,
+.peix-instr .media-truth-panel.media-truth-approved {
   border-left-color: var(--oxide, #8b9788);
 }
-.peix-instr .media-truth-panel.media-truth-planner_assist {
+.peix-instr .media-truth-panel.media-truth-planner_assist,
+.peix-instr .media-truth-panel.media-truth-shadow_only,
+.peix-instr .media-truth-panel.media-truth-limited {
   border-left-color: var(--signal, #c2542a);
 }
 .peix-instr .media-truth-panel.media-truth-blocked,
@@ -3921,6 +3924,13 @@ html {
   color: var(--ink);
   letter-spacing: 0;
 }
+.peix-instr .media-truth-release-copy {
+  margin-top: 12px;
+  max-width: 860px;
+  color: var(--slate);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
 .peix-instr .media-truth-permission {
   flex: 0 0 auto;
   max-width: 240px;
@@ -3937,7 +3947,7 @@ html {
 }
 .peix-instr .media-truth-meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin: 18px 0 0;
 }
@@ -4004,12 +4014,42 @@ html {
   letter-spacing: 0.08em;
   color: var(--ink-40);
 }
+.peix-instr .media-truth-delta-stack {
+  flex: 0 0 auto;
+  text-align: right;
+}
+.peix-instr .media-truth-delta-stack span {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-40);
+}
 .peix-instr .media-truth-delta {
   font-family: var(--font-display);
   font-size: 28px;
   line-height: 1;
   color: var(--ink);
   white-space: nowrap;
+}
+.peix-instr .media-truth-delta-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.peix-instr .media-truth-delta-pair span {
+  border: 1px solid var(--ink-20);
+  padding: 4px 7px;
 }
 .peix-instr .media-truth-action,
 .peix-instr .media-truth-region-metrics {
@@ -4102,7 +4142,8 @@ html {
   color: var(--ink-40);
 }
 .peix-instr .media-truth-block-reasons b,
-.peix-instr .media-truth-gates span {
+.peix-instr .media-truth-gates span,
+.peix-instr .media-truth-gates b {
   border: 1px dashed var(--ink-20);
   padding: 4px 7px;
   color: var(--ink);

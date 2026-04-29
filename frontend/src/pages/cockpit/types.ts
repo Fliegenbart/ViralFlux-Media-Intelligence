@@ -418,6 +418,12 @@ export type MediaSpendingGlobalStatus =
   | 'planner_assist'
   | 'spendable';
 
+export type MediaSpendingReleaseMode =
+  | 'blocked'
+  | 'shadow_only'
+  | 'limited'
+  | 'approved';
+
 export type MediaSpendingBudgetPermission =
   | 'blocked'
   | 'manual_approval_required'
@@ -439,6 +445,12 @@ export interface MediaSpendingTruthRegion {
   budget_permission?: MediaSpendingBudgetPermission | string;
   recommended_action: string;
   recommended_delta_pct: number;
+  shadow_delta_pct?: number;
+  shadowDeltaPct?: number;
+  approved_delta_pct?: number;
+  approvedDeltaPct?: number;
+  execution_status?: MediaSpendingReleaseMode | 'blocked' | string;
+  executionStatus?: MediaSpendingReleaseMode | 'blocked' | string;
   max_delta_pct: number;
   surge_probability_7d?: number | null;
   expected_growth_score?: number | null;
@@ -455,9 +467,11 @@ export interface MediaSpendingTruthRegion {
 
 export interface MediaSpendingTruthGateEvaluation {
   gate: string;
-  status: 'passed' | 'failed' | 'warning' | 'blocked' | string;
+  status: 'passed' | 'failed' | 'warning' | 'blocked' | 'insufficient_evidence' | string;
   threshold?: Record<string, unknown>;
   observed?: Record<string, unknown>;
+  severity?: 'hard' | 'limited' | 'soft' | string;
+  reason?: string;
   explanation?: string;
 }
 
@@ -468,6 +482,11 @@ export interface MediaSpendingTruthPayload {
   pathogen_scope?: string;
   horizon_days?: number;
   global_status: MediaSpendingGlobalStatus | string;
+  globalDecision?: MediaSpendingReleaseMode | string;
+  release_mode?: MediaSpendingReleaseMode | string;
+  releaseMode?: MediaSpendingReleaseMode | string;
+  max_approved_delta_pct?: number;
+  maxApprovedDeltaPct?: number;
   budget_permission: MediaSpendingBudgetPermission | string;
   data_quality?: string;
   forecast_evidence?: string;
@@ -478,6 +497,7 @@ export interface MediaSpendingTruthPayload {
   blockedBecause?: string[];
   gate_evaluations?: MediaSpendingTruthGateEvaluation[];
   gateEvaluations?: MediaSpendingTruthGateEvaluation[];
+  gateTrace?: MediaSpendingTruthGateEvaluation[];
   regions: MediaSpendingTruthRegion[];
   limitations?: string[];
 }

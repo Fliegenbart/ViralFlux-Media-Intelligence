@@ -161,6 +161,148 @@ class MediaSpendingTruthTests(unittest.TestCase):
         self.assertEqual(region["media_spending_truth"], "blocked")
         self.assertEqual(region["recommended_delta_pct"], 0.0)
 
+
+    def test_release_cascade_approved_exposes_shadow_and_approved_deltas(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[
+                _prediction(),
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    event_probability=0.20,
+                    change_pct=-8.0,
+                    state_population_millions=13.0,
+                    decision={"stage": "watch", "forecast_confidence": 0.70},
+                    viral_pressure_features={"budget_opportunity_score": 0.18, "recent_saturation_score": 0.20},
+                ),
+            ],
+            truth_scoreboard=_scoreboard("go", [], evaluable_weeks=18),
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0},
+        )
+
+        nw = next(item for item in payload["regions"] if item["region_code"] == "NW")
+        self.assertEqual(payload["release_mode"], "approved")
+        self.assertEqual(payload["releaseMode"], "approved")
+        self.assertEqual(payload["globalDecision"], "approved")
+        self.assertEqual(payload["maxApprovedDeltaPct"], 15.0)
+        self.assertGreater(nw["shadow_delta_pct"], 0.0)
+        self.assertEqual(nw["approved_delta_pct"], nw["shadow_delta_pct"])
+        self.assertEqual(nw["recommended_delta_pct"], nw["approved_delta_pct"])
+        self.assertAlmostEqual(sum(item["approved_delta_pct"] for item in payload["regions"]), 0.0, places=6)
+        self.assertTrue(all("severity" in item for item in payload["gateTrace"]))
+
+    def test_release_cascade_limited_when_backtest_is_positive_but_uncertain(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[
+                _prediction(),
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    event_probability=0.20,
+                    change_pct=-8.0,
+                    state_population_millions=13.0,
+                    decision={"stage": "watch", "forecast_confidence": 0.70},
+                    viral_pressure_features={"budget_opportunity_score": 0.18, "recent_saturation_score": 0.20},
+                ),
+            ],
+            truth_scoreboard=_scoreboard("go", [], evaluable_weeks=18),
+            decision_backtest={
+                "decision_backtest_passed": False,
+                "regret_reduction_vs_static": 0.01,
+                "min_regret_reduction": 0.03,
+                "evaluable_panel_weeks": 18,
+                "verdict": "better_but_uncertain",
+            },
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0},
+        )
+
+        nw = next(item for item in payload["regions"] if item["region_code"] == "NW")
+        self.assertEqual(payload["release_mode"], "limited")
+        self.assertEqual(payload["globalDecision"], "limited")
+        self.assertEqual(payload["maxApprovedDeltaPct"], 5.0)
+        self.assertGreater(nw["shadow_delta_pct"], nw["approved_delta_pct"])
+        self.assertGreater(nw["approved_delta_pct"], 0.0)
+        self.assertLessEqual(abs(nw["approved_delta_pct"]), 5.0)
+        self.assertEqual(nw["executionStatus"], "limited")
+
+    def test_release_cascade_shadow_only_when_evidence_is_insufficient(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[
+                _prediction(),
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    event_probability=0.20,
+                    change_pct=-8.0,
+                    state_population_millions=13.0,
+                    decision={"stage": "watch", "forecast_confidence": 0.70},
+                    viral_pressure_features={"budget_opportunity_score": 0.18, "recent_saturation_score": 0.20},
+                ),
+            ],
+            truth_scoreboard=_scoreboard("candidate", ["too_few_evaluable_weeks"], evaluable_weeks=10),
+            decision_backtest={
+                "decision_backtest_passed": False,
+                "regret_reduction_vs_static": 0.0,
+                "evaluable_panel_weeks": 6,
+                "verdict": "not_enough_data",
+            },
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0},
+        )
+
+        nw = next(item for item in payload["regions"] if item["region_code"] == "NW")
+        self.assertEqual(payload["release_mode"], "shadow_only")
+        self.assertEqual(payload["globalDecision"], "shadow_only")
+        self.assertEqual(payload["maxApprovedDeltaPct"], 0.0)
+        self.assertGreater(nw["shadow_delta_pct"], 0.0)
+        self.assertEqual(nw["approved_delta_pct"], 0.0)
+        self.assertEqual(nw["recommended_delta_pct"], 0.0)
+        by_gate = {item["gate"]: item for item in payload["gateTrace"]}
+        self.assertIn("insufficient_evidence", {by_gate["forecast_quality"]["status"], by_gate["decision_backtest"]["status"]})
+
+    def test_regional_data_problem_blocks_only_that_region_when_enough_regions_remain(self) -> None:
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[
+                _prediction(),
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    event_probability=0.20,
+                    change_pct=-8.0,
+                    state_population_millions=13.0,
+                    decision={"stage": "watch", "forecast_confidence": 0.70},
+                    viral_pressure_features={"budget_opportunity_score": 0.18, "recent_saturation_score": 0.20},
+                ),
+                _prediction(
+                    bundesland="SN",
+                    bundesland_name="Sachsen",
+                    event_probability=0.80,
+                    change_pct=30.0,
+                    regional_data_fresh=False,
+                    coverage_blockers=["regional_data_stale"],
+                    viral_pressure_features={"budget_opportunity_score": 0.90, "recent_saturation_score": 0.20},
+                ),
+            ],
+            truth_scoreboard=_scoreboard("go", [], evaluable_weeks=18),
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0, "SN": 10000.0},
+        )
+
+        sn = next(item for item in payload["regions"] if item["region_code"] == "SN")
+        self.assertEqual(payload["release_mode"], "approved")
+        self.assertEqual(sn["executionStatus"], "blocked")
+        self.assertEqual(sn["approved_delta_pct"], 0.0)
+        by_gate = {item["gate"]: item for item in payload["gateTrace"]}
+        self.assertEqual(by_gate["live_data_quality"]["status"], "warning")
+
     def test_passed_gates_allow_increase_approved_with_reason_codes(self) -> None:
         payload = build_media_spending_truth(
             virus_typ="Influenza A",

@@ -100,6 +100,102 @@ describe('MediaSpendingTruthPanel', () => {
     expect(screen.getByText(/Früh positionieren/)).toBeInTheDocument();
   });
 
+
+  it('renders shadow-only recommendations without approval', () => {
+    render(
+      <MediaSpendingTruthPanel
+        truth={{
+          ...basePayload,
+          global_status: 'planner_assist',
+          release_mode: 'shadow_only',
+          releaseMode: 'shadow_only',
+          globalDecision: 'shadow_only',
+          max_approved_delta_pct: 0,
+          maxApprovedDeltaPct: 0,
+          budget_permission: 'manual_approval_required',
+          forecast_evidence: 'limited',
+          data_quality: 'good',
+          gateTrace: [
+            {
+              gate: 'decision_backtest',
+              status: 'insufficient_evidence',
+              severity: 'hard',
+              reason: 'Not enough decision backtest windows.',
+            },
+          ],
+          regions: [
+            {
+              ...basePayload.regions[0],
+              media_spending_truth: 'preposition_approved',
+              recommended_action: 'small_increase',
+              recommended_delta_pct: 0,
+              shadow_delta_pct: 8.4,
+              approved_delta_pct: 0,
+              executionStatus: 'shadow_only',
+              max_delta_pct: 0,
+              confidence: 0.73,
+              reason_codes: ['high_import_pressure', 'manual_approval_required'],
+              manual_approval_required: true,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Manuelle Prüfung')).toBeInTheDocument();
+    expect(screen.getByText(/Empfehlungen werden berechnet/)).toBeInTheDocument();
+    expect(screen.getByText('Shadow +8,4%')).toBeInTheDocument();
+    expect(screen.getByText('Freigegeben 0%')).toBeInTheDocument();
+    expect(screen.getByText(/Shadow only/)).toBeInTheDocument();
+  });
+
+  it('renders limited mode with capped approved delta', () => {
+    render(
+      <MediaSpendingTruthPanel
+        truth={{
+          ...basePayload,
+          global_status: 'planner_assist',
+          release_mode: 'limited',
+          releaseMode: 'limited',
+          globalDecision: 'limited',
+          max_approved_delta_pct: 5,
+          maxApprovedDeltaPct: 5,
+          budget_permission: 'approved_with_cap',
+          forecast_evidence: 'validated',
+          data_quality: 'good',
+          gateTrace: [
+            {
+              gate: 'decision_backtest',
+              status: 'warning',
+              severity: 'limited',
+              reason: 'Backtest is positive but not stable enough for full approval.',
+            },
+          ],
+          regions: [
+            {
+              ...basePayload.regions[0],
+              media_spending_truth: 'increase_approved',
+              recommended_action: 'increase',
+              recommended_delta_pct: 5,
+              shadow_delta_pct: 11.2,
+              approved_delta_pct: 5,
+              executionStatus: 'limited',
+              max_delta_pct: 5,
+              confidence: 0.78,
+              reason_codes: ['high_surge_probability'],
+              manual_approval_required: true,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Limited')).toBeInTheDocument();
+    expect(screen.getByText(/maximal 5 Prozent/)).toBeInTheDocument();
+    expect(screen.getByText('Shadow +11,2%')).toBeInTheDocument();
+    expect(screen.getAllByText('Freigegeben +5%').length).toBeGreaterThan(0);
+  });
+
   it('renders spendable regional actions', () => {
     render(
       <MediaSpendingTruthPanel

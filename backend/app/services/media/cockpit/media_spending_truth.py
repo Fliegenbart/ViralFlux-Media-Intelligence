@@ -67,6 +67,7 @@ class MediaSpendingTruthPolicy:
     min_confidence_for_preposition: float = 0.55
     requires_forecast_gate_pass: bool = True
     requires_budget_regret_pass: bool = True
+    min_eligible_regions: int = 2
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -182,11 +183,44 @@ def _live_data_observed(predictions: Iterable[Mapping[str, Any]]) -> dict[str, A
     }
 
 
+
+def _region_is_live_eligible(prediction: Mapping[str, Any]) -> bool:
+    return bool(prediction.get("regional_data_fresh", True)) and not bool(prediction.get("coverage_blockers"))
+
+
+def _decision_backtest_status(decision_backtest: Mapping[str, Any]) -> str:
+    if bool(decision_backtest.get("decision_backtest_passed")):
+        return "passed"
+
+    verdict = str(decision_backtest.get("verdict") or "").lower()
+    windows = int(
+        _safe_float(
+            decision_backtest.get("evaluable_panel_weeks")
+            or decision_backtest.get("sample_size")
+            or decision_backtest.get("sampleSize"),
+            999.0,
+        )
+    )
+    uplift = _safe_float(
+        decision_backtest.get("upliftVsPersistence")
+        or decision_backtest.get("uplift_vs_persistence")
+        or decision_backtest.get("regret_reduction_vs_static")
+        or decision_backtest.get("regret_reduction_vs_current_incidence"),
+        0.0,
+    )
+
+    if verdict in {"not_enough_data", "insufficient_evidence"} or windows < MIN_EVALUABLE_PANEL_WEEKS:
+        return "insufficient_evidence"
+    if verdict in {"better_but_uncertain", "roughly_equal", "equal_to_persistence"} or uplift >= 0.0:
+        return "warning"
+    return "failed"
+
+
 def _build_gate_evaluations(
     *,
     forecast_gate_passed: bool,
-    live_data_gate_passed: bool,
-    decision_backtest_passed: bool,
+    live_data_gate_status: str,
+    decision_backtest_status: str,
     business_constraints_passed: bool,
     insufficient_evidence: bool,
     model_worse_than_persistence: bool,
@@ -197,15 +231,29 @@ def _build_gate_evaluations(
     card: Mapping[str, Any],
     predictions: list[Mapping[str, Any]],
     decision_backtest: Mapping[str, Any],
+    eligible_region_count: int,
+    min_eligible_regions: int,
 ) -> list[dict[str, Any]]:
-    forecast_status = "passed" if forecast_gate_passed else "warning" if insufficient_evidence and not model_worse_than_persistence and not blockers else "failed"
+    if forecast_gate_passed:
+        forecast_status = "passed"
+    elif insufficient_evidence and not model_worse_than_persistence and not any(item in HARD_FORECAST_BLOCKERS for item in blockers):
+        forecast_status = "insufficient_evidence"
+    else:
+        forecast_status = "failed"
+
     backtest_threshold = _safe_float(decision_backtest.get("min_regret_reduction"), 0.03)
     backtest_observed = {
-        "decision_backtest_passed": bool(decision_backtest_passed),
+        "decision_backtest_passed": bool(decision_backtest.get("decision_backtest_passed")),
         "regret_reduction_vs_static": decision_backtest.get("regret_reduction_vs_static"),
         "regret_reduction_vs_current_incidence": decision_backtest.get("regret_reduction_vs_current_incidence"),
         "model_rank_among_strategies": decision_backtest.get("model_rank_among_strategies"),
+        "verdict": decision_backtest.get("verdict"),
+        "evaluable_panel_weeks": decision_backtest.get("evaluable_panel_weeks"),
     }
+
+    live_severity = "hard" if live_data_gate_status == "failed" else "soft"
+    decision_severity = "hard" if decision_backtest_status in {"failed", "insufficient_evidence"} else "limited"
+
     return [
         {
             "gate": "forecast_quality",
@@ -222,6 +270,8 @@ def _build_gate_evaluations(
                 "warnings": warnings,
                 "quality_gate_overall_passed": _quality_gate_passed(card),
             },
+            "severity": "hard",
+            "reason": "Forecast evidence must be strong enough before budget can be approved.",
             "explanation": "Forecast evidence is spendable only when readiness is go, enough panel weeks exist, and no hard blockers are present.",
         },
         {
@@ -233,30 +283,65 @@ def _build_gate_evaluations(
                 "lift_vs_persistence": card.get("lift_vs_persistence") or {},
                 "lift_vs_baseline_hit_rate": card.get("lift_vs_baseline_hit_rate") or {},
             },
+            "severity": "hard",
+            "reason": "Spending cannot increase when the model is worse than persistence.",
             "explanation": "Spending cannot increase when the regional policy does not beat simple persistence baselines.",
         },
         {
             "gate": "live_data_quality",
-            "status": "passed" if live_data_gate_passed else "failed",
-            "threshold": {"regional_data_fresh": True, "coverage_blockers": "none"},
-            "observed": _live_data_observed(predictions),
+            "status": live_data_gate_status,
+            "threshold": {
+                "regional_data_fresh": True,
+                "coverage_blockers": "none",
+                "min_eligible_regions": min_eligible_regions,
+            },
+            "observed": {
+                **_live_data_observed(predictions),
+                "eligible_regions": eligible_region_count,
+            },
+            "severity": live_severity,
+            "reason": "Regional data problems block affected regions; too few eligible regions block global approval.",
             "explanation": "Live regional data must be fresh and complete enough before budget shifts are allowed.",
         },
         {
             "gate": "decision_backtest",
-            "status": "passed" if decision_backtest_passed else "failed",
+            "status": decision_backtest_status,
             "threshold": {"min_regret_reduction_vs_static": backtest_threshold},
             "observed": backtest_observed,
+            "severity": decision_severity,
+            "reason": "The decision backtest decides whether recommendations are shadow, limited, or fully approved.",
             "explanation": "The MediaSpendingTruth allocation must beat simple allocation baselines on decision backtests.",
         },
         {
             "gate": "business_constraints",
-            "status": "passed" if business_constraints_passed else "blocked",
+            "status": "passed" if business_constraints_passed else "failed",
             "threshold": {"max_weekly_shift_pct": 15.0, "uncertainty_shift_cap_pct": 5.0},
             "observed": {"constraints_allow_budget_permission": bool(business_constraints_passed)},
+            "severity": "hard" if not business_constraints_passed else "soft",
+            "reason": "Business constraints cap normal recommendations and only block on hard exclusions.",
             "explanation": "Caps and business constraints must allow the recommendation before it becomes spendable.",
         },
     ]
+
+
+def _derive_release_mode(gate_evaluations: list[Mapping[str, Any]]) -> str:
+    hard_fails = [
+        gate
+        for gate in gate_evaluations
+        if gate.get("severity") == "hard" and gate.get("status") == "failed"
+    ]
+    if hard_fails:
+        return "blocked"
+    if any(gate.get("status") == "insufficient_evidence" for gate in gate_evaluations):
+        return "shadow_only"
+    limited_fails = [
+        gate
+        for gate in gate_evaluations
+        if gate.get("severity") == "limited" and gate.get("status") in {"failed", "warning"}
+    ]
+    if limited_fails:
+        return "limited"
+    return "approved"
 
 
 def _blocked_reasons_from_gates(gate_evaluations: list[Mapping[str, Any]]) -> list[str]:
@@ -270,9 +355,35 @@ def _blocked_reasons_from_gates(gate_evaluations: list[Mapping[str, Any]]) -> li
         _append_unique(reasons, "data_quality_insufficient_for_budget_shift")
     if (by_gate.get("decision_backtest") or {}).get("status") == "failed":
         _append_unique(reasons, "decision_backtest_not_passed")
-    if (by_gate.get("business_constraints") or {}).get("status") == "blocked":
+    if (by_gate.get("business_constraints") or {}).get("status") in {"failed", "blocked"}:
         _append_unique(reasons, "business_constraints_block_budget_shift")
     return reasons
+
+
+def _global_status_for_release_mode(release_mode: str) -> str:
+    return {
+        "blocked": "blocked",
+        "shadow_only": "planner_assist",
+        "limited": "planner_assist",
+        "approved": "spendable",
+    }.get(release_mode, "blocked")
+
+
+def _budget_permission_for_release_mode(release_mode: str) -> str:
+    return {
+        "blocked": "blocked",
+        "shadow_only": "manual_approval_required",
+        "limited": "approved_with_cap",
+        "approved": "approved_with_cap",
+    }.get(release_mode, "blocked")
+
+
+def _max_approved_delta_for_release_mode(release_mode: str, policy: MediaSpendingTruthPolicy) -> float:
+    if release_mode == "approved":
+        return float(policy.max_weekly_shift_pct)
+    if release_mode == "limited":
+        return float(policy.uncertainty_shift_cap_pct)
+    return 0.0
 
 
 def _region_reason_codes(
@@ -325,6 +436,11 @@ def _empty_payload(
         "pathogen_scope": virus_typ,
         "horizon_days": int(horizon_days),
         "global_status": "blocked",
+        "globalDecision": "blocked",
+        "release_mode": "blocked",
+        "releaseMode": "blocked",
+        "max_approved_delta_pct": 0.0,
+        "maxApprovedDeltaPct": 0.0,
         "budget_permission": "blocked",
         "decision_policy": policy.__dict__,
         "data_quality": "unknown",
@@ -334,9 +450,11 @@ def _empty_payload(
         "blockedBecause": [reason],
         "gate_evaluations": [],
         "gateEvaluations": [],
+        "gateTrace": [],
         "regions": [],
         "limitations": [reason, "not_for_automatic_budget_execution"],
     }
+
 
 
 def build_media_spending_truth(
@@ -380,20 +498,44 @@ def build_media_spending_truth(
         or readiness in {"candidate", "watch", "watch_strong", "unknown"}
     )
     forecast_gate_passed = _quality_gate_passed(card) and not hard_blockers and not model_worse_than_persistence and not insufficient_evidence
+
     decision_backtest_payload = dict(decision_backtest or {})
-    decision_backtest_passed = bool(decision_backtest_payload.get("decision_backtest_passed"))
-    live_data_gate_passed = _live_data_quality_passed(rows)
-    decision_backtest_hard_fail = forecast_gate_passed and not decision_backtest_passed
-    global_spending_blocked = bool(
-        hard_blockers
-        or model_worse_than_persistence
-        or not live_data_gate_passed
-        or decision_backtest_hard_fail
+    decision_backtest_gate_status = _decision_backtest_status(decision_backtest_payload)
+    eligible_region_count = sum(1 for row in rows if _region_is_live_eligible(row))
+    min_eligible_regions = min(max(int(effective_policy.min_eligible_regions), 1), len(rows))
+    if eligible_region_count >= len(rows):
+        live_data_gate_status = "passed"
+    elif eligible_region_count >= min_eligible_regions:
+        live_data_gate_status = "warning"
+    else:
+        live_data_gate_status = "failed"
+
+    business_constraints_passed = True
+    gate_evaluations = _build_gate_evaluations(
+        forecast_gate_passed=forecast_gate_passed,
+        live_data_gate_status=live_data_gate_status,
+        decision_backtest_status=decision_backtest_gate_status,
+        business_constraints_passed=business_constraints_passed,
+        insufficient_evidence=insufficient_evidence,
+        model_worse_than_persistence=model_worse_than_persistence,
+        readiness=readiness,
+        blockers=blockers,
+        warnings=warnings,
+        evaluable_weeks=evaluable_weeks,
+        card=card,
+        predictions=rows,
+        decision_backtest=decision_backtest_payload,
+        eligible_region_count=eligible_region_count,
+        min_eligible_regions=min_eligible_regions,
     )
-    full_spendable = forecast_gate_passed and decision_backtest_passed and live_data_gate_passed
+    release_mode = _derive_release_mode(gate_evaluations)
+    global_status = _global_status_for_release_mode(release_mode)
+    budget_permission = _budget_permission_for_release_mode(release_mode)
+    max_approved_delta_pct = _max_approved_delta_for_release_mode(release_mode, effective_policy)
+    blocked_because = _blocked_reasons_from_gates(gate_evaluations) if release_mode == "blocked" else []
+    full_spendable = release_mode == "approved"
 
     preliminary_regions: list[dict[str, Any]] = []
-    planner_candidates = 0
 
     for prediction in rows:
         code = str(prediction.get("bundesland") or prediction.get("region_code") or "")
@@ -410,72 +552,65 @@ def build_media_spending_truth(
         saturation_score = _clamp(_safe_float(features.get("recent_saturation_score")), 0.0, 1.0)
         regional_blockers = [str(item) for item in (prediction.get("coverage_blockers") or [])]
         fresh = bool(prediction.get("regional_data_fresh", True))
+        region_eligible = fresh and not regional_blockers and not hard_blockers and not model_worse_than_persistence
         limiting_factors = list(dict.fromkeys([*hard_blockers, *regional_blockers]))
-        manual = False
-        max_delta = 0.0
+        manual = release_mode in {"shadow_only", "limited"}
+        candidate_max_delta = 0.0
         media_truth = "watch_only"
         action = "maintain"
 
         promising = p_surge >= 0.55 and growth_score > 0.0 and confidence >= effective_policy.min_confidence_for_preposition
         plateau = p_surge >= 0.55 and _safe_float(prediction.get("change_pct")) <= 2.0 and saturation_score >= 0.55
 
-        if hard_blockers or not fresh:
+        if hard_blockers or not fresh or regional_blockers:
             media_truth = "blocked"
             action = "none"
-            max_delta = 0.0
         elif model_worse_than_persistence:
             media_truth = "watch_only"
             action = "maintain"
-            max_delta = 0.0
-        elif global_spending_blocked:
-            media_truth = "watch_only"
-            action = "maintain"
-            max_delta = 0.0
-        elif not full_spendable:
-            if promising:
-                media_truth = "preposition_approved"
-                action = "small_increase"
-                manual = True
-                max_delta = effective_policy.planner_assist_max_delta_pct
-                planner_candidates += 1
-            else:
-                media_truth = "watch_only"
-                action = "maintain"
-                max_delta = 0.0
         elif confidence < 0.45:
             media_truth = "watch_only"
             action = "maintain"
-            max_delta = 0.0
             _append_unique(limiting_factors, "low_confidence")
+        elif release_mode == "shadow_only" and promising:
+            media_truth = "preposition_approved"
+            action = "small_increase"
+            candidate_max_delta = effective_policy.planner_assist_max_delta_pct
         elif plateau:
             media_truth = "cap_or_reduce"
             action = "cap_or_reduce"
-            max_delta = effective_policy.uncertainty_shift_cap_pct
+            candidate_max_delta = effective_policy.uncertainty_shift_cap_pct
         elif p_surge >= 0.65 and growth_score >= 0.15 and confidence >= effective_policy.min_confidence_for_approval and saturation_score < 0.75:
             media_truth = "increase_approved"
             action = "increase"
-            max_delta = effective_policy.max_weekly_shift_pct
+            candidate_max_delta = effective_policy.max_weekly_shift_pct
         elif promising:
             media_truth = "preposition_approved"
             action = "small_increase"
-            max_delta = effective_policy.preposition_max_delta_pct
+            candidate_max_delta = effective_policy.preposition_max_delta_pct
         elif p_surge <= 0.35 and growth_score <= 0.02 and confidence >= effective_policy.min_confidence_for_approval:
             media_truth = "decrease_approved"
             action = "decrease"
-            max_delta = effective_policy.max_weekly_shift_pct
+            candidate_max_delta = effective_policy.max_weekly_shift_pct
         else:
             media_truth = "maintain"
             action = "maintain"
-            max_delta = 0.0
 
+        if release_mode == "blocked" or not region_eligible:
+            candidate_max_delta = 0.0
+            if region_eligible and not hard_blockers and not model_worse_than_persistence:
+                media_truth = "watch_only"
+                action = "maintain"
         if insufficient_evidence and not full_spendable:
             _append_unique(limiting_factors, "insufficient_evaluable_weeks")
-        if not decision_backtest_passed:
+        if decision_backtest_gate_status in {"failed", "insufficient_evidence", "warning"}:
             _append_unique(limiting_factors, "decision_backtest_not_passed")
         if model_worse_than_persistence:
             _append_unique(limiting_factors, "model_not_better_than_persistence")
         if not fresh:
             _append_unique(limiting_factors, "stale_data")
+        if live_data_gate_status == "warning" and region_eligible:
+            _append_unique(limiting_factors, "partial_regional_data_quality_warning")
 
         reason_codes = _region_reason_codes(
             prediction=prediction,
@@ -484,10 +619,16 @@ def build_media_spending_truth(
             growth_score=growth_score,
             blockers=all_gate_notes,
             insufficient_evidence=insufficient_evidence and not full_spendable,
-            manual=manual,
+            manual=manual and region_eligible,
         )
         if plateau:
             _append_unique(reason_codes, "high_current_activity_but_plateauing")
+
+        region_budget_permission = "blocked"
+        if region_eligible and release_mode == "shadow_only":
+            region_budget_permission = "manual_approval_required"
+        elif region_eligible and release_mode in {"limited", "approved"} and candidate_max_delta > 0:
+            region_budget_permission = "approved_with_cap"
 
         preliminary_regions.append(
             {
@@ -496,10 +637,17 @@ def build_media_spending_truth(
                 "pathogen_scope": virus_typ,
                 "horizon_days": int(horizon_days),
                 "media_spending_truth": media_truth,
-                "budget_permission": "manual_approval_required" if manual else "approved_with_cap" if full_spendable and max_delta > 0 else "blocked",
+                "budget_permission": region_budget_permission,
                 "recommended_action": action,
                 "recommended_delta_pct": 0.0,
-                "max_delta_pct": round(float(max_delta), 2),
+                "shadow_delta_pct": 0.0,
+                "shadowDeltaPct": 0.0,
+                "approved_delta_pct": 0.0,
+                "approvedDeltaPct": 0.0,
+                "execution_status": "blocked" if not region_eligible or release_mode == "blocked" else release_mode,
+                "executionStatus": "blocked" if not region_eligible or release_mode == "blocked" else release_mode,
+                "max_delta_pct": round(float(max_approved_delta_pct if region_eligible else 0.0), 2),
+                "shadow_max_delta_pct": round(float(candidate_max_delta), 2),
                 "surge_probability_7d": round(p_surge, 4),
                 "expected_growth_score": round(growth_score, 4),
                 "confidence": round(confidence, 4),
@@ -507,79 +655,94 @@ def build_media_spending_truth(
                 "forecast_class": prediction.get("forecast_class") or prediction.get("cluster_id") or None,
                 "reason_codes": reason_codes,
                 "limiting_factors": limiting_factors,
-                "manual_approval_required": bool(manual),
+                "manual_approval_required": bool(region_eligible and release_mode in {"shadow_only", "limited"}),
                 "research_only": False,
-                "planner_assist": bool(manual),
+                "planner_assist": bool(region_eligible and release_mode in {"shadow_only", "limited"}),
                 "base_budget_eur": round(_base_budget_for_prediction(prediction, base_budget_by_region), 2),
-                "uncertainty_capped": bool(manual or (not full_spendable and max_delta > 0)),
+                "uncertainty_capped": bool(release_mode == "limited"),
+                "region_eligible_for_allocation": bool(region_eligible),
                 "limitations": ["recommendation_valid_only_for_region_level_media_planning", "not_for_individual_targeting"],
             }
         )
 
-    if global_spending_blocked:
-        global_status = "blocked"
-    elif full_spendable:
-        global_status = "spendable"
-    elif planner_candidates > 0:
-        global_status = "planner_assist"
-    else:
-        global_status = "watch_only"
-
-    budget_permission = {
-        "blocked": "blocked",
-        "watch_only": "blocked",
-        "planner_assist": "manual_approval_required",
-        "spendable": "approved_with_cap",
-    }[global_status]
-    business_constraints_passed = True
-    gate_evaluations = _build_gate_evaluations(
-        forecast_gate_passed=forecast_gate_passed,
-        live_data_gate_passed=live_data_gate_passed,
-        decision_backtest_passed=decision_backtest_passed,
-        business_constraints_passed=business_constraints_passed,
-        insufficient_evidence=insufficient_evidence,
-        model_worse_than_persistence=model_worse_than_persistence,
-        readiness=readiness,
-        blockers=blockers,
-        warnings=warnings,
-        evaluable_weeks=evaluable_weeks,
-        card=card,
-        predictions=rows,
-        decision_backtest=decision_backtest_payload,
-    )
-    blocked_because = _blocked_reasons_from_gates(gate_evaluations) if global_status == "blocked" else []
-
-    allocation_input = [
-        region
-        for region in preliminary_regions
-        if _safe_float(region.get("max_delta_pct")) > 0.0
-    ]
-    allocation_rows: dict[str, dict[str, Any]] = {}
-    if allocation_input:
+    def _allocate(regions: list[dict[str, Any]], *, cap_pct: float, use_shadow_cap: bool) -> dict[str, dict[str, Any]]:
+        allocation_input: list[dict[str, Any]] = []
+        for region in regions:
+            if not region.get("region_eligible_for_allocation"):
+                continue
+            region_cap = _safe_float(region.get("shadow_max_delta_pct")) if use_shadow_cap else min(_safe_float(region.get("shadow_max_delta_pct")), cap_pct)
+            if region_cap <= 0.0:
+                continue
+            allocation_row = dict(region)
+            allocation_row["max_delta_pct"] = region_cap
+            allocation_row["uncertainty_capped"] = False
+            allocation_input.append(allocation_row)
+        if not allocation_input:
+            return {}
         allocation = allocate_budget_deltas(
             allocation_input,
             config=BudgetAllocatorConfig(
-                max_weekly_shift_pct=effective_policy.max_weekly_shift_pct,
-                uncertainty_shift_cap_pct=effective_policy.uncertainty_shift_cap_pct,
+                max_weekly_shift_pct=cap_pct,
+                uncertainty_shift_cap_pct=cap_pct,
             ),
         )
-        allocation_rows = {str(row.get("region_code")): row for row in allocation.get("regions", [])}
+        return {str(row.get("region_code")): row for row in allocation.get("regions", [])}
+
+    shadow_allocation_rows: dict[str, dict[str, Any]] = {}
+    approved_allocation_rows: dict[str, dict[str, Any]] = {}
+    if release_mode != "blocked":
+        shadow_allocation_rows = _allocate(
+            preliminary_regions,
+            cap_pct=effective_policy.max_weekly_shift_pct,
+            use_shadow_cap=True,
+        )
+    if release_mode == "approved":
+        approved_allocation_rows = shadow_allocation_rows
+    elif release_mode == "limited":
+        approved_allocation_rows = _allocate(
+            preliminary_regions,
+            cap_pct=effective_policy.uncertainty_shift_cap_pct,
+            use_shadow_cap=False,
+        )
 
     final_regions: list[dict[str, Any]] = []
     for region in preliminary_regions:
-        allocated = allocation_rows.get(str(region.get("region_code")))
+        code = str(region.get("region_code"))
+        shadow_allocated = shadow_allocation_rows.get(code)
+        approved_allocated = approved_allocation_rows.get(code)
         final_region = dict(region)
-        if allocated:
-            final_region["recommended_delta_pct"] = round(_safe_float(allocated.get("recommended_delta_pct")), 2)
-            final_region["before_budget_eur"] = allocated.get("before_budget_eur")
-            final_region["after_budget_eur"] = allocated.get("after_budget_eur")
-            final_region["allocated_shift_eur"] = allocated.get("allocated_shift_eur")
+
+        shadow_delta = _safe_float(shadow_allocated.get("recommended_delta_pct")) if shadow_allocated else 0.0
+        approved_delta = _safe_float(approved_allocated.get("recommended_delta_pct")) if approved_allocated else 0.0
+        final_region["shadow_delta_pct"] = round(shadow_delta, 6)
+        final_region["shadowDeltaPct"] = round(shadow_delta, 6)
+        final_region["approved_delta_pct"] = round(approved_delta, 6)
+        final_region["approvedDeltaPct"] = round(approved_delta, 6)
+        final_region["recommended_delta_pct"] = round(approved_delta, 6)
+
+        if approved_allocated:
+            final_region["before_budget_eur"] = approved_allocated.get("before_budget_eur")
+            final_region["after_budget_eur"] = approved_allocated.get("after_budget_eur")
+            final_region["allocated_shift_eur"] = approved_allocated.get("allocated_shift_eur")
         else:
             final_region["before_budget_eur"] = final_region.get("base_budget_eur")
             final_region["after_budget_eur"] = final_region.get("base_budget_eur")
             final_region["allocated_shift_eur"] = 0.0
+
+        if release_mode == "shadow_only" and final_region.get("region_eligible_for_allocation"):
+            final_region["max_delta_pct"] = min(_safe_float(final_region.get("shadow_max_delta_pct")), effective_policy.planner_assist_max_delta_pct)
+        elif release_mode == "limited" and final_region.get("region_eligible_for_allocation"):
+            final_region["max_delta_pct"] = effective_policy.uncertainty_shift_cap_pct
+        elif release_mode == "approved" and final_region.get("region_eligible_for_allocation"):
+            final_region["max_delta_pct"] = effective_policy.max_weekly_shift_pct
+        else:
+            final_region["max_delta_pct"] = 0.0
+
+        final_region.pop("region_eligible_for_allocation", None)
+        final_region.pop("shadow_max_delta_pct", None)
         final_regions.append(final_region)
 
+    forecast_evidence = "validated" if forecast_gate_passed else "limited" if not hard_blockers else "blocked"
     return {
         "schema_version": SCHEMA_VERSION,
         "decision_date": decision_day.isoformat(),
@@ -587,15 +750,21 @@ def build_media_spending_truth(
         "pathogen_scope": virus_typ,
         "horizon_days": int(horizon_days),
         "global_status": global_status,
+        "globalDecision": release_mode,
+        "release_mode": release_mode,
+        "releaseMode": release_mode,
+        "max_approved_delta_pct": round(float(max_approved_delta_pct), 2),
+        "maxApprovedDeltaPct": round(float(max_approved_delta_pct), 2),
         "budget_permission": budget_permission,
         "decision_policy": effective_policy.__dict__,
         "data_quality": _data_quality_label(rows),
-        "forecast_evidence": "validated" if forecast_gate_passed else "limited" if not hard_blockers else "blocked",
+        "forecast_evidence": forecast_evidence,
         "decision_backtest": decision_backtest_payload,
         "blocked_because": blocked_because,
         "blockedBecause": blocked_because,
         "gate_evaluations": gate_evaluations,
         "gateEvaluations": gate_evaluations,
+        "gateTrace": gate_evaluations,
         "forecast_gate": {
             "readiness": readiness,
             "passed": bool(forecast_gate_passed),

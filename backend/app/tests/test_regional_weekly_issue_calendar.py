@@ -23,7 +23,7 @@ from app.services.ml.regional_features_builders import (
 )
 from app.services.ml.regional_features_manifests import signal_bundle_metadata
 from app.services.ml.regional_panel_utils import ALL_BUNDESLAENDER
-from app.services.ml.regional_trainer_backtest import _build_panel_evaluation
+from app.services.ml.regional_trainer_backtest import _build_backtest_policy, _build_panel_evaluation
 
 
 class _FakeNowcastService:
@@ -352,6 +352,56 @@ class RegionalWeeklyIssueCalendarTests(unittest.TestCase):
             "left_join_asof_latest_available_at_or_before_cutoff",
         )
         self.assertFalse(metadata["source_lineage"]["are_konsultation"]["can_drop_region_rows"])
+
+    def test_backtest_policy_records_calendar_limits_and_leakage_guards(self) -> None:
+        prepared = pd.DataFrame(
+            {
+                "as_of_date": pd.date_range("2024-01-07", periods=110, freq="7D"),
+                "ww_feature_age_days": [2.0] * 110,
+                "are_feature_age_days": [8.0] * 110,
+            }
+        )
+        oof = pd.DataFrame(
+            {
+                "as_of_date": pd.date_range("2026-01-04", periods=6, freq="7D"),
+            }
+        )
+        panel_evaluation = {
+            "issue_calendar_type": "weekly_shared_issue_calendar",
+            "rows": [
+                {"is_evaluable_top3_panel": True},
+                {"is_evaluable_top3_panel": False},
+            ],
+        }
+
+        policy = _build_backtest_policy(
+            prepared_frame=prepared,
+            oof_frame=oof,
+            panel_evaluation=panel_evaluation,
+            feature_columns=["ww_level", "are_consult_incidence_lag_1"],
+            event_feature_columns=[
+                "ww_level",
+                "current_known_incidence",
+                "survstat_current_incidence",
+            ],
+        )
+
+        self.assertEqual(policy["issue_calendar_type"], "weekly_shared_issue_calendar")
+        self.assertEqual(policy["prepared_issue_weeks"], 110)
+        self.assertEqual(policy["actual_test_weeks"], 6)
+        self.assertEqual(policy["evaluable_panel_weeks"], 1)
+        self.assertEqual(policy["max_possible_test_weeks"], max(0, 110 - policy["min_train_weeks"]))
+        self.assertEqual(policy["historical_evidence_level"], "limited")
+        self.assertEqual(policy["data_start_by_source"]["wastewater"], "2024-01-05")
+        guards = policy["target_leakage_guards"]
+        self.assertTrue(guards["passed"])
+        self.assertTrue(guards["event_label_not_in_feature_columns"])
+        self.assertTrue(guards["next_week_incidence_not_in_feature_columns"])
+        self.assertTrue(guards["target_week_survstat_not_used_as_feature"])
+        self.assertEqual(
+            guards["current_known_incidence_policy"],
+            "allowed_only_as_asof_safe_event_anchor",
+        )
 
 
 if __name__ == "__main__":

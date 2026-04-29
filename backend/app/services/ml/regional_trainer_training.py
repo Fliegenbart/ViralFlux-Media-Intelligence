@@ -291,6 +291,10 @@ def train_single_horizon(
             "shadow_evaluation": rollout_info.get("shadow_evaluation"),
             "quality_gate": backtest_bundle["quality_gate"],
             "aggregate_metrics": backtest_bundle["aggregate_metrics"],
+            "backtest_policy": backtest_bundle["backtest_payload"].get("backtest_policy"),
+            "target_leakage_guards": (
+                (backtest_bundle["backtest_payload"].get("backtest_policy") or {}).get("target_leakage_guards")
+            ),
             "benchmark_summary": backtest_bundle.get("benchmark_summary") or {},
             "label_selection": selection,
             "revision_policy_metadata": {

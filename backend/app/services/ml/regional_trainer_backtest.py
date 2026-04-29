@@ -523,6 +523,13 @@ def build_backtest_bundle(
         fold_selection_summary=fold_selection_summary,
         panel_evaluation=panel_evaluation,
     )
+    backtest_payload["backtest_policy"] = _build_backtest_policy(
+        prepared_frame=working,
+        oof_frame=oof_frame,
+        panel_evaluation=panel_evaluation,
+        feature_columns=feature_columns,
+        event_feature_columns=effective_event_feature_columns,
+    )
     return {
         "oof_frame": oof_frame,
         "aggregate_metrics": aggregate,
@@ -1083,6 +1090,141 @@ def _panel_precision_at_top3(
         sum(1 for row in evaluable if bool(row.get(hit_key))) / len(evaluable),
         6,
     )
+
+
+def _source_start_by_age_columns(prepared_frame: pd.DataFrame) -> dict[str, str | None]:
+    if prepared_frame.empty or "as_of_date" not in prepared_frame.columns:
+        return {}
+    as_of_dates = pd.to_datetime(prepared_frame["as_of_date"], errors="coerce").dt.normalize()
+    source_age_columns = {
+        "wastewater": ("ww_feature_age_days",),
+        "wastewater_cross_virus_context": (
+            "ww_context_feature_age_days",
+            "wastewater_context_feature_age_days",
+        ),
+        "survstat_truth": ("survstat_feature_age_days", "truth_feature_age_days"),
+        "grippeweb": ("grippeweb_feature_age_days",),
+        "ifsg_influenza": ("ifsg_influenza_feature_age_days",),
+        "ifsg_rsv": ("ifsg_rsv_feature_age_days",),
+        "are": ("are_feature_age_days",),
+    }
+    starts: dict[str, str | None] = {}
+    for source, columns in source_age_columns.items():
+        candidates = []
+        for column in columns:
+            if column not in prepared_frame.columns:
+                continue
+            ages = pd.to_numeric(prepared_frame[column], errors="coerce")
+            visible = as_of_dates - pd.to_timedelta(ages, unit="D")
+            visible = visible.loc[visible.notna()]
+            if not visible.empty:
+                candidates.append(visible.min())
+        starts[source] = min(candidates).date().isoformat() if candidates else None
+    return starts
+
+
+def _target_leakage_guards(
+    *,
+    feature_columns: list[str],
+    event_feature_columns: list[str],
+) -> dict[str, Any]:
+    feature_set = {str(column) for column in feature_columns}
+    event_feature_set = {str(column) for column in event_feature_columns}
+    all_feature_set = feature_set | event_feature_set
+    forbidden_target_columns = {
+        "event_label",
+        "next_week_incidence",
+        "target_incidence",
+        "target_date",
+        "target_week_start",
+        "y_next_log",
+    }
+    leaked_columns = sorted(all_feature_set & forbidden_target_columns)
+    guards = {
+        "event_label_not_in_feature_columns": "event_label" not in all_feature_set,
+        "next_week_incidence_not_in_feature_columns": "next_week_incidence" not in all_feature_set,
+        "target_week_survstat_not_used_as_feature": not bool(
+            all_feature_set
+            & {
+                "event_label",
+                "next_week_incidence",
+                "target_incidence",
+                "target_date",
+                "target_week_start",
+                "y_next_log",
+            }
+        ),
+        "current_known_incidence_policy": "allowed_only_as_asof_safe_event_anchor",
+        "current_known_incidence_in_regression_features": "current_known_incidence" in feature_set,
+        "current_known_incidence_in_event_features": "current_known_incidence" in event_feature_set,
+        "current_known_incidence_available_asof_policy": (
+            "visible SurvStat rows must have available_date at or before forecast_issue_cutoff_date"
+        ),
+        "leaked_target_columns": leaked_columns,
+    }
+    guards["passed"] = bool(
+        guards["event_label_not_in_feature_columns"]
+        and guards["next_week_incidence_not_in_feature_columns"]
+        and guards["target_week_survstat_not_used_as_feature"]
+    )
+    return guards
+
+
+def _historical_evidence_level(*, actual_test_weeks: int, evaluable_panel_weeks: int) -> str:
+    if evaluable_panel_weeks < MIN_EVALUABLE_PANEL_WEEKS or actual_test_weeks < 26:
+        return "limited"
+    if actual_test_weeks < 52:
+        return "moderate"
+    return "strong"
+
+
+def _build_backtest_policy(
+    *,
+    prepared_frame: pd.DataFrame,
+    oof_frame: pd.DataFrame,
+    panel_evaluation: dict[str, Any],
+    feature_columns: list[str],
+    event_feature_columns: list[str],
+) -> dict[str, Any]:
+    prepared_issue_weeks = (
+        int(pd.to_datetime(prepared_frame["as_of_date"], errors="coerce").dt.normalize().nunique())
+        if "as_of_date" in prepared_frame.columns
+        else 0
+    )
+    actual_test_weeks = (
+        int(pd.to_datetime(oof_frame["as_of_date"], errors="coerce").dt.normalize().nunique())
+        if "as_of_date" in oof_frame.columns
+        else 0
+    )
+    rows = [row for row in panel_evaluation.get("rows") or [] if isinstance(row, dict)]
+    evaluable_panel_weeks = sum(1 for row in rows if row.get("is_evaluable_top3_panel"))
+    max_possible_test_weeks = max(0, int(prepared_issue_weeks) - int(_BACKTEST_MIN_TRAIN_PERIODS))
+    return {
+        "issue_calendar_type": panel_evaluation.get("issue_calendar_type") or "weekly_shared_issue_calendar",
+        "prepared_issue_weeks": prepared_issue_weeks,
+        "min_train_weeks": int(_BACKTEST_MIN_TRAIN_PERIODS),
+        "min_test_weeks": int(_BACKTEST_MIN_TEST_PERIODS),
+        "requested_splits": int(_BACKTEST_N_SPLITS),
+        "max_possible_test_weeks": max_possible_test_weeks,
+        "actual_test_weeks": actual_test_weeks,
+        "panel_evaluation_rows": len(rows),
+        "evaluable_panel_weeks": int(evaluable_panel_weeks),
+        "min_evaluable_panel_weeks": int(MIN_EVALUABLE_PANEL_WEEKS),
+        "data_start_by_source": _source_start_by_age_columns(prepared_frame),
+        "historical_evidence_level": _historical_evidence_level(
+            actual_test_weeks=actual_test_weeks,
+            evaluable_panel_weeks=int(evaluable_panel_weeks),
+        ),
+        "limitation": (
+            "short_history_limits_backtest_evidence"
+            if max_possible_test_weeks < 52
+            else None
+        ),
+        "target_leakage_guards": _target_leakage_guards(
+            feature_columns=feature_columns,
+            event_feature_columns=event_feature_columns,
+        ),
+    }
 
 
 def _quality_gate_with_panel_evaluation_check(

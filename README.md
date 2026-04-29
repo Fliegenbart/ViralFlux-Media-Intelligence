@@ -41,22 +41,25 @@ Budgetverschiebung bereits kausal Umsatz, Absatz oder ROI hebt.
   Unsicherheit
 - keine seriöse Aussage, wenn Quelle, Frische oder Coverage fehlen
 
-### Aktueller Live-Stand
+### Aktueller Live-Stand (29. April 2026)
 
-- H7 liefert für Influenza A, Influenza B, RSV A und SARS-CoV-2 wieder alle
-  16 Bundesländer.
-- Hamburg ist aktuell bewusst auf `Watch`, weil die regionale Datenfrische
-  blockiert.
-- Der H5/H7-Abgleich über Influenza A, Influenza B und RSV A erzeugt aktuell
-  48 regionale Zeilen: 4 bestätigte Richtungen, 5 kurzfristige Signale, 2
-  aufbauende Wochensignale, 3 Coverage-Blocker und 34 ohne alignierten
-  Anstieg.
-- Der Business-Gate-Status ist aktuell `candidate_only`: Es gibt Signale,
-  aber noch keine seriös freigebbaren Budget-Regionen, weil echte Outcome-,
-  Spend- und Vergleichsdaten fehlen.
-- Bekannte technische Grenze: ältere H7-Modelle für Influenza A/B enthalten
-  noch Legacy-`sars_*`-Feature-Spalten. Diese werden kompatibel gefüllt, aber
-  sollten im nächsten Retraining aus den Artefakten entfernt werden.
+- Die regionale H5/H7-Panel-Logik nutzt einen gemeinsamen Wochenkalender.
+  Training und Backtest laufen damit auf denselben Issue-Wochen; Live-
+  Inferenz nutzt weiter den letzten echten Abwasser-Tag pro Bundesland.
+- Die sechs Produktionsartefakte für Influenza A, Influenza B und RSV A
+  (je H5/H7) wurden mit der reparierten Kalenderlogik regeneriert.
+- Influenza A und Influenza B zeigen starke Ranking-Signale, bleiben aber
+  bewusst `WATCH`: Die historische Evidenz ist wegen kurzer Abwasserhistorie
+  noch knapp, und einzelne Kalibrierungs-Gates (`ECE`) scheitern.
+- RSV A ist aktuell nicht konkurrenzfähig gegen Persistenz und bleibt
+  Monitoring-only.
+- Der Business-/Media-Gate-Status bleibt blockiert bzw. `candidate_only`:
+  Es gibt keine automatische Budgetfreigabe ohne ausreichende Modellgüte,
+  frische Quellenlage und echte Outcome-/Spend-/Vergleichsdaten.
+- Die Artefakte schreiben jetzt ihre Backtest-Policy selbst mit:
+  `prepared_issue_weeks`, `min_train_weeks`, `max_possible_test_weeks`,
+  `actual_test_weeks`, `evaluable_panel_weeks`, `historical_evidence_level`
+  und `target_leakage_guards`.
 
 ---
 
@@ -118,7 +121,7 @@ die Lücke ist der operationale Vorsprung gegenüber dem Meldewesen.
 Darunter:
 
 - **Lead-Time-Hero-Monument** (Supreme Thin, 160 px): der Median-Lead
-  aus dem Regional-Backtest über 68 Walk-forward-Folds
+  aus dem Truth Scoreboard über die wöchentlichen H5/H7-Panels
 - **Ephemeris-Tabelle** zweispaltig (Observed · bis HEUTE /
   Forecast · Modell) mit Peak-KWs, Q50-Horizont, Coverage Q80/Q95
 - **Modell-Gütenachweis** als dark Monument-Row: PR-AUC, Precision @
@@ -171,23 +174,36 @@ Button drückt.
 
 ---
 
-## Modell-Gütenachweis (auf dem aktuellen Regional-Forecast)
+## Modell-Gütenachweis (Truth Scoreboard H5/H7)
 
-Für den Pilot-Scope (Influenza A, horizon=7, Walk-forward über 68
-Wochen) zeigt der Backend-Endpoint `/api/v1/media/cockpit/backtest`
-aktuell:
+Der aktuelle Gütenachweis bewertet wöchentliche Bundesland-Panels, nicht
+asynchrone Tages-Snippets. Maßgeblich ist: Trifft das Modell in einer
+Issue-Woche mindestens eine echte Event-Region unter den Top-3?
 
-| Metrik                  | Modell | Persistenz-Baseline | Uplift      |
-|-------------------------|--------|---------------------|-------------|
-| PR-AUC                  | 0.746  | 0.292               | **2.6× besser** |
-| Precision @ Top-3       | 77.5 % | 68.5 %              | **+9.0 pp** |
-| Median Lead-Zeit        | +5 d   | —                   | strukturell |
+Produktions-Policy: `min_train_weeks = 104`. Bei 125 vorbereiteten
+Issue-Wochen bleiben strukturell nur 21 Testwochen. Deshalb ist `GO` für
+Media-Readiness aktuell bewusst blockiert, auch wenn das Ranking stark ist.
 
-Die Zahlen stehen im Modell-Gütenachweis-Panel unter § III *und* in § V
-Backtest — beide Sektionen lesen denselben Endpoint. Das Legacy-
-`forecast_accuracy_log`-System (SARS-CoV-2-basiert, nicht Pilot-Teil)
-ist in der UI nicht mehr sichtbar; es taugte semantisch nicht zum
-aktuellen Regional-Ranking-Modell.
+| Scope | Testwochen | evaluierbare Wochen | PR-AUC | Hit @ Top-3 | Persistenz | Random Expected | ECE | Status |
+|-------|-----------:|--------------------:|-------:|------------:|-----------:|----------------:|----:|--------|
+| Influenza A H5 | 21 | 10 | 0.853 | 1.000 | 0.700 | 0.824 | 0.060 | WATCH |
+| Influenza A H7 | 21 | 10 | 0.854 | 1.000 | 0.700 | 0.824 | 0.061 | WATCH |
+| Influenza B H5 | 21 | 11 | 0.874 | 1.000 | 0.818 | 0.897 | 0.049 | WATCH |
+| Influenza B H7 | 21 | 11 | 0.884 | 1.000 | 0.818 | 0.897 | 0.055 | WATCH |
+| RSV A H5 | 7 | 4 | 0.640 | 0.750 | 1.000 | 0.838 | 0.147 | WATCH |
+| RSV A H7 | 7 | 4 | 0.640 | 0.750 | 1.000 | 0.838 | 0.147 | WATCH |
+
+Explorative Sensitivity-Läufe mit `min_train_weeks = 52` und `78` zeigen,
+dass Influenza A/B auch bei mehr Testwochen stark ranken. Diese Läufe sind
+Analyse, nicht Produktionsfreigabe: Die Media-Readiness-Policy bleibt bei
+104 Trainingswochen.
+
+Die wichtigste Produktlesart ist daher:
+
+- Influenza A/B: starke WATCH-Kandidaten, aber noch kein Media-GO
+- RSV A: Monitoring-only, derzeit schwächer als Persistenz
+- Budget: blockiert, bis Modellgüte, Evidenzumfang und Business-Outcome-
+  Daten gemeinsam tragen
 
 ---
 
@@ -214,13 +230,21 @@ Frontend die Vintage-Runs für den Overlay in § III.
 ## Datenquellen
 
 Je nach Signalpfad fließen unter anderem ein:
-- SURVSTAT (RKI-Meldewesen, wöchentlich, Referenz-Pegel)
-- Notaufnahme-Syndromsurveillance (AKTIN, tagesaktuell, Lead-Sensor)
-- AMELAG / Abwasser
+- SURVSTAT (RKI-Meldewesen, wöchentlich, Truth-Anker und Referenz-Pegel)
+- AMELAG / Abwasser (frühes regionales Eingangssignal)
 - GrippeWeb
+- IfSG-Influenza/RSV und ARE-Kontext
+- Notaufnahme-Syndromsurveillance (AKTIN, Lead-Sensor wo verfügbar)
 - Google Trends
 - Wetter, Ferien, Kalendereffekte
 - BfArM-Kontext für Marketing-/Supply-Signale
+
+Wichtig: SURVSTAT ist vor allem der Wahrheitsanker für Training und
+Backtest. As-of-sichere Werte wie `current_known_incidence`,
+`seasonal_baseline` und `seasonal_mad` dürfen als Kontext genutzt werden.
+Zielwerte wie `next_week_incidence` und `event_label` sind Targets und
+dürfen nie Feature-Spalten sein; das wird in den Artefakt-Metadaten über
+`target_leakage_guards` ausgewiesen.
 
 Die Plattform trennt bewusst drei Ebenen: *epidemiologische Signale*,
 *Datenqualität und Frische*, *Business-/Freigabe-Logik*. Der Snapshot-

@@ -465,6 +465,14 @@ export interface MediaSpendingTruthRegion {
   limitations?: string[];
 }
 
+export interface MediaSpendingTruthGateComponent {
+  name?: string;
+  status: 'passed' | 'failed' | 'warning' | 'blocked' | 'insufficient_evidence' | string;
+  observed?: number | null;
+  threshold?: number | null;
+  direction?: 'higher_is_better' | 'lower_is_better' | string;
+}
+
 export interface MediaSpendingTruthGateEvaluation {
   gate: string;
   status: 'passed' | 'failed' | 'warning' | 'blocked' | 'insufficient_evidence' | string;
@@ -472,11 +480,13 @@ export interface MediaSpendingTruthGateEvaluation {
   observed?: Record<string, unknown>;
   severity?: 'hard' | 'limited' | 'soft' | string;
   reason?: string;
+  components?: Record<string, MediaSpendingTruthGateComponent>;
   explanation?: string;
 }
 
 export interface MediaSpendingTruthPayload {
   schema_version: 'media_spending_truth_v1' | string;
+  engine_version?: string;
   decision_date?: string;
   valid_until?: string;
   pathogen_scope?: string;

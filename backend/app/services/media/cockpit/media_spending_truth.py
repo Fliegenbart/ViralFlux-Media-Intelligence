@@ -16,6 +16,7 @@ from app.services.media.cockpit.budget_allocator import BudgetAllocatorConfig, a
 from app.services.media.cockpit.spending_decision_backtest import evaluate_spending_decision_backtest_for_scope
 
 SCHEMA_VERSION = "media_spending_truth_v1"
+ENGINE_VERSION = "media_spending_truth_v1_2"
 MIN_EVALUABLE_PANEL_WEEKS = 12
 
 HARD_FORECAST_BLOCKERS = {
@@ -188,6 +189,170 @@ def _region_is_live_eligible(prediction: Mapping[str, Any]) -> bool:
     return bool(prediction.get("regional_data_fresh", True)) and not bool(prediction.get("coverage_blockers"))
 
 
+
+def _component_payload(
+    *,
+    name: str,
+    observed: Any,
+    threshold: Any,
+    direction: str = "higher_is_better",
+    warn_below: float | None = None,
+    hard_fail_below: float | None = None,
+) -> dict[str, Any]:
+    obs = _safe_float(observed, float("nan"))
+    thr = _safe_float(threshold, float("nan"))
+    failed = False
+    if math.isfinite(obs) and math.isfinite(thr):
+        if direction == "lower_is_better":
+            failed = obs > thr
+        else:
+            failed = obs < thr
+    elif observed is None:
+        failed = True
+
+    status = "failed" if failed else "passed"
+    if name == "persistence_uplift" and math.isfinite(obs):
+        if hard_fail_below is not None and obs < hard_fail_below:
+            status = "failed"
+        elif warn_below is not None and obs < warn_below:
+            status = "warning"
+        else:
+            status = "passed"
+    elif name == "rank_quality" and failed:
+        status = "warning"
+
+    return {
+        "name": name,
+        "status": status,
+        "observed": None if not math.isfinite(obs) else obs,
+        "threshold": None if not math.isfinite(thr) else thr,
+        "direction": direction,
+    }
+
+
+def _forecast_quality_components(
+    *,
+    card: Mapping[str, Any],
+    predictions: list[Mapping[str, Any]],
+    eligible_region_count: int,
+) -> dict[str, dict[str, Any]]:
+    quality_gate = card.get("quality_gate") if isinstance(card.get("quality_gate"), Mapping) else {}
+    raw_components = quality_gate.get("components") or card.get("forecast_quality_components") or {}
+    components: dict[str, dict[str, Any]] = {}
+
+    if isinstance(raw_components, Mapping):
+        for name, raw in raw_components.items():
+            if not isinstance(raw, Mapping):
+                continue
+            direction = str(raw.get("direction") or "higher_is_better")
+            components[str(name)] = _component_payload(
+                name=str(name),
+                observed=raw.get("observed"),
+                threshold=raw.get("threshold"),
+                direction=direction,
+                warn_below=0.02 if str(name) == "persistence_uplift" else None,
+                hard_fail_below=-0.02 if str(name) == "persistence_uplift" else None,
+            )
+
+    if predictions and "valid_region_share" not in components:
+        components["valid_region_share"] = _component_payload(
+            name="valid_region_share",
+            observed=eligible_region_count / max(len(predictions), 1),
+            threshold=0.75,
+            direction="higher_is_better",
+        )
+    if "forecast_freshness" not in components:
+        components["forecast_freshness"] = _component_payload(
+            name="forecast_freshness",
+            observed=1.0,
+            threshold=0.80,
+            direction="higher_is_better",
+        )
+    return components
+
+
+def _forecast_quality_gate_evaluation(
+    *,
+    forecast_gate_passed: bool,
+    insufficient_evidence: bool,
+    model_worse_than_persistence: bool,
+    hard_blockers: list[str],
+    blockers: list[str],
+    warnings: list[str],
+    readiness: str,
+    evaluable_weeks: int,
+    card: Mapping[str, Any],
+    predictions: list[Mapping[str, Any]],
+    eligible_region_count: int,
+) -> dict[str, Any]:
+    components = _forecast_quality_components(
+        card=card,
+        predictions=predictions,
+        eligible_region_count=eligible_region_count,
+    )
+    component_statuses = {name: item.get("status") for name, item in components.items()}
+
+    hard_component_failures: list[str] = []
+    if component_statuses.get("valid_region_share") == "failed":
+        hard_component_failures.append("valid_region_share")
+    if component_statuses.get("forecast_freshness") == "failed":
+        hard_component_failures.append("forecast_freshness")
+    if component_statuses.get("directional_accuracy") == "failed":
+        hard_component_failures.append("directional_accuracy")
+    persistence = components.get("persistence_uplift") or {}
+    persistence_observed = _safe_float(persistence.get("observed"), 0.0)
+    if persistence and persistence_observed < -0.02:
+        hard_component_failures.append("persistence_uplift")
+
+    warning_components = [
+        name
+        for name, status in component_statuses.items()
+        if status in {"failed", "warning"} and name not in hard_component_failures
+    ]
+
+    if forecast_gate_passed:
+        status = "passed"
+        severity = "hard"
+        reason = "Forecast quality sufficient for media decisioning."
+    elif hard_blockers or model_worse_than_persistence or hard_component_failures:
+        status = "failed"
+        severity = "hard"
+        reason = "Forecast failed hard requirements: " + ", ".join([*hard_blockers, *hard_component_failures] or blockers or ["forecast_quality"])
+    elif insufficient_evidence:
+        status = "insufficient_evidence"
+        severity = "hard"
+        reason = "Forecast evidence is not yet sufficient for budget approval."
+    elif warning_components or any(item in CALIBRATION_WARNING_BLOCKERS for item in blockers + warnings):
+        status = "warning"
+        severity = "limited"
+        reason = "Forecast decision quality is usable only for limited release."
+    else:
+        status = "failed"
+        severity = "hard"
+        reason = "Forecast quality below required threshold."
+
+    return {
+        "gate": "forecast_quality",
+        "status": status,
+        "threshold": {
+            "readiness": "go",
+            "min_evaluable_panel_weeks": MIN_EVALUABLE_PANEL_WEEKS,
+            "hard_blockers": "none",
+        },
+        "observed": {
+            "readiness": readiness,
+            "evaluable_panel_weeks": evaluable_weeks,
+            "blockers": blockers,
+            "warnings": warnings,
+            "quality_gate_overall_passed": _quality_gate_passed(card),
+        },
+        "severity": severity,
+        "reason": reason,
+        "components": components,
+        "explanation": "Forecast quality separates hard requirements, decision-usefulness metrics, and calibration diagnostics.",
+    }
+
+
 def _decision_backtest_status(decision_backtest: Mapping[str, Any]) -> str:
     if bool(decision_backtest.get("decision_backtest_passed")):
         return "passed"
@@ -218,28 +383,17 @@ def _decision_backtest_status(decision_backtest: Mapping[str, Any]) -> str:
 
 def _build_gate_evaluations(
     *,
-    forecast_gate_passed: bool,
+    forecast_quality_gate: Mapping[str, Any],
     live_data_gate_status: str,
     decision_backtest_status: str,
     business_constraints_passed: bool,
-    insufficient_evidence: bool,
     model_worse_than_persistence: bool,
-    readiness: str,
-    blockers: list[str],
-    warnings: list[str],
-    evaluable_weeks: int,
     card: Mapping[str, Any],
     predictions: list[Mapping[str, Any]],
     decision_backtest: Mapping[str, Any],
     eligible_region_count: int,
     min_eligible_regions: int,
 ) -> list[dict[str, Any]]:
-    if forecast_gate_passed:
-        forecast_status = "passed"
-    elif insufficient_evidence and not model_worse_than_persistence and not any(item in HARD_FORECAST_BLOCKERS for item in blockers):
-        forecast_status = "insufficient_evidence"
-    else:
-        forecast_status = "failed"
 
     backtest_threshold = _safe_float(decision_backtest.get("min_regret_reduction"), 0.03)
     backtest_observed = {
@@ -255,25 +409,7 @@ def _build_gate_evaluations(
     decision_severity = "hard" if decision_backtest_status in {"failed", "insufficient_evidence"} else "limited"
 
     return [
-        {
-            "gate": "forecast_quality",
-            "status": forecast_status,
-            "threshold": {
-                "readiness": "go",
-                "min_evaluable_panel_weeks": MIN_EVALUABLE_PANEL_WEEKS,
-                "hard_blockers": "none",
-            },
-            "observed": {
-                "readiness": readiness,
-                "evaluable_panel_weeks": evaluable_weeks,
-                "blockers": blockers,
-                "warnings": warnings,
-                "quality_gate_overall_passed": _quality_gate_passed(card),
-            },
-            "severity": "hard",
-            "reason": "Forecast evidence must be strong enough before budget can be approved.",
-            "explanation": "Forecast evidence is spendable only when readiness is go, enough panel weeks exist, and no hard blockers are present.",
-        },
+        dict(forecast_quality_gate),
         {
             "gate": "baseline_superiority",
             "status": "failed" if model_worse_than_persistence else "passed",
@@ -431,6 +567,7 @@ def _empty_payload(
 ) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
+        "engine_version": ENGINE_VERSION,
         "decision_date": decision_day.isoformat(),
         "valid_until": (decision_day + timedelta(days=int(horizon_days))).isoformat(),
         "pathogen_scope": virus_typ,
@@ -511,17 +648,25 @@ def build_media_spending_truth(
         live_data_gate_status = "failed"
 
     business_constraints_passed = True
-    gate_evaluations = _build_gate_evaluations(
+    forecast_quality_gate = _forecast_quality_gate_evaluation(
         forecast_gate_passed=forecast_gate_passed,
+        insufficient_evidence=insufficient_evidence,
+        model_worse_than_persistence=model_worse_than_persistence,
+        hard_blockers=hard_blockers,
+        blockers=blockers,
+        warnings=warnings,
+        readiness=readiness,
+        evaluable_weeks=evaluable_weeks,
+        card=card,
+        predictions=rows,
+        eligible_region_count=eligible_region_count,
+    )
+    gate_evaluations = _build_gate_evaluations(
+        forecast_quality_gate=forecast_quality_gate,
         live_data_gate_status=live_data_gate_status,
         decision_backtest_status=decision_backtest_gate_status,
         business_constraints_passed=business_constraints_passed,
-        insufficient_evidence=insufficient_evidence,
         model_worse_than_persistence=model_worse_than_persistence,
-        readiness=readiness,
-        blockers=blockers,
-        warnings=warnings,
-        evaluable_weeks=evaluable_weeks,
         card=card,
         predictions=rows,
         decision_backtest=decision_backtest_payload,
@@ -745,6 +890,7 @@ def build_media_spending_truth(
     forecast_evidence = "validated" if forecast_gate_passed else "limited" if not hard_blockers else "blocked"
     return {
         "schema_version": SCHEMA_VERSION,
+        "engine_version": ENGINE_VERSION,
         "decision_date": decision_day.isoformat(),
         "valid_until": valid_day.isoformat(),
         "pathogen_scope": virus_typ,

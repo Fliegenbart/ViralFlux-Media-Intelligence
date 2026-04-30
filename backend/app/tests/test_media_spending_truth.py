@@ -303,6 +303,104 @@ class MediaSpendingTruthTests(unittest.TestCase):
         by_gate = {item["gate"]: item for item in payload["gateTrace"]}
         self.assertEqual(by_gate["live_data_quality"]["status"], "warning")
 
+
+    def test_forecast_quality_gate_exposes_component_diagnostics_and_engine_version(self) -> None:
+        scoreboard = _scoreboard("blocked", ["ece_fail"], evaluable_weeks=18)
+        card = scoreboard["combined_by_virus"]["Influenza A"]["h7"]
+        card["quality_gate"] = {
+            "overall_passed": False,
+            "components": {
+                "valid_region_share": {"observed": 0.94, "threshold": 0.75, "direction": "higher_is_better"},
+                "directional_accuracy": {"observed": 0.71, "threshold": 0.60, "direction": "higher_is_better"},
+                "rank_quality": {"observed": 0.48, "threshold": 0.50, "direction": "higher_is_better"},
+                "persistence_uplift": {"observed": 0.04, "threshold": 0.00, "direction": "higher_is_better"},
+                "calibration_error": {"observed": 0.23, "threshold": 0.15, "direction": "lower_is_better"},
+            },
+        }
+
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[_prediction(), _prediction(bundesland="BY", bundesland_name="Bayern", event_probability=0.20, change_pct=-8.0, viral_pressure_features={"budget_opportunity_score": 0.18})],
+            truth_scoreboard=scoreboard,
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0},
+        )
+
+        by_gate = {item["gate"]: item for item in payload["gateTrace"]}
+        forecast_gate = by_gate["forecast_quality"]
+        self.assertEqual(payload["engine_version"], "media_spending_truth_v1_2")
+        self.assertIn("components", forecast_gate)
+        self.assertEqual(forecast_gate["components"]["calibration_error"]["status"], "failed")
+        self.assertEqual(forecast_gate["components"]["calibration_error"]["direction"], "lower_is_better")
+        self.assertEqual(forecast_gate["components"]["valid_region_share"]["status"], "passed")
+
+    def test_calibration_only_forecast_warning_allows_limited_release_when_decision_backtest_passes(self) -> None:
+        scoreboard = _scoreboard("blocked", ["ece_fail"], evaluable_weeks=18)
+        card = scoreboard["combined_by_virus"]["Influenza A"]["h7"]
+        card["quality_gate"] = {
+            "overall_passed": False,
+            "components": {
+                "valid_region_share": {"observed": 1.0, "threshold": 0.75, "direction": "higher_is_better"},
+                "forecast_freshness": {"observed": 1.0, "threshold": 0.80, "direction": "higher_is_better"},
+                "directional_accuracy": {"observed": 0.74, "threshold": 0.55, "direction": "higher_is_better"},
+                "rank_quality": {"observed": 0.62, "threshold": 0.50, "direction": "higher_is_better"},
+                "persistence_uplift": {"observed": 0.05, "threshold": 0.00, "direction": "higher_is_better"},
+                "calibration_error": {"observed": 0.23, "threshold": 0.15, "direction": "lower_is_better"},
+            },
+        }
+
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[
+                _prediction(),
+                _prediction(bundesland="BY", bundesland_name="Bayern", event_probability=0.20, change_pct=-8.0, viral_pressure_features={"budget_opportunity_score": 0.18}),
+            ],
+            truth_scoreboard=scoreboard,
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0},
+        )
+
+        nw = next(item for item in payload["regions"] if item["region_code"] == "NW")
+        by_gate = {item["gate"]: item for item in payload["gateTrace"]}
+        self.assertEqual(by_gate["forecast_quality"]["status"], "warning")
+        self.assertEqual(by_gate["forecast_quality"]["severity"], "limited")
+        self.assertEqual(payload["release_mode"], "limited")
+        self.assertGreater(nw["shadow_delta_pct"], nw["approved_delta_pct"])
+        self.assertGreater(nw["approved_delta_pct"], 0.0)
+        self.assertLessEqual(abs(nw["approved_delta_pct"]), 5.0)
+
+    def test_directional_or_persistence_forecast_component_failure_remains_blocked(self) -> None:
+        scoreboard = _scoreboard("blocked", [], evaluable_weeks=18)
+        card = scoreboard["combined_by_virus"]["Influenza A"]["h7"]
+        card["quality_gate"] = {
+            "overall_passed": False,
+            "components": {
+                "valid_region_share": {"observed": 1.0, "threshold": 0.75, "direction": "higher_is_better"},
+                "forecast_freshness": {"observed": 1.0, "threshold": 0.80, "direction": "higher_is_better"},
+                "directional_accuracy": {"observed": 0.40, "threshold": 0.55, "direction": "higher_is_better"},
+                "rank_quality": {"observed": 0.62, "threshold": 0.50, "direction": "higher_is_better"},
+                "persistence_uplift": {"observed": 0.03, "threshold": 0.00, "direction": "higher_is_better"},
+                "calibration_error": {"observed": 0.08, "threshold": 0.15, "direction": "lower_is_better"},
+            },
+        }
+
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[_prediction(), _prediction(bundesland="BY", bundesland_name="Bayern", event_probability=0.20, change_pct=-8.0, viral_pressure_features={"budget_opportunity_score": 0.18})],
+            truth_scoreboard=scoreboard,
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            base_budget_by_region={"NW": 10000.0, "BY": 10000.0},
+        )
+
+        by_gate = {item["gate"]: item for item in payload["gateTrace"]}
+        self.assertEqual(payload["release_mode"], "blocked")
+        self.assertEqual(by_gate["forecast_quality"]["status"], "failed")
+        self.assertEqual(by_gate["forecast_quality"]["severity"], "hard")
+        self.assertEqual(by_gate["forecast_quality"]["components"]["directional_accuracy"]["status"], "failed")
+
     def test_passed_gates_allow_increase_approved_with_reason_codes(self) -> None:
         payload = build_media_spending_truth(
             virus_typ="Influenza A",

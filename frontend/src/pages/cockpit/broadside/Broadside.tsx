@@ -10,6 +10,8 @@ import ImpactSection from './ImpactSection';
 import BacktestSection from './BacktestSection';
 import NextStepsSection from './NextStepsSection';
 import CeoPitchMode from './CeoPitchMode';
+import EvidenceStatusBar from './EvidenceStatusBar';
+import VirusWaveEvidencePanel from './VirusWaveEvidencePanel';
 
 /**
  * Broadside — Story-Scroll-Renovation 2026-04-22.
@@ -144,17 +146,15 @@ export const Broadside: React.FC<Props> = ({
         onVirusChange={onVirusChange}
         supportedViruses={supportedViruses}
       />
+      <EvidenceStatusBar snapshot={snapshot} />
       <main className="page">
-        <CeoPitchMode snapshot={snapshot} supportedViruses={supportedViruses} onReload={onReload} />
-        {/* 2026-04-20: Atlas promoted to § I — the 3D wave map is the
-            consistent aha-moment for first-time readers (confirmed during
-            persona walkthrough). Decision follows as § II because the
-            recommendation reads as the verdict after the evidence. */}
+        <VirusWaveEvidencePanel snapshot={snapshot} />
         <AtlasSection snapshot={snapshot} />
-        <DecisionSection snapshot={snapshot} />
         <ForecastSection snapshot={snapshot} />
-        <ImpactSection snapshot={snapshot} />
         <BacktestSection snapshot={snapshot} />
+        <DecisionSection snapshot={snapshot} />
+        <CeoPitchMode snapshot={snapshot} supportedViruses={supportedViruses} onReload={onReload} />
+        <ImpactSection snapshot={snapshot} />
         <NextStepsSection snapshot={snapshot} />
         <PageFooter snapshot={snapshot} />
       </main>

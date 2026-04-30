@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { CockpitSnapshot } from '../types';
+import type { CockpitSnapshot, EvidenceValidationStatus } from '../types';
 import { useBacktest } from '../useBacktest';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
@@ -24,6 +24,37 @@ import type { GateTone } from './SectionHeader';
 
 interface Props {
   snapshot: CockpitSnapshot;
+}
+
+function firstText(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function firstNumber(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
+  for (const value of values) {
+    if (typeof value === 'boolean') return value;
+  }
+  return null;
+}
+
+function validationFrom(snapshot: CockpitSnapshot): EvidenceValidationStatus | null {
+  return snapshot.backtestResearch ?? snapshot.backtest_research ?? null;
+}
+
+function pctLabel(value: number | null): string {
+  if (value === null) return '—';
+  const pct = value <= 1 ? value * 100 : value;
+  return `${pct.toFixed(0)} %`;
 }
 
 const VIRUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -129,8 +160,8 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
   return (
     <section className="instr-section" id="sec-backtest">
       <SectionHeader
-        numeral="V"
-        title="Backtest"
+        numeral="IV"
+        title="Evidence Validation"
         subtitle={
           <>
             Walk-forward über {window?.folds ?? '—'} Wochen · gegen Persistenz-Baseline
@@ -157,6 +188,89 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           </>
         }
       />
+
+      {(() => {
+        const validation = validationFrom(snapshot);
+        const decisionBacktest =
+          snapshot.mediaSpendingTruth?.decision_backtest ??
+          snapshot.mediaSpendingTruth?.decisionBacktest ??
+          null;
+        const researchOnly = firstBool(
+          validation?.research_only,
+          validation?.researchOnly,
+        ) ?? true;
+        const candidateStatus = firstText(
+          validation?.candidate_status,
+          validation?.candidateStatus,
+          snapshot.mediaSpendingTruth?.forecast_evidence,
+          snapshot.mediaSpendingTruth?.forecastEvidence,
+          snapshot.modelStatus?.forecastReadiness,
+        ) ?? 'review';
+        const onsetGain = firstNumber(
+          validation?.onset_gain_days,
+          validation?.onsetGainDays,
+          headline?.median_lead_days ?? null,
+          snapshot.modelStatus?.lead?.bestLagDays ?? null,
+        );
+        const falseWarningRisk = firstNumber(
+          validation?.false_warning_risk,
+          validation?.falseWarningRisk,
+        );
+        const phaseAccuracy = firstNumber(
+          validation?.phase_accuracy,
+          validation?.phaseAccuracy,
+          headline?.precision_at_top3 ?? null,
+        );
+        const recommendation = firstText(
+          validation?.recommendation,
+          decisionBacktest?.decision_backtest_passed === true
+            ? 'go_for_simulation'
+            : null,
+        ) ?? 'review';
+
+        return (
+          <div className="validation-panel">
+            <div className="validation-head">
+              <div>
+                <div className="validation-kicker">Research layer</div>
+                <h3>SurvStat-only vs AMELAG + SurvStat</h3>
+              </div>
+              <span className="research-chip">
+                {researchOnly ? 'research_only=true' : 'budget gate connected'}
+              </span>
+            </div>
+            <div className="validation-grid">
+              <div>
+                <span className="metric-label">Candidate status</span>
+                <span className="metric-value">{candidateStatus}</span>
+                <span className="metric-note">noch kein direkter Budget-Effekt</span>
+              </div>
+              <div>
+                <span className="metric-label">Onset gain</span>
+                <span className="metric-value">
+                  {onsetGain !== null ? `${onsetGain} d` : '—'}
+                </span>
+                <span className="metric-note">Früherkennung gegen Meldewesen</span>
+              </div>
+              <div>
+                <span className="metric-label">False warning risk</span>
+                <span className="metric-value">{pctLabel(falseWarningRisk)}</span>
+                <span className="metric-note">nur Research, kein Budgettrigger</span>
+              </div>
+              <div>
+                <span className="metric-label">Phase accuracy</span>
+                <span className="metric-value">{pctLabel(phaseAccuracy)}</span>
+                <span className="metric-note">Wellenphase richtig getroffen</span>
+              </div>
+              <div>
+                <span className="metric-label">Recommendation</span>
+                <span className="metric-value">{recommendation}</span>
+                <span className="metric-note">Simulation vor operativer Freigabe</span>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="backtest-head">
         <div className="bt-monument">

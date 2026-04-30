@@ -83,7 +83,7 @@ export const ImpactSection: React.FC<Props> = ({ snapshot }) => {
   return (
     <section className="instr-section" id="sec-impact">
       <SectionHeader
-        numeral="IV"
+        numeral="VI"
         title="Wirkung & Feedback-Loop"
         subtitle={
           <>

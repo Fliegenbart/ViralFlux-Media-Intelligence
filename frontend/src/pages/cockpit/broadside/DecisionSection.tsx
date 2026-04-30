@@ -196,6 +196,9 @@ const BLOCKER_LABELS: Record<string, string> = {
   regional_coverage_incomplete: 'regionale Abdeckung unvollständig',
   horizon_coverage_blocked: 'H5/H7-Coverage blockiert',
   forecast_stale: 'Forecast veraltet',
+  DATA_STALE: 'Daten sind zu alt',
+  DRIFT_WARN: 'Drift-Warnung aktiv',
+  SEASON_OFF: 'außerhalb der aktiven Saison',
 };
 
 const formatBlocker = (value: string): string =>
@@ -390,8 +393,8 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   return (
     <section className="instr-section" id="sec-decision">
       <SectionHeader
-        numeral="II"
-        title="Entscheidung der Woche"
+        numeral="V"
+        title="Media Budget Decision"
         subtitle={
           <>
             {snapshot.isoWeek} · {virusLabel} ·{' '}
@@ -405,16 +408,10 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Die <b>eine Empfehlung</b> der Woche: „Prüfe X € als
-            kontrollierten Shift-Kandidaten von A nach B." Rechts die
-            Konfidenz als Skala mit Nadel — kein Prozent-Pill, das
-            Genauigkeit vortäuscht. In Wellen-Peaks
-            (z. B. KW 05-10) steht hier ein prüfbarer Shift-Kandidat
-            mit Begründung; in Post-Saison-Wochen wie heute schweigt
-            das Tool bewusst — keine Empfehlung ist die ehrliche
-            Empfehlung, wenn kein Signal da ist. Probier die
-            <b> Demo-Szene</b>, um zu sehen, wie die Empfehlung
-            aussieht, sobald der Media-Plan angebunden ist.
+            Erst nach Evidenz, Forecast und Validierung kommt Media.
+            Dieses Panel trennt darum zwischen <b>diagnostischem Signal</b>,
+            <b> freigegebenem Budget-Effekt</b> und <b>blockierten Gates</b>.
+            Wenn Budget nicht freigegeben ist, muss das hier lesbar sein.
           </>
         }
       />

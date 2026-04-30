@@ -84,6 +84,16 @@ const releaseModeFromPayload = (truth: MediaSpendingTruthPayload): string => {
   return truth.global_status || 'blocked';
 };
 
+const budgetCanChangeFromPayload = (truth: MediaSpendingTruthPayload, releaseMode: string): boolean => {
+  const explicit =
+    truth.can_change_budget ??
+    truth.canChangeBudget ??
+    truth.budget_can_change ??
+    truth.budgetCanChange;
+  if (typeof explicit === 'boolean') return explicit;
+  return releaseMode === 'approved' && truth.budget_permission === 'approved_with_cap';
+};
+
 const approvedDelta = (region: MediaSpendingTruthRegion): number =>
   region.approved_delta_pct ?? region.approvedDeltaPct ?? region.recommended_delta_pct ?? 0;
 
@@ -110,6 +120,9 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
 
   const releaseMode = releaseModeFromPayload(truth);
   const permission = truth.budget_permission || 'blocked';
+  const budgetCanChange = budgetCanChangeFromPayload(truth, releaseMode);
+  const diagnosticOnly =
+    truth.diagnostic_only ?? truth.diagnosticOnly ?? !budgetCanChange;
   const regions = sortRegions(truth.regions ?? []);
   const blockedReasons = (truth.blocked_because ?? truth.blockedBecause ?? []).slice(0, 4);
   const gateTrace = truth.gateTrace ?? truth.gate_evaluations ?? truth.gateEvaluations ?? [];
@@ -131,7 +144,9 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
           <h3>{STATUS_LABELS[releaseMode] ?? releaseMode.replace(/_/g, ' ')}</h3>
         </div>
         <div className="media-truth-permission">
-          {PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' ')}
+          <span>{PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' ')}</span>
+          <b>{budgetCanChange ? 'budget_can_change=true' : 'budget_can_change=false'}</b>
+          {diagnosticOnly ? <b>Diagnostic only</b> : null}
         </div>
       </div>
 

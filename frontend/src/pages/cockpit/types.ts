@@ -411,6 +411,152 @@ export interface EvidenceComponent {
   blockers: string[];
 }
 
+export interface VirusWaveTruthSource {
+  phase?: string | null;
+  phase_label?: string | null;
+  phaseLabel?: string | null;
+  onset_date?: string | null;
+  onsetDate?: string | null;
+  peak_date?: string | null;
+  peakDate?: string | null;
+  latest_date?: string | null;
+  latestDate?: string | null;
+  status?: string | null;
+  confidence?: number | null;
+  lead_days?: number | null;
+  leadDays?: number | null;
+}
+
+export interface VirusWaveTruthAlignment {
+  lead_lag_days?: number | null;
+  leadLagDays?: number | null;
+  alignment_score?: number | null;
+  alignmentScore?: number | null;
+  divergence_score?: number | null;
+  divergenceScore?: number | null;
+  amelag_lead_days?: number | null;
+  amelagLeadDays?: number | null;
+}
+
+export interface VirusWaveEvidenceWeights {
+  amelag?: number | null;
+  survstat?: number | null;
+  [key: string]: number | null | undefined;
+}
+
+export interface VirusWaveTruthEvidence {
+  effective_weights?: VirusWaveEvidenceWeights | null;
+  effectiveWeights?: VirusWaveEvidenceWeights | null;
+  confidence_method?: string | null;
+  confidenceMethod?: string | null;
+  confidence?: number | null;
+  method?: string | null;
+  summary?: string[] | null;
+}
+
+export interface VirusWaveTruth {
+  schema?: string | null;
+  engine_version?: string | null;
+  engineVersion?: string | null;
+  status?: string | null;
+  reason?: string | null;
+  scope?: {
+    virus?: string | null;
+    region?: string | null;
+    lookback_weeks?: number | null;
+    lookbackWeeks?: number | null;
+  } | null;
+  sourceStatus?: Record<string, unknown> | null;
+  source_status?: Record<string, unknown> | null;
+  survstat?: VirusWaveTruthSource | null;
+  amelag?: VirusWaveTruthSource | null;
+  alignment?: VirusWaveTruthAlignment | null;
+  evidence?: VirusWaveTruthEvidence | null;
+}
+
+export interface SiteEarlyWarningAlert {
+  standort: string;
+  bundesland: string;
+  datum: string;
+  typ: string;
+  stage: 'yellow' | 'red' | 'none' | string;
+  metric?: string | null;
+  current_value?: number | null;
+  currentValue?: number | null;
+  baseline_value?: number | null;
+  baselineValue?: number | null;
+  change_pct?: number | null;
+  changePct?: number | null;
+  previous_value?: number | null;
+  previousValue?: number | null;
+  previous_date?: string | null;
+  previousDate?: string | null;
+  unter_bg?: string | null;
+  unterBg?: string | null;
+  laborwechsel?: string | null;
+  reasons?: string[] | string | null;
+  quality_flags?: string[] | null;
+  qualityFlags?: string[] | null;
+}
+
+export interface SiteEarlyWarningPayload {
+  measurements_evaluated?: number | null;
+  measurementsEvaluated?: number | null;
+  site_virus_series?: number | null;
+  siteVirusSeries?: number | null;
+  historical_alerts?: number | null;
+  historicalAlerts?: number | null;
+  active_alerts?: SiteEarlyWarningAlert[] | number | null;
+  activeAlerts?: SiteEarlyWarningAlert[] | null;
+  active_alert_count?: number | null;
+  activeAlertCount?: number | null;
+  active_red_alerts?: number | null;
+  activeRedAlerts?: number | null;
+  active_yellow_alerts?: number | null;
+  activeYellowAlerts?: number | null;
+  active_since_date?: string | null;
+  activeSinceDate?: string | null;
+  latest_measurement_date?: string | null;
+  latestMeasurementDate?: string | null;
+  source?: string | null;
+  config?: Record<string, unknown> | null;
+}
+
+export interface EvidenceValidationStatus {
+  research_only?: boolean | null;
+  researchOnly?: boolean | null;
+  candidate_status?: string | null;
+  candidateStatus?: string | null;
+  recommendation?: 'go_for_simulation' | 'review' | 'no_go' | string | null;
+  onset_gain_days?: number | null;
+  onsetGainDays?: number | null;
+  false_warning_risk?: number | null;
+  falseWarningRisk?: number | null;
+  phase_accuracy?: number | null;
+  phaseAccuracy?: number | null;
+  survstat_only?: Record<string, unknown> | null;
+  survstatOnly?: Record<string, unknown> | null;
+  amelag_survstat?: Record<string, unknown> | null;
+  amelagSurvstat?: Record<string, unknown> | null;
+}
+
+export interface CockpitSystemStatus {
+  diagnostic_only?: boolean | null;
+  diagnosticOnly?: boolean | null;
+  can_change_budget?: boolean | null;
+  canChangeBudget?: boolean | null;
+  budget_can_change?: boolean | null;
+  budgetCanChange?: boolean | null;
+  global_status?: string | null;
+  globalStatus?: string | null;
+  budget_mode?: string | null;
+  budgetMode?: string | null;
+  latest_amelag_date?: string | null;
+  latestAmelagDate?: string | null;
+  latest_survstat_date?: string | null;
+  latestSurvstatDate?: string | null;
+}
+
 
 export type MediaSpendingGlobalStatus =
   | 'blocked'
@@ -486,23 +632,38 @@ export interface MediaSpendingTruthGateEvaluation {
 
 export interface MediaSpendingTruthPayload {
   schema_version: 'media_spending_truth_v1' | string;
+  schemaVersion?: string;
   engine_version?: string;
+  engineVersion?: string;
   decision_date?: string;
+  decisionDate?: string;
   valid_until?: string;
+  validUntil?: string;
   pathogen_scope?: string;
   horizon_days?: number;
   global_status: MediaSpendingGlobalStatus | string;
+  globalStatus?: MediaSpendingGlobalStatus | string;
   globalDecision?: MediaSpendingReleaseMode | string;
   release_mode?: MediaSpendingReleaseMode | string;
   releaseMode?: MediaSpendingReleaseMode | string;
   max_approved_delta_pct?: number;
   maxApprovedDeltaPct?: number;
   budget_permission: MediaSpendingBudgetPermission | string;
+  budgetPermission?: MediaSpendingBudgetPermission | string;
+  can_change_budget?: boolean | null;
+  canChangeBudget?: boolean | null;
+  budget_can_change?: boolean | null;
+  budgetCanChange?: boolean | null;
+  diagnostic_only?: boolean | null;
+  diagnosticOnly?: boolean | null;
   data_quality?: string;
   forecast_evidence?: string;
+  forecastEvidence?: string;
   decision_policy?: Record<string, unknown>;
   forecast_gate?: Record<string, unknown>;
+  forecastGate?: Record<string, unknown>;
   decision_backtest?: Record<string, unknown>;
+  decisionBacktest?: Record<string, unknown>;
   blocked_because?: string[];
   blockedBecause?: string[];
   gate_evaluations?: MediaSpendingTruthGateEvaluation[];
@@ -510,6 +671,7 @@ export interface MediaSpendingTruthPayload {
   gateTrace?: MediaSpendingTruthGateEvaluation[];
   regions: MediaSpendingTruthRegion[];
   limitations?: string[];
+  virusWaveTruth?: VirusWaveTruth | null;
 }
 
 export interface EvidenceScore {
@@ -571,4 +733,11 @@ export interface CockpitSnapshot {
   mediaPlan: MediaPlanStatus;
   /** Free-form operator notes, shown in a small "facts" strip. */
   notes: string[];
+  /** Optional evidence-first cockpit blocks. Older snapshots omit them. */
+  systemStatus?: CockpitSystemStatus | null;
+  virusWaveTruth?: VirusWaveTruth | null;
+  siteEarlyWarning?: SiteEarlyWarningPayload | null;
+  site_early_warning?: SiteEarlyWarningPayload | null;
+  backtestResearch?: EvidenceValidationStatus | null;
+  backtest_research?: EvidenceValidationStatus | null;
 }

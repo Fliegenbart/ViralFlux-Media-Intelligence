@@ -186,7 +186,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
   return (
     <section className="instr-section" id="sec-next-steps">
       <SectionHeader
-        numeral="VI"
+        numeral="VII"
         title="Nächste Schritte"
         subtitle={
           <>

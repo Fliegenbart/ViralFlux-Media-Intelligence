@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { CockpitSnapshot, RegionForecast, Bundesland } from '../types';
+import type {
+  CockpitSnapshot,
+  RegionForecast,
+  Bundesland,
+  SiteEarlyWarningAlert,
+} from '../types';
 import { fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
@@ -29,6 +34,120 @@ import AtlasChoropleth from './AtlasChoropleth';
 interface Props {
   snapshot: CockpitSnapshot;
 }
+
+function firstNumber(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function compactValue(value: number | null): string {
+  if (value === null) return '—';
+  return Math.round(value).toLocaleString('de-DE');
+}
+
+function alertReasons(alert: SiteEarlyWarningAlert): string[] {
+  const rawReasons = alert.reasons;
+  const reasons = Array.isArray(rawReasons)
+    ? rawReasons
+    : typeof rawReasons === 'string' && rawReasons.trim()
+      ? rawReasons.split(',').map((item) => item.trim()).filter(Boolean)
+      : [];
+  const qualityFlags = alert.quality_flags ?? alert.qualityFlags ?? [];
+  const flags = [...reasons, ...qualityFlags];
+  if (alert.unter_bg === 'ja' || alert.unterBg === 'ja') flags.push('unter_bg');
+  if (alert.laborwechsel === 'ja') flags.push('laborwechsel');
+  return Array.from(new Set(flags));
+}
+
+function activeAlertsFrom(snapshot: CockpitSnapshot): SiteEarlyWarningAlert[] {
+  const payload = snapshot.siteEarlyWarning ?? snapshot.site_early_warning ?? null;
+  if (!payload) return [];
+  if (Array.isArray(payload.activeAlerts)) return payload.activeAlerts;
+  if (Array.isArray(payload.active_alerts)) return payload.active_alerts;
+  return [];
+}
+
+function activeAlertCount(snapshot: CockpitSnapshot, alerts: SiteEarlyWarningAlert[]): number {
+  const payload = snapshot.siteEarlyWarning ?? snapshot.site_early_warning ?? null;
+  if (!payload) return alerts.length;
+  if (typeof payload.active_alert_count === 'number') return payload.active_alert_count;
+  if (typeof payload.activeAlertCount === 'number') return payload.activeAlertCount;
+  if (typeof payload.active_alerts === 'number') return payload.active_alerts;
+  return alerts.length;
+}
+
+const SiteEarlyWarningLayer: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
+  const payload = snapshot.siteEarlyWarning ?? snapshot.site_early_warning ?? null;
+  const alerts = activeAlertsFrom(snapshot);
+  const count = activeAlertCount(snapshot, alerts);
+  const redCount = payload?.active_red_alerts ?? payload?.activeRedAlerts ?? alerts.filter((a) => a.stage === 'red').length;
+  const yellowCount = payload?.active_yellow_alerts ?? payload?.activeYellowAlerts ?? alerts.filter((a) => a.stage === 'yellow').length;
+  const latestDate = payload?.latest_measurement_date ?? payload?.latestMeasurementDate ?? '—';
+
+  return (
+    <div className="site-warning-layer" aria-label="AMELAG Standort-Frühwarnung">
+      <div className="site-warning-head">
+        <div>
+          <div className="site-warning-kicker">AMELAG Standort-Frühwarnung</div>
+          <h3>Lokale Baseline statt letzter Einzelwert</h3>
+        </div>
+        <div className="site-warning-counts">
+          <span className="red">{redCount} rot</span>
+          <span className="yellow">{yellowCount} gelb</span>
+          <span>{count} aktiv</span>
+        </div>
+      </div>
+      <p className="site-warning-note">
+        Ein Standort wird nicht alarmiert, nur weil der letzte Messwert stark
+        steigt. Verglichen wird gegen die lokale Standort-Baseline; Qualitätsflags
+        wie unter_bg oder Laborwechsel bleiben sichtbar. Diese Warnungen sind
+        lokal und nicht budgetwirksam.
+      </p>
+      <div className="site-warning-meta">
+        <span>Latest wastewater data: {latestDate}</span>
+        <span>Vergleich: current_value gegen baseline_value</span>
+      </div>
+      {alerts.length > 0 ? (
+        <div className="site-alert-list">
+          {alerts.slice(0, 8).map((alert) => {
+            const current = firstNumber(alert.current_value, alert.currentValue);
+            const baseline = firstNumber(alert.baseline_value, alert.baselineValue);
+            const changePct = firstNumber(alert.change_pct, alert.changePct);
+            const flags = alertReasons(alert);
+            return (
+              <div className={`site-alert site-alert-${alert.stage}`} key={`${alert.standort}-${alert.typ}-${alert.datum}`}>
+                <div className="site-alert-main">
+                  <span className={`site-alert-stage ${alert.stage}`}>{alert.stage}</span>
+                  <span className="site-alert-name">{alert.standort}</span>
+                  <span className="site-alert-region">{alert.bundesland}</span>
+                  <span className="site-alert-virus">{alert.typ}</span>
+                </div>
+                <div className="site-alert-values">
+                  <span>current {compactValue(current)}</span>
+                  <span>baseline {compactValue(baseline)}</span>
+                  <span>
+                    change {changePct !== null ? `${changePct > 0 ? '+' : ''}${changePct.toFixed(0)} %` : '—'}
+                  </span>
+                </div>
+                <div className="site-alert-flags">
+                  {flags.length > 0 ? flags.join(' · ') : 'quality_flags=none'}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="site-warning-empty">
+          Noch kein site_early_warning Detailblock im Snapshot. Sobald aktive
+          Standort-Alarme mitgeliefert werden, erscheinen hier Standort,
+          Virus, Baseline, aktueller Wert, Abweichung und Flags.
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Schematisches Deutschland-Raster (x, z)  — -4..+4 Einheiten.
 const LAENDER_COORDS: Record<Bundesland, { x: number; z: number; name: string }> = {
@@ -808,8 +927,8 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
   return (
     <section className="instr-section" id="sec-atlas">
       <SectionHeader
-        numeral="I"
-        title="Wellen-Atlas · Frühsignal-Ranking"
+        numeral="II"
+        title="AMELAG Standort-Frühwarnung"
         subtitle={
           <>
             {activeRegionCount} / 16 Bundesländer
@@ -890,6 +1009,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
           </div>
         </div>
       </div>
+      <SiteEarlyWarningLayer snapshot={snapshot} />
     </section>
   );
 };

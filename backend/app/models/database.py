@@ -30,6 +30,7 @@ class WastewaterData(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     unter_bg = Column(Boolean)  # Unter Bestimmungsgrenze
+    laborwechsel = Column(Boolean, nullable=True)  # AMELAG Labor-/Methodenwechsel
     created_at = Column(DateTime, default=_utc_now)
 
     __table_args__ = (
@@ -228,6 +229,232 @@ class SurvstatKreisData(Base):
         UniqueConstraint("week_label", "kreis", "disease", name="uq_survstat_kreis"),
         Index("idx_survstat_kreis_disease_week", "disease", "year", "week"),
         Index("idx_survstat_kreis_cluster", "disease_cluster", "year"),
+    )
+
+
+class VirusWaveFeatureRun(Base):
+    """Versioned materialization run for virus wave evidence snapshots."""
+    __tablename__ = "virus_wave_feature_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_key = Column(String, nullable=False, unique=True, index=True)
+    algorithm_version = Column(String, nullable=False, index=True)
+    mode = Column(String, nullable=False, default="materialized", index=True)
+    status = Column(String, nullable=False, default="success", index=True)
+    pathogen = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=False, default="DE", index=True)
+    started_at = Column(DateTime, nullable=False, default=_utc_now, index=True)
+    finished_at = Column(DateTime, nullable=True, index=True)
+    pathogens_processed = Column(Integer, nullable=False, default=1)
+    regions_processed = Column(Integer, nullable=False, default=1)
+    input_min_date = Column(DateTime, nullable=True)
+    input_max_date = Column(DateTime, nullable=True, index=True)
+    parameters_json = Column(JSON)
+    snapshot_json = Column(JSON)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    features = relationship("VirusWaveFeature", cascade="all, delete-orphan")
+    alignments = relationship("VirusWaveAlignment", cascade="all, delete-orphan")
+    evidence_rows = relationship("VirusWaveEvidence", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_virus_wave_run_scope_finished", "pathogen", "region_code", "finished_at"),
+        Index("idx_virus_wave_run_algorithm_status", "algorithm_version", "status"),
+    )
+
+
+class VirusWaveFeature(Base):
+    """Materialized wave features per source/pathogen/region."""
+    __tablename__ = "virus_wave_features"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("virus_wave_feature_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)
+    source_role = Column(String, nullable=False, index=True)
+    pathogen = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=False, default="DE", index=True)
+    season = Column(String, nullable=True, index=True)
+    phase = Column(String, nullable=True, index=True)
+    onset_date = Column(DateTime, nullable=True, index=True)
+    peak_date = Column(DateTime, nullable=True, index=True)
+    end_date = Column(DateTime, nullable=True)
+    wave_strength = Column(Float, nullable=True)
+    peak_value = Column(Float, nullable=True)
+    area_under_curve = Column(Float, nullable=True)
+    growth_rate = Column(Float, nullable=True)
+    decline_rate = Column(Float, nullable=True)
+    wave_points = Column(Integer, nullable=True)
+    latest_observation_date = Column(DateTime, nullable=True, index=True)
+    data_freshness_days = Column(Integer, nullable=True)
+    signal_basis = Column(String, nullable=True)
+    quality_flags_json = Column(JSON)
+    confidence_score = Column(Float, nullable=True)
+    feature_payload_json = Column(JSON)
+    algorithm_version = Column(String, nullable=False, index=True)
+    computed_at = Column(DateTime, default=_utc_now, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "source", "pathogen", "region_code", name="uq_virus_wave_feature_run_source"),
+        Index("idx_virus_wave_feature_scope_source", "pathogen", "region_code", "source"),
+        Index("idx_virus_wave_feature_algorithm", "algorithm_version", "computed_at"),
+    )
+
+
+class VirusWaveAlignment(Base):
+    """Materialized alignment between early and confirmed wave sources."""
+    __tablename__ = "virus_wave_alignment"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("virus_wave_feature_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    pathogen = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=False, default="DE", index=True)
+    season = Column(String, nullable=True, index=True)
+    early_source = Column(String, nullable=False, default="amelag", index=True)
+    confirmed_source = Column(String, nullable=False, default="survstat", index=True)
+    early_wave_feature_id = Column(Integer, ForeignKey("virus_wave_features.id", ondelete="SET NULL"), nullable=True, index=True)
+    confirmed_wave_feature_id = Column(Integer, ForeignKey("virus_wave_features.id", ondelete="SET NULL"), nullable=True, index=True)
+    raw_lead_lag_days = Column(Integer, nullable=True)
+    early_source_lead_days = Column(Integer, nullable=True)
+    alignment_status = Column(String, nullable=True, index=True)
+    alignment_score = Column(Float, nullable=True)
+    divergence_score = Column(Float, nullable=True)
+    correlation_score = Column(Float, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    matched_window_start = Column(DateTime, nullable=True)
+    matched_window_end = Column(DateTime, nullable=True)
+    alignment_payload_json = Column(JSON)
+    algorithm_version = Column(String, nullable=False, index=True)
+    computed_at = Column(DateTime, default=_utc_now, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "pathogen", "region_code", name="uq_virus_wave_alignment_run_scope"),
+        Index("idx_virus_wave_alignment_scope", "pathogen", "region_code", "alignment_status"),
+    )
+
+
+class VirusWaveEvidence(Base):
+    """Materialized source weighting evidence for each decision profile."""
+    __tablename__ = "virus_wave_evidence"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("virus_wave_feature_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    pathogen = Column(String, nullable=False, index=True)
+    region_code = Column(String, nullable=False, default="DE", index=True)
+    season = Column(String, nullable=True, index=True)
+    profile_name = Column(String, nullable=False, index=True)
+    primary_source = Column(String, nullable=True, index=True)
+    base_weights_json = Column(JSON)
+    quality_multipliers_json = Column(JSON)
+    effective_weights_json = Column(JSON)
+    source_availability_json = Column(JSON)
+    evidence_coverage = Column(Float, nullable=True)
+    evidence_mode = Column(String, nullable=False, default="diagnostic_only", index=True)
+    budget_can_change = Column(Boolean, nullable=False, default=False, index=True)
+    confidence_score = Column(Float, nullable=True)
+    confidence_method = Column(String, nullable=True)
+    quality_flags_json = Column(JSON)
+    evidence_payload_json = Column(JSON)
+    algorithm_version = Column(String, nullable=False, index=True)
+    computed_at = Column(DateTime, default=_utc_now, index=True)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "pathogen", "region_code", "profile_name", name="uq_virus_wave_evidence_run_profile"),
+        Index("idx_virus_wave_evidence_scope_profile", "pathogen", "region_code", "profile_name"),
+        Index("idx_virus_wave_evidence_algorithm", "algorithm_version", "computed_at"),
+    )
+
+
+class VirusWaveBacktestRun(Base):
+    """Research-only backtest run for virus wave evidence."""
+    __tablename__ = "virus_wave_backtest_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_key = Column(String, nullable=False, unique=True, index=True)
+    algorithm_version = Column(String, nullable=False, index=True)
+    backtest_version = Column(String, nullable=False, index=True)
+    mode = Column(String, nullable=False, index=True)  # historical_cutoff, retrospective_descriptive
+    status = Column(String, nullable=False, default="success", index=True)
+    started_at = Column(DateTime, nullable=False, default=_utc_now, index=True)
+    finished_at = Column(DateTime, nullable=True, index=True)
+    pathogens = Column(JSON)
+    regions = Column(JSON)
+    seasons = Column(JSON)
+    baseline_models = Column(JSON)
+    candidate_models = Column(JSON)
+    parameters_json = Column(JSON)
+    summary_json = Column(JSON)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    results = relationship("VirusWaveBacktestResult", cascade="all, delete-orphan")
+    events = relationship("VirusWaveBacktestEvent", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_virus_wave_backtest_run_mode_finished", "mode", "finished_at"),
+        Index("idx_virus_wave_backtest_run_version", "backtest_version", "algorithm_version"),
+    )
+
+
+class VirusWaveBacktestResult(Base):
+    """Per-model aggregate metrics from a virus wave backtest."""
+    __tablename__ = "virus_wave_backtest_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("virus_wave_backtest_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    pathogen = Column(String, nullable=False, index=True)
+    canonical_pathogen = Column(String, nullable=False, index=True)
+    pathogen_variant = Column(String, nullable=True, index=True)
+    region_code = Column(String, nullable=False, default="DE", index=True)
+    season = Column(String, nullable=True, index=True)
+    model_name = Column(String, nullable=False, index=True)
+    status = Column(String, nullable=False, default="ok", index=True)
+    onset_detection_gain_days = Column(Float, nullable=True)
+    peak_detection_gain_days = Column(Float, nullable=True)
+    phase_accuracy = Column(Float, nullable=True)
+    false_early_warning_rate = Column(Float, nullable=True)
+    missed_wave_rate = Column(Float, nullable=True)
+    false_post_peak_rate = Column(Float, nullable=True)
+    lead_lag_stability = Column(Float, nullable=True)
+    mean_alignment_score = Column(Float, nullable=True)
+    mean_divergence_score = Column(Float, nullable=True)
+    confidence_brier_score = Column(Float, nullable=True)
+    summary_json = Column(JSON)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("run_id", "pathogen", "region_code", "model_name", name="uq_virus_wave_backtest_result_model"),
+        Index("idx_virus_wave_backtest_result_scope", "canonical_pathogen", "region_code", "season"),
+    )
+
+
+class VirusWaveBacktestEvent(Base):
+    """Event-level diagnostic record from a virus wave backtest."""
+    __tablename__ = "virus_wave_backtest_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(Integer, ForeignKey("virus_wave_backtest_runs.id", ondelete="CASCADE"), nullable=False, index=True)
+    pathogen = Column(String, nullable=False, index=True)
+    canonical_pathogen = Column(String, nullable=False, index=True)
+    pathogen_variant = Column(String, nullable=True, index=True)
+    region_code = Column(String, nullable=False, default="DE", index=True)
+    season = Column(String, nullable=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    event_date = Column(DateTime, nullable=True, index=True)
+    model_name = Column(String, nullable=False, index=True)
+    survstat_phase = Column(String, nullable=True)
+    amelag_phase = Column(String, nullable=True)
+    predicted_phase = Column(String, nullable=True)
+    observed_phase = Column(String, nullable=True)
+    lead_lag_days = Column(Integer, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    details_json = Column(JSON)
+    created_at = Column(DateTime, default=_utc_now, index=True)
+
+    __table_args__ = (
+        Index("idx_virus_wave_backtest_event_scope", "canonical_pathogen", "region_code", "event_type"),
+        Index("idx_virus_wave_backtest_event_model", "model_name", "event_date"),
     )
 
 

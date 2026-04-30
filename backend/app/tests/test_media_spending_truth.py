@@ -1,6 +1,10 @@
 import unittest
+from unittest.mock import patch
 
-from app.services.media.cockpit.media_spending_truth import build_media_spending_truth
+from app.services.media.cockpit.media_spending_truth import (
+    _resolve_virus_wave_truth_diagnostic,
+    build_media_spending_truth,
+)
 
 
 def _prediction(**overrides) -> dict:
@@ -443,6 +447,152 @@ class MediaSpendingTruthTests(unittest.TestCase):
         self.assertGreater(region["recommended_delta_pct"], 0.0)
         self.assertLessEqual(region["recommended_delta_pct"], 15.0)
         self.assertIn("high_surge_probability", region["reason_codes"])
+
+    def test_payload_can_expose_virus_wave_truth_diagnostic(self) -> None:
+        virus_wave_truth = {
+            "schema": "virus_wave_truth_v1",
+            "scope": {"virus": "Influenza A", "region": "DE"},
+            "sourceStatus": {"survstat_points": 60270, "survstat_wave_points": 383},
+        }
+
+        payload = build_media_spending_truth(
+            virus_typ="Influenza A",
+            horizon_days=7,
+            predictions=[_prediction()],
+            truth_scoreboard=_scoreboard("go", [], evaluable_weeks=18),
+            decision_backtest={"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            virus_wave_truth=virus_wave_truth,
+        )
+
+        self.assertEqual(payload["virusWaveTruth"], virus_wave_truth)
+
+    def test_wave_truth_evidence_is_diagnostic_only_and_does_not_change_budget(self) -> None:
+        base_kwargs = {
+            "virus_typ": "Influenza A",
+            "horizon_days": 7,
+            "predictions": [
+                _prediction(),
+                _prediction(
+                    bundesland="BY",
+                    bundesland_name="Bayern",
+                    event_probability=0.20,
+                    change_pct=-8.0,
+                    state_population_millions=13.0,
+                    decision={"stage": "watch", "forecast_confidence": 0.70},
+                    viral_pressure_features={"budget_opportunity_score": 0.18, "recent_saturation_score": 0.20},
+                ),
+            ],
+            "truth_scoreboard": _scoreboard("go", [], evaluable_weeks=18),
+            "decision_backtest": {"decision_backtest_passed": True, "regret_reduction_vs_static": 0.14},
+            "base_budget_by_region": {"NW": 10000.0, "BY": 10000.0},
+        }
+        baseline = build_media_spending_truth(**base_kwargs)
+        with_evidence = build_media_spending_truth(
+            **base_kwargs,
+            virus_wave_truth={
+                "schema": "virus_wave_truth_v1",
+                "scope": {"virus": "Influenza A", "region": "DE"},
+                "evidence": {
+                    "mode": "diagnostic_only",
+                    "early_warning_signal": {"primary_source": "amelag", "confidence": 0.99},
+                    "budget_impact": {
+                        "mode": "diagnostic_only",
+                        "can_change_budget": False,
+                        "reason": "awaiting_backtest_validation",
+                    },
+                },
+            },
+        )
+
+        baseline_regions = {
+            item["region_code"]: (
+                item["recommended_delta_pct"],
+                item["approved_delta_pct"],
+                item["shadow_delta_pct"],
+                item["recommended_action"],
+            )
+            for item in baseline["regions"]
+        }
+        evidence_regions = {
+            item["region_code"]: (
+                item["recommended_delta_pct"],
+                item["approved_delta_pct"],
+                item["shadow_delta_pct"],
+                item["recommended_action"],
+            )
+            for item in with_evidence["regions"]
+        }
+        self.assertEqual(evidence_regions, baseline_regions)
+        self.assertFalse(with_evidence["virusWaveTruth"]["evidence"]["budget_impact"]["can_change_budget"])
+
+    def test_wave_truth_feature_flag_can_disable_diagnostic(self) -> None:
+        diagnostic = _resolve_virus_wave_truth_diagnostic(
+            None,
+            virus_typ="Influenza A",
+            enabled=False,
+        )
+
+        self.assertEqual(diagnostic["schema"], "virus_wave_truth_v1")
+        self.assertEqual(diagnostic["status"], "disabled")
+        self.assertEqual(diagnostic["reason"], "VIRUS_WAVE_TRUTH_ENABLED=false")
+        self.assertEqual(diagnostic["evidence"]["mode"], "disabled")
+        self.assertFalse(diagnostic["evidence"]["budget_impact"]["can_change_budget"])
+
+    def test_wave_truth_runtime_mode_flag_blocks_runtime_computation(self) -> None:
+        diagnostic = _resolve_virus_wave_truth_diagnostic(
+            None,
+            virus_typ="Influenza A",
+            enabled=True,
+            runtime_mode=False,
+        )
+
+        self.assertEqual(diagnostic["status"], "disabled")
+        self.assertIn("VIRUS_WAVE_TRUTH_RUNTIME_MODE=false", diagnostic["reason"])
+
+    def test_wave_truth_materialized_mode_reads_latest_snapshot_without_runtime(self) -> None:
+        materialized = {
+            "schema": "virus_wave_truth_v1",
+            "scope": {"virus": "Influenza A", "region": "DE"},
+            "evidence": {
+                "mode": "diagnostic_only",
+                "budget_impact": {"can_change_budget": False},
+            },
+            "materialization": {"mode": "materialized", "status": "success"},
+        }
+
+        with patch(
+            "app.services.media.cockpit.virus_wave_materialization.read_latest_materialized_virus_wave_truth",
+            return_value=materialized,
+        ):
+            diagnostic = _resolve_virus_wave_truth_diagnostic(
+                None,
+                virus_typ="Influenza A",
+                enabled=True,
+                runtime_mode=False,
+                materialized_mode=True,
+                allow_runtime_fallback=False,
+            )
+
+        self.assertEqual(diagnostic, materialized)
+        self.assertFalse(diagnostic["evidence"]["budget_impact"]["can_change_budget"])
+
+    def test_wave_truth_materialized_mode_reports_missing_when_fallback_is_disabled(self) -> None:
+        with patch(
+            "app.services.media.cockpit.virus_wave_materialization.read_latest_materialized_virus_wave_truth",
+            return_value=None,
+        ):
+            diagnostic = _resolve_virus_wave_truth_diagnostic(
+                None,
+                virus_typ="Influenza A",
+                enabled=True,
+                runtime_mode=True,
+                materialized_mode=True,
+                allow_runtime_fallback=False,
+            )
+
+        self.assertEqual(diagnostic["status"], "materialized_missing")
+        self.assertEqual(diagnostic["evidence"]["mode"], "diagnostic_only")
+        self.assertFalse(diagnostic["evidence"]["budget_impact"]["can_change_budget"])
 
 
 if __name__ == "__main__":

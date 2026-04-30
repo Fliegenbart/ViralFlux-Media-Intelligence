@@ -55,6 +55,10 @@ def _fk_exists(table_name: str, fk_name: str) -> bool:
     return fk_name in {fk.get("name") for fk in inspector.get_foreign_keys(table_name)}
 
 
+def _is_sqlite() -> bool:
+    return op.get_bind().dialect.name == "sqlite"
+
+
 def upgrade() -> None:
     if not _column_exists("llm_recommendations", "outcome_record_id"):
         op.add_column(
@@ -62,14 +66,24 @@ def upgrade() -> None:
             sa.Column("outcome_record_id", sa.Integer(), nullable=True),
         )
     if not _fk_exists("llm_recommendations", "llm_recommendations_outcome_record_id_fkey"):
-        op.create_foreign_key(
-            "llm_recommendations_outcome_record_id_fkey",
-            "llm_recommendations",
-            "media_outcome_records",
-            ["outcome_record_id"],
-            ["id"],
-            ondelete="SET NULL",
-        )
+        if _is_sqlite():
+            with op.batch_alter_table("llm_recommendations") as batch_op:
+                batch_op.create_foreign_key(
+                    "llm_recommendations_outcome_record_id_fkey",
+                    "media_outcome_records",
+                    ["outcome_record_id"],
+                    ["id"],
+                    ondelete="SET NULL",
+                )
+        else:
+            op.create_foreign_key(
+                "llm_recommendations_outcome_record_id_fkey",
+                "llm_recommendations",
+                "media_outcome_records",
+                ["outcome_record_id"],
+                ["id"],
+                ondelete="SET NULL",
+            )
     if not _index_exists("llm_recommendations", "ix_llm_recommendations_outcome_record_id"):
         op.create_index(
             "ix_llm_recommendations_outcome_record_id",
@@ -85,10 +99,17 @@ def downgrade() -> None:
             table_name="llm_recommendations",
         )
     if _fk_exists("llm_recommendations", "llm_recommendations_outcome_record_id_fkey"):
-        op.drop_constraint(
-            "llm_recommendations_outcome_record_id_fkey",
-            "llm_recommendations",
-            type_="foreignkey",
-        )
+        if _is_sqlite():
+            with op.batch_alter_table("llm_recommendations") as batch_op:
+                batch_op.drop_constraint(
+                    "llm_recommendations_outcome_record_id_fkey",
+                    type_="foreignkey",
+                )
+        else:
+            op.drop_constraint(
+                "llm_recommendations_outcome_record_id_fkey",
+                "llm_recommendations",
+                type_="foreignkey",
+            )
     if _column_exists("llm_recommendations", "outcome_record_id"):
         op.drop_column("llm_recommendations", "outcome_record_id")

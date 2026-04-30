@@ -593,6 +593,109 @@ def _empty_payload(
     }
 
 
+def _virus_wave_truth_disabled_payload(*, virus_typ: str, reason: str) -> dict[str, Any]:
+    return {
+        "schema": "virus_wave_truth_v1",
+        "scope": {"virus": virus_typ, "region": "DE"},
+        "status": "disabled",
+        "reason": reason,
+        "evidence": {
+            "mode": "disabled",
+            "budget_impact": {
+                "mode": "diagnostic_only",
+                "can_change_budget": False,
+                "reason": reason,
+            },
+        },
+    }
+
+
+def _virus_wave_truth_materialized_missing_payload(*, virus_typ: str, reason: str) -> dict[str, Any]:
+    return {
+        "schema": "virus_wave_truth_v1",
+        "scope": {"virus": virus_typ, "region": "DE"},
+        "status": "materialized_missing",
+        "reason": reason,
+        "evidence": {
+            "mode": "diagnostic_only",
+            "budget_impact": {
+                "mode": "diagnostic_only",
+                "can_change_budget": False,
+                "reason": "awaiting_materialized_wave_evidence",
+            },
+        },
+        "materialization": {
+            "mode": "materialized",
+            "status": "missing",
+            "runtime_fallback_allowed": False,
+        },
+    }
+
+
+def _resolve_virus_wave_truth_diagnostic(
+    db: Any,
+    *,
+    virus_typ: str,
+    enabled: bool = True,
+    runtime_mode: bool = True,
+    materialized_mode: bool = False,
+    allow_runtime_fallback: bool = True,
+) -> dict[str, Any]:
+    if not enabled:
+        return _virus_wave_truth_disabled_payload(
+            virus_typ=virus_typ,
+            reason="VIRUS_WAVE_TRUTH_ENABLED=false",
+        )
+    if materialized_mode:
+        try:
+            from app.services.media.cockpit.virus_wave_materialization import read_latest_materialized_virus_wave_truth
+
+            materialized = read_latest_materialized_virus_wave_truth(db, virus_typ=virus_typ, region="DE")
+        except Exception as exc:  # pragma: no cover - diagnostics must not break budget endpoint
+            if not allow_runtime_fallback:
+                return {
+                    "schema": "virus_wave_truth_v1",
+                    "scope": {"virus": virus_typ, "region": "DE"},
+                    "status": "error",
+                    "error": str(exc),
+                    "evidence": {
+                        "mode": "diagnostic_only",
+                        "budget_impact": {
+                            "mode": "diagnostic_only",
+                            "can_change_budget": False,
+                            "reason": "materialized_read_failed",
+                        },
+                    },
+                }
+            materialized = None
+
+        if materialized is not None:
+            return materialized
+        if not allow_runtime_fallback:
+            return _virus_wave_truth_materialized_missing_payload(
+                virus_typ=virus_typ,
+                reason="VIRUS_WAVE_TRUTH_MATERIALIZED_MODE=true but no successful materialized run is available",
+            )
+
+    if not runtime_mode:
+        return _virus_wave_truth_disabled_payload(
+            virus_typ=virus_typ,
+            reason="VIRUS_WAVE_TRUTH_RUNTIME_MODE=false and no materialized diagnostic was selected",
+        )
+
+    try:
+        from app.services.media.cockpit.virus_wave_truth import build_virus_wave_truth
+
+        return build_virus_wave_truth(db, virus_typ=virus_typ, region="DE")
+    except Exception as exc:  # pragma: no cover - diagnostics must not break budget endpoint
+        return {
+            "schema": "virus_wave_truth_v1",
+            "scope": {"virus": virus_typ, "region": "DE"},
+            "status": "error",
+            "error": str(exc),
+        }
+
+
 
 def build_media_spending_truth(
     *,
@@ -605,6 +708,7 @@ def build_media_spending_truth(
     decision_date: date | datetime | str | None = None,
     valid_until: date | datetime | str | None = None,
     policy: MediaSpendingTruthPolicy | None = None,
+    virus_wave_truth: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Translate regional forecasts into capped media spending decisions."""
 
@@ -888,7 +992,7 @@ def build_media_spending_truth(
         final_regions.append(final_region)
 
     forecast_evidence = "validated" if forecast_gate_passed else "limited" if not hard_blockers else "blocked"
-    return {
+    payload = {
         "schema_version": SCHEMA_VERSION,
         "engine_version": ENGINE_VERSION,
         "decision_date": decision_day.isoformat(),
@@ -924,6 +1028,9 @@ def build_media_spending_truth(
             "recommendations_are_region_level_only",
         ],
     }
+    if virus_wave_truth is not None:
+        payload["virusWaveTruth"] = dict(virus_wave_truth)
+    return payload
 
 
 def build_media_spending_truth_from_forecast(
@@ -939,6 +1046,7 @@ def build_media_spending_truth_from_forecast(
 
     from app.services.media.cockpit.truth_scoreboard import build_truth_scoreboard
     from app.services.media.media_plan_service import aggregate_by_bundesland, current_iso_week, current_plan_rows
+    from app.core.config import get_settings
     from app.services.ml.regional_forecast import RegionalForecastService
 
     service = RegionalForecastService(db)
@@ -966,6 +1074,16 @@ def build_media_spending_truth_from_forecast(
             if row.get("bundesland")
         }
 
+    settings = get_settings()
+    virus_wave_truth = _resolve_virus_wave_truth_diagnostic(
+        db,
+        virus_typ=virus_typ,
+        enabled=bool(settings.VIRUS_WAVE_TRUTH_ENABLED),
+        runtime_mode=bool(settings.VIRUS_WAVE_TRUTH_RUNTIME_MODE),
+        materialized_mode=bool(settings.VIRUS_WAVE_TRUTH_MATERIALIZED_MODE),
+        allow_runtime_fallback=bool(settings.VIRUS_WAVE_TRUTH_ALLOW_RUNTIME_FALLBACK),
+    )
+
     return build_media_spending_truth(
         virus_typ=virus_typ,
         horizon_days=int(horizon_days),
@@ -974,4 +1092,5 @@ def build_media_spending_truth_from_forecast(
         decision_backtest=decision_backtest,
         base_budget_by_region=base_budget,
         decision_date=decision_day,
+        virus_wave_truth=virus_wave_truth,
     )

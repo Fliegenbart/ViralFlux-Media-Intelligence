@@ -119,6 +119,8 @@ class AmelagIngestionService:
 
         if 'unter_bg' in df.columns:
             df['unter_bg'] = df['unter_bg'].map({'ja': True, 'nein': False})
+        if 'laborwechsel' in df.columns:
+            df['laborwechsel'] = df['laborwechsel'].map({'ja': True, 'nein': False})
 
         logger.info(f"Loaded {len(df)} Einzelstandort rows, {df['standort'].nunique()} sites, {df['bundesland'].nunique()} Bundesländer")
         return df
@@ -153,6 +155,7 @@ class AmelagIngestionService:
                 'untere_schranke': float(row['untere_schranke']) if pd.notna(row.get('untere_schranke')) else None,
                 'einwohner': int(row['einwohner']) if pd.notna(row.get('einwohner')) else None,
                 'unter_bg': bool(row['unter_bg']) if pd.notna(row.get('unter_bg')) else None,
+                'laborwechsel': bool(row['laborwechsel']) if pd.notna(row.get('laborwechsel')) else None,
                 'latitude': coords[0] if coords else None,
                 'longitude': coords[1] if coords else None,
             }

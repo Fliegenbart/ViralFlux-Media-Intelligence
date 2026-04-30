@@ -7,6 +7,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.database import WastewaterData
+from app.services.media.cockpit.amelag_site_early_warning import (
+    build_site_early_warning,
+    empty_region_site_early_warning,
+    region_site_early_warning,
+)
 from app.services.media.cockpit.constants import BUNDESLAND_NAMES
 from app.services.media.cockpit.signals import (
     build_ranking_signal_fields,
@@ -24,6 +29,7 @@ def build_map_section(
     peix_score: dict[str, Any],
     region_recommendations: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
+    site_early_warning = build_site_early_warning(db, virus_typ=virus_typ)
     latest_date = db.query(func.max(WastewaterData.datum)).filter(
         WastewaterData.virus_typ == virus_typ
     ).scalar()
@@ -36,6 +42,7 @@ def build_map_section(
             "regions": {},
             "top_regions": [],
             "activation_suggestions": [],
+            "site_early_warning": site_early_warning,
         }
 
     current_rows = db.query(
@@ -99,6 +106,7 @@ def build_map_section(
                 (row.avg_vorhersage - row.avg_viruslast) / row.avg_viruslast
             ) * 100.0
 
+        region_site_warning = region_site_early_warning(site_early_warning, code)
         payload = {
             "name": BUNDESLAND_NAMES.get(code, code),
             "avg_viruslast": round(float(row.avg_viruslast), 1),
@@ -116,6 +124,7 @@ def build_map_section(
             "peix_score": peix_entry.get("score_0_100"),
             "peix_band": peix_entry.get("risk_band"),
             "recommendation_ref": recommendation_ref,
+            "site_early_warning": region_site_warning,
             "tooltip": build_region_tooltip(
                 region_name=BUNDESLAND_NAMES.get(code, code),
                 virus_typ=virus_typ,
@@ -157,6 +166,7 @@ def build_map_section(
             "peix_score": peix_entry.get("score_0_100"),
             "peix_band": peix_entry.get("risk_band"),
             "recommendation_ref": normalize_recommendation_ref(region_recommendations.get(code)),
+            "site_early_warning": empty_region_site_early_warning(),
             "tooltip": build_region_tooltip(
                 region_name=name,
                 virus_typ=virus_typ,
@@ -228,4 +238,5 @@ def build_map_section(
         "regions": regions,
         "top_regions": top_regions,
         "activation_suggestions": activation_suggestions,
+        "site_early_warning": site_early_warning,
     }

@@ -92,3 +92,94 @@ def generate_marketing_opportunities_task(self):
     except Exception as exc:
         logger.exception("Marketing opportunity generation failed")
         raise RuntimeError(f"Marketing opportunity generation failed: {exc}") from exc
+
+
+@celery_app.task(bind=True, name="materialize_virus_wave_truth_task")
+def materialize_virus_wave_truth_task(
+    self,
+    virus_types: list[str] | None = None,
+    region: str = "DE",
+    lookback_weeks: int = 156,
+):
+    """Manually materialize virusWaveTruth/evidence v1.1 snapshots."""
+    logger.info(
+        "Starting virus wave truth materialization for region=%s virus_types=%s",
+        region,
+        virus_types or "default",
+    )
+    try:
+        with get_db_context() as db:
+            from app.services.media.cockpit.virus_wave_materialization import materialize_all_virus_wave_truth
+
+            return materialize_all_virus_wave_truth(
+                db,
+                virus_types=virus_types,
+                region=region,
+                lookback_weeks=int(lookback_weeks),
+            )
+    except Exception as exc:
+        logger.exception("Virus wave truth materialization failed")
+        raise RuntimeError(f"Virus wave truth materialization failed: {exc}") from exc
+
+
+@celery_app.task(bind=True, name="run_virus_wave_backtest_task")
+def run_virus_wave_backtest_task(
+    self,
+    virus_types: list[str] | None = None,
+    region: str = "DE",
+    lookback_weeks: int = 156,
+    mode: str = "historical_cutoff",
+    seasonal_windows: bool = True,
+    scope_mode: str = "canonical",
+):
+    """Manually run research-only virusWaveTruth/evidence v1.7 backtests."""
+    logger.info(
+        "Starting virus wave backtest for region=%s mode=%s scope_mode=%s virus_types=%s",
+        region,
+        mode,
+        scope_mode,
+        virus_types or "default",
+    )
+    try:
+        with get_db_context() as db:
+            from app.services.media.cockpit.virus_wave_backtest import run_all_virus_wave_backtests
+
+            return run_all_virus_wave_backtests(
+                db,
+                virus_types=virus_types,
+                region=region,
+                lookback_weeks=int(lookback_weeks),
+                mode=mode,
+                seasonal_windows=bool(seasonal_windows),
+                scope_mode=scope_mode,
+            )
+    except Exception as exc:
+        logger.exception("Virus wave backtest failed")
+        raise RuntimeError(f"Virus wave backtest failed: {exc}") from exc
+
+
+@celery_app.task(bind=True, name="generate_virus_wave_backtest_report_task")
+def generate_virus_wave_backtest_report_task(
+    self,
+    mode: str = "historical_cutoff",
+    scope_mode: str | None = "canonical",
+    output_path: str | None = None,
+):
+    """Generate the research-only v1.7 backtest evaluation report."""
+    logger.info("Starting virus wave backtest evaluation report for mode=%s scope_mode=%s", mode, scope_mode)
+    try:
+        with get_db_context() as db:
+            from app.services.media.cockpit.virus_wave_backtest_report import (
+                DEFAULT_REPORT_PATH,
+                write_virus_wave_backtest_evaluation_report,
+            )
+
+            return write_virus_wave_backtest_evaluation_report(
+                db,
+                mode=mode,
+                scope_mode=scope_mode,
+                output_path=output_path or DEFAULT_REPORT_PATH,
+            )
+    except Exception as exc:
+        logger.exception("Virus wave backtest evaluation report failed")
+        raise RuntimeError(f"Virus wave backtest evaluation report failed: {exc}") from exc

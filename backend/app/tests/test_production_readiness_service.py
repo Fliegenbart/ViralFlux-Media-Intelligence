@@ -574,6 +574,113 @@ class ProductionReadinessServiceTests(unittest.TestCase):
         self.assertIn("source_criticality", influenza_item)
         self.assertEqual(snapshot["blockers"], [])
 
+    def test_build_snapshot_stays_operationally_healthy_for_science_warnings(self) -> None:
+        now = datetime(2026, 3, 17, 10, 0, 0)
+        self._seed_wastewater(available_time=now - timedelta(days=1))
+
+        def fake_artifacts(_self, virus_typ: str, horizon_days: int = 7):
+            coverage = {
+                "grippeweb_are_available": 0.95,
+                "grippeweb_ili_available": 0.94,
+            }
+            if virus_typ in {"Influenza A", "Influenza B"}:
+                coverage["ifsg_influenza_available"] = 0.96
+            elif virus_typ == "RSV A":
+                coverage["ifsg_rsv_available"] = 0.95
+            else:
+                coverage.update(
+                    {
+                        "sars_are_available": 0.91,
+                        "sars_notaufnahme_available": 0.93,
+                        "sars_trends_available": 0.30,
+                    }
+                )
+            quality_gate = {"overall_passed": True, "forecast_readiness": "GO"}
+            if virus_typ == "Influenza A" and horizon_days == 7:
+                quality_gate = {
+                    "overall_passed": False,
+                    "forecast_readiness": "WATCH",
+                    "profile": "pilot_v1",
+                    "failed_checks": ["ece_passed"],
+                    "checks": {
+                        "precision_at_top3_passed": True,
+                        "activation_fp_rate_passed": True,
+                        "pr_auc_passed": True,
+                        "brier_passed": True,
+                        "ece_passed": False,
+                        "min_evaluable_panel_weeks_passed": True,
+                    },
+                }
+            return {
+                "metadata": {
+                    "feature_columns": ["feature_a"],
+                    "trained_at": (now - timedelta(days=2)).isoformat(),
+                    "model_version": f"regional:{virus_typ}:h{horizon_days}",
+                    "calibration_version": f"isotonic:{virus_typ}:h{horizon_days}",
+                    "quality_gate": quality_gate,
+                    "dataset_manifest": {
+                        "rows": 120,
+                        "states": 16,
+                        "source_coverage": coverage,
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                    "point_in_time_snapshot": {
+                        "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                    },
+                },
+                "dataset_manifest": {
+                    "rows": 120,
+                    "states": 16,
+                    "source_coverage": coverage,
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+                "point_in_time_snapshot": {
+                    "as_of_range": {"end": (now - timedelta(days=1)).date().isoformat()},
+                },
+            }
+
+        with patch(
+            "app.services.ml.regional_forecast.RegionalForecastService._load_artifacts",
+            new=fake_artifacts,
+        ), patch(
+            "app.services.ml.forecast_decision_service.ForecastDecisionService.build_monitoring_snapshot",
+            return_value={
+                "monitoring_status": "warning",
+                "forecast_readiness": "WATCH",
+                "freshness_status": "fresh",
+                "accuracy_freshness_status": "fresh",
+                "backtest_freshness_status": "fresh",
+                "model_version": "national:v1",
+                "alerts": ["MAPE-Drift ist im Accuracy-Monitoring aktiv."],
+            },
+        ):
+            service = ProductionReadinessService(
+                session_factory=self._session_factory,
+                now_provider=lambda: now,
+            )
+            service.settings.CORE_PRODUCTION_SCOPES = "Influenza A:h7,Influenza B:h7"
+            ok_component = lambda: {"status": "ok", "message": "mocked"}
+            service._broker_component = ok_component  # type: ignore[method-assign]
+            service._schema_bootstrap_component = ok_component  # type: ignore[method-assign]
+            snapshot = service.build_snapshot()
+
+        self.assertEqual(snapshot["status"], "healthy")
+        self.assertEqual(snapshot["readiness_mode"], "layered_operational_v1")
+        self.assertEqual(snapshot["operational_status"], "healthy")
+        self.assertEqual(snapshot["science_status"], "review")
+        self.assertEqual(snapshot["forecast_monitoring_status"], "warning")
+        self.assertEqual(snapshot["budget_status"], "diagnostic_only")
+        layers = snapshot["readiness_layers"]
+        self.assertEqual(layers["operational"]["status"], "healthy")
+        self.assertEqual(layers["core_operational"]["status"], "healthy")
+        self.assertEqual(layers["core_operational"]["hard_blockers"], 0)
+        self.assertEqual(layers["science_validation"]["status"], "review")
+        self.assertGreaterEqual(layers["science_validation"]["warning_count"], 1)
+        self.assertEqual(layers["forecast_monitoring"]["status"], "warning")
+        self.assertGreaterEqual(layers["forecast_monitoring"]["warning_count"], 1)
+        self.assertEqual(snapshot["components"]["core_regional_operational"]["status"], "warning")
+        self.assertEqual(snapshot["blockers"], [])
+
     def test_build_core_snapshot_reports_healthy_for_allowlisted_scope_even_if_global_snapshot_stays_degraded(self) -> None:
         now = datetime(2026, 3, 17, 10, 0, 0)
         self._seed_wastewater(available_time=now - timedelta(days=1))

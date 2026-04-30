@@ -18,6 +18,9 @@ describe('EvidenceStatusBar', () => {
             diagnostic_only: true,
             can_change_budget: false,
             global_status: 'diagnostic_only',
+            operational_status: 'healthy',
+            science_status: 'review',
+            budget_status: 'diagnostic_only',
             latest_amelag_date: '2026-04-22',
             latest_survstat_date: '2026-04-20',
           },
@@ -42,6 +45,9 @@ describe('EvidenceStatusBar', () => {
     expect(screen.getByText('Diagnostic only')).toBeInTheDocument();
     expect(screen.getByText('Budget changes disabled')).toBeInTheDocument();
     expect(screen.getByText('can_change_budget=false')).toBeInTheDocument();
+    expect(screen.getByText('Operational: healthy')).toBeInTheDocument();
+    expect(screen.getByText('Science: review')).toBeInTheDocument();
+    expect(screen.getByText('Budget: diagnostic only')).toBeInTheDocument();
     expect(screen.getByText('2026-04-22')).toBeInTheDocument();
     expect(screen.getByText('2026-04-20')).toBeInTheDocument();
   });

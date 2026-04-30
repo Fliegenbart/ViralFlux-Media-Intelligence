@@ -38,6 +38,10 @@ function recordDate(record: Record<string, unknown> | null | undefined, ...keys:
   return null;
 }
 
+function readableStatus(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
 function getActiveAlertCount(snapshot: CockpitSnapshot): number | null {
   const site = snapshot.siteEarlyWarning ?? snapshot.site_early_warning ?? null;
   if (!site) return null;
@@ -110,6 +114,20 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
     mediaTruth?.globalStatus,
     snapshot.modelStatus?.forecastReadiness,
   ) ?? 'unknown';
+  const operationalStatus = firstText(
+    systemStatus?.operational_status,
+    systemStatus?.operationalStatus,
+  );
+  const scienceStatus = firstText(
+    systemStatus?.science_status,
+    systemStatus?.scienceStatus,
+  );
+  const budgetStatus = firstText(
+    systemStatus?.budget_status,
+    systemStatus?.budgetStatus,
+    mediaTruth?.release_mode,
+    mediaTruth?.releaseMode,
+  ) ?? (canChangeBudget ? 'budget active' : 'diagnostic only');
   const featureLagDays = snapshot.modelStatus?.forecastFreshness?.featureLagDays;
   const dataFreshness =
     snapshot.modelStatus?.forecastFreshness?.isStale === true
@@ -152,10 +170,17 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
       <div className="evidence-status-cell primary">
         <span className="evidence-status-label">System Status</span>
         <span className="evidence-status-value">{globalStatus}</span>
+        {operationalStatus ? (
+          <span className="evidence-status-note">Operational: {readableStatus(operationalStatus)}</span>
+        ) : null}
+        {scienceStatus ? (
+          <span className="evidence-status-note">Science: {readableStatus(scienceStatus)}</span>
+        ) : null}
       </div>
       <div className="evidence-status-cell">
         <span className="evidence-status-label">Budget Mode</span>
         <span className="evidence-status-value">{budgetMode}</span>
+        <span className="evidence-status-note">Budget: {readableStatus(budgetStatus)}</span>
         <span className="evidence-status-note">
           {canChangeBudget ? 'Budget changes enabled' : 'Budget changes disabled'}
         </span>

@@ -204,12 +204,77 @@ def _public_forecast_monitoring_reasons(items: list[dict[str, Any]]) -> list[str
     return grouped_reasons + passthrough_reasons
 
 
+def _public_readiness_layers(layers: dict[str, Any]) -> dict[str, Any]:
+    public_layers: dict[str, Any] = {}
+    for name in (
+        "operational",
+        "core_operational",
+        "science_validation",
+        "forecast_monitoring",
+    ):
+        layer = layers.get(name) or {}
+        public_layers[name] = {
+            "status": layer.get("status"),
+            "hard_blockers": int(layer.get("hard_blockers") or 0),
+            "warning_count": int(layer.get("warning_count") or 0),
+        }
+    return public_layers
+
+
+def _public_layered_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]] | None:
+    layers = snapshot.get("readiness_layers")
+    if not isinstance(layers, dict) or not layers:
+        return None
+
+    reasons: list[str] = []
+    warning_count = 0
+    operational = layers.get("operational") or {}
+    core_operational = layers.get("core_operational") or {}
+    science_validation = layers.get("science_validation") or {}
+    forecast_monitoring = layers.get("forecast_monitoring") or {}
+
+    if str(operational.get("status") or "").strip().lower() != "healthy":
+        reasons.append("operational_readiness_requires_attention")
+        warning_count += max(
+            int(operational.get("warning_count") or 0),
+            int(operational.get("hard_blockers") or 0),
+            1,
+        )
+    if str(core_operational.get("status") or "").strip().lower() != "healthy":
+        reasons.append("core_operational_readiness_requires_attention")
+        warning_count += max(
+            int(core_operational.get("warning_count") or 0),
+            int(core_operational.get("hard_blockers") or 0),
+            1,
+        )
+    if str(science_validation.get("status") or "").strip().lower() in {
+        "review",
+        "warning",
+        "critical",
+    }:
+        reasons.append("science_validation_requires_review")
+        warning_count += max(int(science_validation.get("warning_count") or 0), 1)
+    if str(forecast_monitoring.get("status") or "").strip().lower() in {
+        "warning",
+        "critical",
+        "unknown",
+    }:
+        reasons.append("forecast_monitoring_warnings_present")
+        warning_count += max(int(forecast_monitoring.get("warning_count") or 0), 1)
+
+    return warning_count, _dedupe_public_strings(reasons)
+
+
 def _public_warning_reasons(snapshot: dict[str, Any]) -> tuple[int, list[str]]:
     explicit_warnings = _dedupe_public_strings(
         [str(warning or "").strip() for warning in list(snapshot.get("warnings") or [])]
     )
     if explicit_warnings:
         return len(explicit_warnings), explicit_warnings
+
+    layered = _public_layered_warning_reasons(snapshot)
+    if layered is not None:
+        return layered
 
     components = snapshot.get("components") or {}
     warning_components = [
@@ -270,6 +335,21 @@ def _public_readiness_payload(
         "blocker_count": len(blocker_reasons),
         "warning_count": warning_count,
     }
+    readiness_mode = str(snapshot.get("readiness_mode") or "").strip()
+    if readiness_mode:
+        payload["readiness_mode"] = readiness_mode
+    for source_key, public_key in (
+        ("operational_status", "operational_status"),
+        ("science_status", "science_status"),
+        ("forecast_monitoring_status", "forecast_monitoring_status"),
+        ("budget_status", "budget_status"),
+    ):
+        value = str(snapshot.get(source_key) or "").strip()
+        if value:
+            payload[public_key] = value
+    layers = snapshot.get("readiness_layers")
+    if isinstance(layers, dict) and layers:
+        payload["readiness_layers"] = _public_readiness_layers(layers)
     if status_reasons:
         payload["status_reasons"] = status_reasons[:3]
         if len(status_reasons) > 3:

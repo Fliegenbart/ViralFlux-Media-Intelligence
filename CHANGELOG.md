@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-04-30 — v1.2a Operational Readiness accepted
+
+### Layered operational readiness
+
+- `v1.2a-layered-operational-readiness` marks the deployed operational baseline.
+- Live commit: `168900a60955dac70ee17dec7d9c484953903d54`.
+- `/health/ready` now means operationally deployable and able to serve the production core scope.
+- Science and forecast warnings remain visible, but no longer block the top-level readiness status by themselves.
+- Budget isolation remains explicit: green readiness does not change `can_change_budget`, `budget_can_change`, MediaSpendingTruth gates or domain `global_status`.
+
+### Accepted live state
+
+- Operational: `healthy`
+- Science: `review`
+- Forecast Monitoring: `warning`
+- Budget: `diagnostic_only`
+
+### Known warnings at acceptance
+
+- Influenza A h7: ECE/calibration review required.
+- SARS-CoV-2 and RSV A: forecast monitoring drift warnings remain visible.
+- AMELAG/evidence remains diagnostic-only and not budget-effective.
+
+### v1.3 research backtest kickoff
+
+- Live virus wave backtests were run in `historical_cutoff` mode.
+- Canonical scope report covers `Influenza A+B`, `RSV` and `SARS-CoV-2`.
+- Legacy acceptance scope report covers `Influenza A`, `Influenza B`, `RSV A` and `SARS-CoV-2`.
+- Both reports remain research-only and preserve `budget_can_change=false`.
+
 ## 2026-04-17 — Cockpit-Pivot und Gallery-Refresh
 
 ### Cockpit als einzige user-facing Surface

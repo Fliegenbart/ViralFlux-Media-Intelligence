@@ -549,6 +549,14 @@ export interface CockpitSystemStatus {
   budgetCanChange?: boolean | null;
   global_status?: string | null;
   globalStatus?: string | null;
+  operational_status?: string | null;
+  operationalStatus?: string | null;
+  science_status?: string | null;
+  scienceStatus?: string | null;
+  forecast_monitoring_status?: string | null;
+  forecastMonitoringStatus?: string | null;
+  budget_status?: string | null;
+  budgetStatus?: string | null;
   budget_mode?: string | null;
   budgetMode?: string | null;
   latest_amelag_date?: string | null;

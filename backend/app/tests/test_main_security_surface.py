@@ -133,6 +133,103 @@ class MainSecuritySurfaceTests(unittest.TestCase):
         )
         self.assertNotIn("components", payload)
 
+    def test_public_readiness_payload_exposes_redacted_layered_status(self) -> None:
+        snapshot = {
+            "status": "healthy",
+            "checked_at": "2026-04-30T08:00:00Z",
+            "readiness_mode": "layered_operational_v1",
+            "operational_status": "healthy",
+            "science_status": "review",
+            "forecast_monitoring_status": "warning",
+            "budget_status": "diagnostic_only",
+            "blockers": [],
+            "components": {
+                "core_regional_operational": {
+                    "status": "warning",
+                    "matrix": [
+                        {
+                            "virus_typ": "Influenza A",
+                            "horizon_days": 7,
+                            "blockers": ["Core scope quality gate is not at GO."],
+                        }
+                    ],
+                }
+            },
+            "readiness_layers": {
+                "operational": {
+                    "status": "healthy",
+                    "hard_blockers": 0,
+                    "warning_count": 0,
+                    "details": [{"secret": "do-not-leak"}],
+                },
+                "core_operational": {
+                    "status": "healthy",
+                    "hard_blockers": 0,
+                    "warning_count": 0,
+                },
+                "science_validation": {
+                    "status": "review",
+                    "hard_blockers": 0,
+                    "warning_count": 1,
+                    "items": [{"failed_checks": ["ece_passed"]}],
+                },
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "hard_blockers": 0,
+                    "warning_count": 2,
+                    "items": [{"alert": "drift"}],
+                },
+            },
+            "startup": {"db_summary": {"status": "ok"}},
+        }
+
+        payload = main._public_readiness_payload(
+            snapshot,
+            settings_obj=SimpleNamespace(
+                APP_VERSION="1.0.0",
+                ENVIRONMENT="production",
+            ),
+            expose_details=False,
+        )
+
+        self.assertEqual(payload["status"], "healthy")
+        self.assertEqual(payload["readiness_mode"], "layered_operational_v1")
+        self.assertEqual(payload["operational_status"], "healthy")
+        self.assertEqual(payload["science_status"], "review")
+        self.assertEqual(payload["forecast_monitoring_status"], "warning")
+        self.assertEqual(payload["budget_status"], "diagnostic_only")
+        self.assertEqual(payload["warning_count"], 3)
+        self.assertIn("science_validation_requires_review", payload["status_reasons"])
+        self.assertIn("forecast_monitoring_warnings_present", payload["status_reasons"])
+        self.assertEqual(
+            payload["readiness_layers"],
+            {
+                "operational": {
+                    "status": "healthy",
+                    "hard_blockers": 0,
+                    "warning_count": 0,
+                },
+                "core_operational": {
+                    "status": "healthy",
+                    "hard_blockers": 0,
+                    "warning_count": 0,
+                },
+                "science_validation": {
+                    "status": "review",
+                    "hard_blockers": 0,
+                    "warning_count": 1,
+                },
+                "forecast_monitoring": {
+                    "status": "warning",
+                    "hard_blockers": 0,
+                    "warning_count": 2,
+                },
+            },
+        )
+        self.assertNotIn("components", payload)
+        self.assertNotIn("startup", payload)
+        self.assertNotIn("blockers", payload)
+
     def test_public_readiness_payload_prioritizes_system_warning_reasons_before_forecast_monitoring(self) -> None:
         snapshot = {
             "status": "degraded",

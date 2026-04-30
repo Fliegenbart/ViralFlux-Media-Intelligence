@@ -32,6 +32,15 @@ _HEALTH_BY_STATUS = {
     "critical": "unhealthy",
     "unknown": "degraded",
 }
+READINESS_MODE = "layered_operational_v1"
+BUDGET_STATUS = "diagnostic_only"
+_SCIENCE_ONLY_CORE_BLOCKERS = {
+    "Core scope quality gate is not at GO.",
+}
+_OPERATIONAL_WARNING_CORE_BLOCKERS = {
+    "Core scope still uses an artifact transition fallback.",
+    "Legacy artifact fallback is still active.",
+}
 
 class ProductionReadinessService:
     """Build a release-grade readiness snapshot from live dependencies and artifacts."""
@@ -96,19 +105,11 @@ class ProductionReadinessService:
                 components["core_regional_operational"] = self._skipped_component(reason)
                 blocking_components.append("core_regional_operational")
 
-        overall_component_status = self._worst_status(
-            components[name].get("status")
-            for name in blocking_components
-            if name in components
+        readiness_layers = self._build_readiness_layers(
+            components=components,
+            has_core_scopes=has_core_scopes,
         )
-        overall_status = _HEALTH_BY_STATUS.get(overall_component_status, "degraded")
-        if overall_status == "healthy":
-            advisory_has_critical = any(
-                str((components.get(name) or {}).get("status") or "unknown") == "critical"
-                for name in advisory_components
-            )
-            if advisory_has_critical:
-                overall_status = "degraded"
+        overall_status = self._overall_status_from_layers(readiness_layers)
         blockers = [
             {"component": name, "message": component.get("message")}
             for name, component in components.items()
@@ -121,6 +122,12 @@ class ProductionReadinessService:
             "checked_at": observed_at.isoformat(),
             "environment": self.settings.ENVIRONMENT,
             "app_version": self.settings.APP_VERSION,
+            "readiness_mode": READINESS_MODE,
+            "operational_status": readiness_layers["operational"]["status"],
+            "science_status": readiness_layers["science_validation"]["status"],
+            "forecast_monitoring_status": readiness_layers["forecast_monitoring"]["status"],
+            "budget_status": BUDGET_STATUS,
+            "readiness_layers": readiness_layers,
             "blocking_components": blocking_components,
             "advisory_components": advisory_components,
             "components": components,
@@ -153,10 +160,11 @@ class ProductionReadinessService:
             reason = "database_unavailable" if components["database"]["status"] != "ok" else "startup_light_mode"
             components["core_regional_operational"] = self._skipped_component(reason)
 
-        overall_component_status = self._worst_status(
-            component.get("status") for component in components.values()
+        readiness_layers = self._build_readiness_layers(
+            components=components,
+            has_core_scopes=True,
         )
-        overall_status = _HEALTH_BY_STATUS.get(overall_component_status, "degraded")
+        overall_status = self._overall_status_from_layers(readiness_layers)
         blockers = [
             {"component": name, "message": component.get("message")}
             for name, component in components.items()
@@ -170,6 +178,12 @@ class ProductionReadinessService:
             "app_version": self.settings.APP_VERSION,
             "scope_mode": "core_production",
             "scope_allowlist": allowlist,
+            "readiness_mode": READINESS_MODE,
+            "operational_status": readiness_layers["operational"]["status"],
+            "science_status": readiness_layers["science_validation"]["status"],
+            "forecast_monitoring_status": readiness_layers["forecast_monitoring"]["status"],
+            "budget_status": BUDGET_STATUS,
+            "readiness_layers": readiness_layers,
             "blocking_components": ["database", "celery_broker", "schema_bootstrap", "core_regional_operational"],
             "advisory_components": [],
             "components": components,
@@ -278,7 +292,9 @@ class ProductionReadinessService:
                         "freshness_status": snapshot.get("freshness_status"),
                         "accuracy_freshness_status": snapshot.get("accuracy_freshness_status"),
                         "backtest_freshness_status": snapshot.get("backtest_freshness_status"),
+                        "drift_status": snapshot.get("drift_status"),
                         "model_version": snapshot.get("model_version"),
+                        "alerts": list(snapshot.get("alerts") or []),
                     }
                 )
             except Exception as exc:
@@ -683,6 +699,209 @@ class ProductionReadinessService:
     @staticmethod
     def _worst_status(statuses: Any) -> str:
         return production_readiness_matrix.worst_status(statuses)
+
+    def _build_readiness_layers(
+        self,
+        *,
+        components: dict[str, Any],
+        has_core_scopes: bool,
+    ) -> dict[str, dict[str, Any]]:
+        operational = self._operational_layer(components)
+        core_operational = self._core_operational_layer(
+            components,
+            has_core_scopes=has_core_scopes,
+        )
+        science_validation = self._science_validation_layer(
+            components,
+            has_core_scopes=has_core_scopes,
+        )
+        forecast_monitoring = self._forecast_monitoring_layer(components)
+        return {
+            "operational": operational,
+            "core_operational": core_operational,
+            "science_validation": science_validation,
+            "forecast_monitoring": forecast_monitoring,
+        }
+
+    def _operational_layer(self, components: dict[str, Any]) -> dict[str, Any]:
+        component_names = ["database", "celery_broker", "schema_bootstrap"]
+        statuses = [
+            str((components.get(name) or {}).get("status") or "unknown")
+            for name in component_names
+        ]
+        worst_status = self._worst_status(statuses)
+        hard_blockers = sum(1 for status in statuses if status == "critical")
+        warning_count = sum(1 for status in statuses if status in {"warning", "unknown"})
+        return {
+            "status": _HEALTH_BY_STATUS.get(worst_status, "degraded"),
+            "hard_blockers": hard_blockers,
+            "warning_count": warning_count,
+        }
+
+    def _core_operational_layer(
+        self,
+        components: dict[str, Any],
+        *,
+        has_core_scopes: bool,
+    ) -> dict[str, Any]:
+        component_name = (
+            "core_regional_operational" if has_core_scopes else "regional_operational"
+        )
+        component = components.get(component_name) or {}
+        component_status = str(component.get("status") or "unknown").strip().lower()
+        matrix = list(component.get("matrix") or [])
+
+        hard_blockers = 0
+        warning_count = 0
+        operational_warning_count = 0
+        for item in matrix:
+            item_hard_blockers = self._core_operational_hard_blockers(item)
+            item_warning_blockers = self._core_operational_warning_blockers(item)
+            hard_blockers += len(item_hard_blockers)
+            operational_warning_count += len(item_warning_blockers)
+            if (
+                str(item.get("status") or "").strip().lower() == "critical"
+                and not item_hard_blockers
+            ):
+                hard_blockers += 1
+            warning_count += len(item.get("core_scope_advisories") or [])
+            warning_count += len(item_warning_blockers)
+
+        if component_status == "critical":
+            hard_blockers = max(hard_blockers, 1)
+            status = "unhealthy"
+        elif hard_blockers:
+            status = "unhealthy"
+        elif operational_warning_count:
+            status = "degraded"
+        elif component_status == "unknown":
+            warning_count = max(warning_count, 1)
+            status = "degraded"
+        else:
+            status = "healthy"
+
+        return {
+            "status": status,
+            "hard_blockers": hard_blockers,
+            "warning_count": warning_count,
+        }
+
+    def _science_validation_layer(
+        self,
+        components: dict[str, Any],
+        *,
+        has_core_scopes: bool,
+    ) -> dict[str, Any]:
+        component_name = (
+            "core_regional_operational" if has_core_scopes else "regional_operational"
+        )
+        component = components.get(component_name) or {}
+        warning_count = 0
+        for item in list(component.get("matrix") or []):
+            quality_gate = item.get("quality_gate") or {}
+            quality_readiness = (
+                str(quality_gate.get("forecast_readiness") or "").strip().upper()
+            )
+            failed_checks = list(
+                quality_gate.get("failed_checks")
+                or item.get("quality_gate_failed_checks")
+                or []
+            )
+            if (quality_readiness and quality_readiness != "GO") or failed_checks:
+                warning_count += 1
+
+        forecast_component = components.get("forecast_monitoring") or {}
+        for item in list(forecast_component.get("items") or []):
+            alerts = [str(alert or "") for alert in list(item.get("alerts") or [])]
+            if any(
+                "Kalibrier" in alert or "Event-Wahrscheinlichkeit" in alert
+                for alert in alerts
+            ):
+                warning_count += 1
+
+        return {
+            "status": "review" if warning_count else "healthy",
+            "hard_blockers": 0,
+            "warning_count": warning_count,
+        }
+
+    def _forecast_monitoring_layer(self, components: dict[str, Any]) -> dict[str, Any]:
+        if "forecast_monitoring" not in components:
+            return {
+                "status": "healthy",
+                "hard_blockers": 0,
+                "warning_count": 0,
+            }
+        component = components.get("forecast_monitoring") or {}
+        component_status = str(component.get("status") or "unknown").strip().lower()
+        items = list(component.get("items") or [])
+        warning_count = sum(
+            1
+            for item in items
+            if str(item.get("status") or "").strip().lower()
+            in {"warning", "unknown", "critical"}
+        )
+        if component_status == "critical":
+            status = "critical"
+        elif component_status in {"warning", "unknown"}:
+            status = "warning"
+        else:
+            status = "healthy"
+        return {
+            "status": status,
+            "hard_blockers": sum(
+                1
+                for item in items
+                if str(item.get("status") or "").strip().lower() == "critical"
+            ),
+            "warning_count": warning_count,
+        }
+
+    @staticmethod
+    def _core_operational_hard_blockers(item: dict[str, Any]) -> list[str]:
+        blockers = [
+            str(blocker or "").strip()
+            for blocker in list(item.get("blockers") or [])
+            if str(blocker or "").strip()
+            and str(blocker or "").strip() not in _SCIENCE_ONLY_CORE_BLOCKERS
+            and str(blocker or "").strip() not in _OPERATIONAL_WARNING_CORE_BLOCKERS
+        ]
+        if str(item.get("model_availability") or "").strip().lower() not in {
+            "available",
+            "unsupported",
+        }:
+            blockers.append("Core scope has no loadable regional model artifacts.")
+        if str(item.get("forecast_recency_status") or "").strip().lower() == "critical":
+            blockers.append("Core scope forecast recency is not in the OK window.")
+        if str(item.get("source_freshness_status") or "").strip().lower() == "critical":
+            blockers.append("Core scope source freshness is not in the OK window.")
+        if (
+            str(item.get("source_coverage_required_status") or "").strip().lower()
+            == "critical"
+        ):
+            blockers.append("Core scope required source coverage is not OK.")
+        return list(dict.fromkeys(blockers))
+
+    @staticmethod
+    def _core_operational_warning_blockers(item: dict[str, Any]) -> list[str]:
+        return [
+            str(blocker or "").strip()
+            for blocker in list(item.get("blockers") or [])
+            if str(blocker or "").strip() in _OPERATIONAL_WARNING_CORE_BLOCKERS
+        ]
+
+    @staticmethod
+    def _overall_status_from_layers(layers: dict[str, dict[str, Any]]) -> str:
+        operational_status = str((layers.get("operational") or {}).get("status") or "degraded")
+        core_status = str((layers.get("core_operational") or {}).get("status") or "degraded")
+        forecast_status = str((layers.get("forecast_monitoring") or {}).get("status") or "warning")
+        if "unhealthy" in {operational_status, core_status}:
+            return "unhealthy"
+        if "degraded" in {operational_status, core_status}:
+            return "degraded"
+        if forecast_status == "critical":
+            return "degraded"
+        return "healthy"
 
     @staticmethod
     def _age_status(

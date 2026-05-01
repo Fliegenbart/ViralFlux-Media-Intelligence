@@ -972,6 +972,9 @@ html {
 }
 .peix .flux-loading-field {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
   width: min(58vw, 520px);
   aspect-ratio: 1;
   border-radius: 50%;
@@ -1015,7 +1018,12 @@ html {
 .peix .flux-loading-mark {
   position: relative;
   z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
   font-size: 48px;
+  line-height: 1;
   color: #C2542A;
   text-shadow: 0 0 24px rgba(194, 84, 42, 0.28);
   animation: flux-pulse 1.8s ease-in-out infinite;

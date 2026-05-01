@@ -71,9 +71,9 @@ export const CockpitShell: React.FC = () => {
         <div
           className="peix-shell flux-loading"
           style={{
-            padding: '120px 40px',
+            padding: '0 40px',
             textAlign: 'center',
-            minHeight: '60vh',
+            minHeight: '100svh',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

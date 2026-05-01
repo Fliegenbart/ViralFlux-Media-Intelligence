@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models.database import Base, KreisEinwohner, SurvstatKreisData
+from app.models.database import Base, KreisEinwohner, SurvstatKreisData, SurvstatWeeklyData
 from app.services.data_ingest.survstat_api_service import SurvstatApiService
 from app.services.ml.regional_features import RegionalFeatureBuilder
 
@@ -107,6 +107,105 @@ class SurvstatPopulationSyncTests(unittest.TestCase):
             self.db.query(KreisEinwohner).filter(KreisEinwohner.ags == "11000").one().einwohner,
             3677472,
         )
+
+    def test_aggregate_to_weekly_gesamt_also_writes_current_bundesland_rows(self) -> None:
+        self.db.add_all([
+            KreisEinwohner(
+                kreis_name="SK Berlin Mitte",
+                ags="11001",
+                bundesland="Berlin",
+                einwohner=0,
+            ),
+            KreisEinwohner(
+                kreis_name="SK Berlin Pankow",
+                ags="11003",
+                bundesland="Berlin",
+                einwohner=0,
+            ),
+            KreisEinwohner(
+                kreis_name="Berlin, Stadt",
+                ags="11000",
+                bundesland="Berlin",
+                einwohner=3_677_472,
+            ),
+            KreisEinwohner(
+                kreis_name="LK Ahrweiler",
+                ags="07131",
+                bundesland="Rheinland-Pfalz",
+                einwohner=132_170,
+            ),
+            SurvstatKreisData(
+                year=2026,
+                week=10,
+                week_label="2026_10",
+                kreis="SK Berlin Mitte",
+                disease="influenza, saisonal",
+                disease_cluster="RESPIRATORY",
+                fallzahl=100,
+                inzidenz=None,
+                created_at=utc_now(),
+            ),
+            SurvstatKreisData(
+                year=2026,
+                week=10,
+                week_label="2026_10",
+                kreis="SK Berlin Pankow",
+                disease="influenza, saisonal",
+                disease_cluster="RESPIRATORY",
+                fallzahl=200,
+                inzidenz=None,
+                created_at=utc_now(),
+            ),
+            SurvstatKreisData(
+                year=2026,
+                week=10,
+                week_label="2026_10",
+                kreis="LK Ahrweiler",
+                disease="influenza, saisonal",
+                disease_cluster="RESPIRATORY",
+                fallzahl=132,
+                inzidenz=None,
+                created_at=utc_now(),
+            ),
+        ])
+        self.db.commit()
+
+        upserted = self.service._aggregate_to_weekly_gesamt([2026])
+
+        self.assertEqual(upserted, 3)
+        gesamt = (
+            self.db.query(SurvstatWeeklyData)
+            .filter(
+                SurvstatWeeklyData.week_label == "2026_10",
+                SurvstatWeeklyData.bundesland == "Gesamt",
+                SurvstatWeeklyData.disease == "influenza, saisonal",
+            )
+            .one()
+        )
+        berlin = (
+            self.db.query(SurvstatWeeklyData)
+            .filter(
+                SurvstatWeeklyData.week_label == "2026_10",
+                SurvstatWeeklyData.bundesland == "Berlin",
+                SurvstatWeeklyData.disease == "influenza, saisonal",
+            )
+            .one()
+        )
+        rheinland_pfalz = (
+            self.db.query(SurvstatWeeklyData)
+            .filter(
+                SurvstatWeeklyData.week_label == "2026_10",
+                SurvstatWeeklyData.bundesland == "Rheinland-Pfalz",
+                SurvstatWeeklyData.disease == "influenza, saisonal",
+            )
+            .one()
+        )
+
+        self.assertEqual(gesamt.incidence, 432.0)
+        self.assertAlmostEqual(berlin.incidence, (300.0 / 3_677_472.0) * 100_000.0, places=6)
+        self.assertAlmostEqual(rheinland_pfalz.incidence, (132.0 / 132_170.0) * 100_000.0, places=6)
+        self.assertEqual(berlin.source_file, "survstat_api_state_aggregated")
+        self.assertEqual(rheinland_pfalz.source_file, "survstat_api_state_aggregated")
 
 
 class RegionalKreisTruthAggregationTests(unittest.TestCase):

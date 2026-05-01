@@ -724,19 +724,19 @@ class SurvstatApiService:
         }
 
     # ------------------------------------------------------------------
-    #  Step 7: Aggregate Kreis → Gesamt for survstat_weekly_data
+    #  Step 7: Aggregate Kreis → Weekly rows for survstat_weekly_data
     # ------------------------------------------------------------------
 
     def _aggregate_to_weekly_gesamt(self, years: list[int]) -> int:
-        """Aggregate survstat_kreis_data into survstat_weekly_data 'Gesamt' rows.
+        """Aggregate survstat_kreis_data into current weekly summary rows.
 
-        Sums fallzahl across all Kreise per (week_label, disease) and
-        upserts into survstat_weekly_data so the Markt-Check backtester
-        can use them.
+        The national "Gesamt" rows keep the historic contract and store total
+        case counts. Bundesland rows store cases per 100k people so regional
+        cockpit and backtest views do not depend on stale legacy CSV rows.
         """
         from sqlalchemy import func
 
-        rows = (
+        national_rows = (
             self.db.query(
                 SurvstatKreisData.year,
                 SurvstatKreisData.week,
@@ -760,11 +760,57 @@ class SurvstatApiService:
             .all()
         )
 
-        if not rows:
+        state_population_rows = (
+            self.db.query(
+                KreisEinwohner.bundesland,
+                func.sum(KreisEinwohner.einwohner).label("population"),
+            )
+            .filter(
+                KreisEinwohner.bundesland != "",
+                KreisEinwohner.einwohner > 0,
+            )
+            .group_by(KreisEinwohner.bundesland)
+            .all()
+        )
+        state_population = {
+            row.bundesland: float(row.population)
+            for row in state_population_rows
+            if row.bundesland and row.population and row.population > 0
+        }
+
+        state_rows = (
+            self.db.query(
+                SurvstatKreisData.year,
+                SurvstatKreisData.week,
+                SurvstatKreisData.week_label,
+                SurvstatKreisData.disease,
+                SurvstatKreisData.disease_cluster,
+                KreisEinwohner.bundesland.label("bundesland"),
+                func.sum(SurvstatKreisData.fallzahl).label("total_fallzahl"),
+            )
+            .join(KreisEinwohner, KreisEinwohner.kreis_name == SurvstatKreisData.kreis)
+            .filter(
+                SurvstatKreisData.year.in_(years),
+                SurvstatKreisData.week >= 1,
+                SurvstatKreisData.week <= 53,
+                KreisEinwohner.bundesland != "",
+            )
+            .group_by(
+                SurvstatKreisData.year,
+                SurvstatKreisData.week,
+                SurvstatKreisData.week_label,
+                SurvstatKreisData.disease,
+                SurvstatKreisData.disease_cluster,
+                KreisEinwohner.bundesland,
+            )
+            .all()
+        )
+
+        if not national_rows and not state_rows:
             return 0
 
         upserted = 0
-        for row in rows:
+        for row in national_rows:
             try:
                 week_start = datetime.strptime(
                     f"{row.year}-W{row.week:02d}-1", "%G-W%V-%u"
@@ -804,9 +850,52 @@ class SurvstatApiService:
                 ))
             upserted += 1
 
+        for row in state_rows:
+            population = state_population.get(row.bundesland)
+            if not population:
+                continue
+            try:
+                week_start = datetime.strptime(
+                    f"{row.year}-W{row.week:02d}-1", "%G-W%V-%u"
+                )
+            except ValueError:
+                continue
+            available_time = week_start + pd.Timedelta(days=7)
+            incidence = float(row.total_fallzahl) / population * 100_000
+
+            existing = (
+                self.db.query(SurvstatWeeklyData)
+                .filter(
+                    SurvstatWeeklyData.week_label == row.week_label,
+                    SurvstatWeeklyData.bundesland == row.bundesland,
+                    SurvstatWeeklyData.disease == row.disease,
+                )
+                .first()
+            )
+
+            if existing:
+                existing.incidence = incidence
+                existing.disease_cluster = row.disease_cluster
+                existing.available_time = available_time
+                existing.source_file = "survstat_api_state_aggregated"
+            else:
+                self.db.add(SurvstatWeeklyData(
+                    week_label=row.week_label,
+                    week_start=week_start,
+                    available_time=available_time,
+                    year=row.year,
+                    week=row.week,
+                    bundesland=row.bundesland,
+                    disease=row.disease,
+                    disease_cluster=row.disease_cluster,
+                    incidence=incidence,
+                    source_file="survstat_api_state_aggregated",
+                ))
+            upserted += 1
+
         self.db.commit()
         logger.info(
-            f"SurvStat Gesamt-Aggregation: {upserted} Wochen×Krankheiten "
+            f"SurvStat Wochen-Aggregation: {upserted} Wochen×Regionen×Krankheiten "
             f"in survstat_weekly_data geschrieben."
         )
         return upserted

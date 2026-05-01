@@ -79,6 +79,11 @@ export const CockpitShell: React.FC = () => {
             justifyContent: 'center',
           }}
         >
+          <div className="flux-loading-field" aria-hidden="true">
+            <span className="flux-loading-ring ring-a" />
+            <span className="flux-loading-ring ring-b" />
+            <span className="flux-loading-ring ring-c" />
+          </div>
           <div className="flux-loading-mark">◆</div>
         </div>
       </div>

@@ -2199,6 +2199,21 @@ html {
 .peix-instr .next-step-card.tone-default {
   border-left-color: var(--ink-40);
 }
+.peix-instr .next-step-card.is-primary {
+  grid-column: span 2;
+  background: color-mix(in srgb, var(--signal, #c2542a) 8%, var(--paper));
+  border-color: color-mix(in srgb, var(--signal, #c2542a) 42%, var(--ink-20));
+  border-left-width: 8px;
+  padding: 28px 30px 30px;
+}
+.peix-instr .next-step-card.is-primary .ns-title {
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1.08;
+}
+.peix-instr .next-step-card.is-primary .ns-body {
+  font-size: 15px;
+  max-width: 760px;
+}
 .peix-instr .next-step-card:hover {
   background: color-mix(in srgb, var(--ink) 3%, var(--paper));
   border-color: var(--ink-40);
@@ -2987,6 +3002,9 @@ html {
   padding: 56px 40px;
   border-right: 0.5px solid rgba(244, 241, 234, 0.2);
 }
+.peix-instr .bt-monument.is-primary {
+  background: color-mix(in srgb, var(--signal, #c2542a) 14%, var(--ink));
+}
 .peix-instr .bt-monument:last-child { border-right: none; }
 .peix-instr .bt-monument .label {
   font-family: var(--font-mono);
@@ -3061,6 +3079,14 @@ html {
   color: var(--ink-60);
 }
 .peix-instr .bt-window b { color: var(--ink); font-weight: 500; }
+.peix-instr .backtest-ranking-note {
+  max-width: 980px;
+  margin: 24px 0 0;
+  color: var(--slate);
+  font-family: var(--font-body);
+  font-size: var(--t-small);
+  line-height: 1.55;
+}
 
 /* Roster */
 .peix-instr .roster { margin-top: 0; }
@@ -4165,6 +4191,11 @@ html {
 
   .peix-instr .next-step-card {
     padding: 18px 18px 20px;
+  }
+
+  .peix-instr .next-step-card.is-primary {
+    grid-column: span 1;
+    padding: 22px 20px 24px;
   }
 
   .peix-instr .page-foot {

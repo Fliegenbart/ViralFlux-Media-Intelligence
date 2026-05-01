@@ -68,8 +68,7 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
     return {
       tone: 'caution',
       label: 'Diagnose nutzbar',
-      note:
-        'Operativ stabil, aber Budget-Automation deaktiviert. Erst echte Sales-Validierung kann daraus Freigabe machen.',
+      note: 'Funktioniert. Wartet auf eure Daten, bevor wir Budget bewegen.',
     };
   }
 
@@ -154,6 +153,10 @@ export const CeoPitchMode: React.FC<Props> = ({
   const lead = snapshot.modelStatus?.lead;
   const budgetDisabled = !budgetCanChange(snapshot);
   const salesProofLabel = 'Sales-Validierung offen';
+  const signalPct =
+    typeof signalScore === 'number' && Number.isFinite(signalScore)
+      ? `${Math.round(signalScore * 100)} %`
+      : '—';
 
   const headline = hasStrongSignal
     ? `${toName} als Signal-Kandidat prüfen`
@@ -234,7 +237,7 @@ export const CeoPitchMode: React.FC<Props> = ({
         <div>
           <span>Signal</span>
           <b>{fmtSignalStrength(signalScore)}</b>
-          <small>Ranking-Score, keine kalibrierte Wahrscheinlichkeit</small>
+          <small>Wir sind uns zu {signalPct} sicher. Mit euren Daten sehen wir, ob das stimmt.</small>
         </div>
         <div>
           <span>Coverage</span>

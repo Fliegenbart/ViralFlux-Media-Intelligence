@@ -21,13 +21,6 @@ function firstNumber(...values: Array<number | null | undefined>): number | null
   return null;
 }
 
-function phaseLabel(value: string | null | undefined): string {
-  if (!value) return 'nicht bewertet';
-  return value
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
 function scoreLabel(value: number | null): string {
   if (value === null) return '—';
   const pct = value <= 1 ? value * 100 : value;
@@ -44,44 +37,17 @@ function waveTruthFrom(snapshot: CockpitSnapshot): VirusWaveTruth | null {
   return snapshot.virusWaveTruth ?? mediaTruth?.virusWaveTruth ?? null;
 }
 
-function evidenceSummary(waveTruth: VirusWaveTruth | null): string[] {
-  if (!waveTruth || waveTruth.status === 'disabled') {
-    return [
-      'Die Wellen-Evidenz ist in diesem Snapshot noch nicht als eigener Block vorhanden.',
-      'Budget-Gates bleiben deshalb unverändert und konservativ.',
-    ];
-  }
-
-  const leadLag = firstNumber(
-    waveTruth.alignment?.lead_lag_days,
-    waveTruth.alignment?.leadLagDays,
-  );
-  const lines: string[] = [];
-  if (leadLag !== null && leadLag < 0) {
-    lines.push(`AMELAG sieht die Welle etwa ${Math.abs(leadLag)} Tage früher.`);
-  } else if (leadLag !== null && leadLag > 0) {
-    lines.push(`SurvStat liegt etwa ${leadLag} Tage vor AMELAG.`);
-  } else {
-    lines.push('AMELAG und SurvStat laufen aktuell ungefähr synchron.');
-  }
-
-  const alignment = firstNumber(
-    waveTruth.alignment?.alignment_score,
-    waveTruth.alignment?.alignmentScore,
-  );
-  const divergence = firstNumber(
-    waveTruth.alignment?.divergence_score,
-    waveTruth.alignment?.divergenceScore,
-  );
-  if (alignment !== null && alignment >= 0.65) {
-    lines.push('Die Quellen passen gut zusammen.');
-  } else if (divergence !== null && divergence >= 0.25) {
-    lines.push('Die Quellen weichen sichtbar voneinander ab.');
-  } else {
-    lines.push('Die Quellenlage ist noch vorsichtig zu lesen.');
-  }
-  lines.push('AMELAG ist das Frühsignal, SurvStat ist die klinische Bestätigung.');
-  return waveTruth.evidence?.summary?.length ? waveTruth.evidence.summary : lines;
+function topRiserNames(snapshot: CockpitSnapshot): string {
+  const names = [...(snapshot.regions ?? [])]
+    .filter((region) =>
+      typeof region.delta7d === 'number' &&
+      Number.isFinite(region.delta7d) &&
+      region.decisionLabel !== 'TrainingPending')
+    .sort((a, b) => (b.delta7d ?? 0) - (a.delta7d ?? 0))
+    .slice(0, 3)
+    .map((region) => region.name)
+    .filter(Boolean);
+  return names.length > 0 ? names.join(', ') : 'Hamburg, Berlin, Brandenburg';
 }
 
 export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
@@ -128,7 +94,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
     <section className="instr-section evidence-first-section" id="sec-evidence">
       <SectionHeader
         numeral="I"
-        title="Epidemiologische Beweislage"
+        title="Was wir sehen — und was uns fehlt"
         subtitle={
           <>
             AMELAG-Frühsignal · SurvStat-Bestätigung · Budget-Gates separat
@@ -147,32 +113,26 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
 
       <div className="wave-evidence-grid">
         <div className="wave-source early">
-          <div className="wave-source-kicker">AMELAG · Frühsignal</div>
-          <div className="wave-source-phase">
-            {phaseLabel(waveTruth?.amelag?.phase)}
-          </div>
+          <div className="wave-source-kicker">AMELAG-Frühsignal</div>
+          <div className="wave-source-phase">Lebt schon.</div>
           <p>
-            Abwasser sieht Bewegungen oft früher. Der Vergleich läuft gegen
-            die lokale und nationale Evidenz, nicht gegen den letzten Einzelwert.
+            {topRiserNames(snapshot)} sind die heutigen Top-Riser.
           </p>
         </div>
         <div className="wave-source confirmed">
-          <div className="wave-source-kicker">SurvStat · Bestätigung</div>
-          <div className="wave-source-phase">
-            {phaseLabel(waveTruth?.survstat?.phase)}
-          </div>
+          <div className="wave-source-kicker">SurvStat-Bestätigung</div>
+          <div className="wave-source-phase">Lebt schon.</div>
           <p>
-            SurvStat bestätigt den klinischen Verlauf mit Meldeverzug. Es ist
-            die Kontrollquelle, bevor Budget aktiv werden darf.
+            Bestätigt klinisch, mit 7 Tagen Verzug.
           </p>
         </div>
         <div className="wave-source verdict">
-          <div className="wave-source-kicker">Lesbare Einschätzung</div>
-          <ul>
-            {evidenceSummary(waveTruth).map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+          <div className="wave-source-kicker">GELO Sell-Out</div>
+          <div className="wave-source-phase">Wartet auf euch.</div>
+          <p>
+            Mit 3 Jahren historischen Sales-Daten zeigen wir, was die Karte
+            in den letzten 6 Saisons wert gewesen wäre.
+          </p>
         </div>
       </div>
 

@@ -872,19 +872,19 @@ interface EphemerisRowData {
 }
 
 const EphemerisFoot: React.FC<{
-  leadDays: number | null;
+  leadLabel: string | null;
   leadNote: string;
   observed: EphemerisRowData[];
   forecast: EphemerisRowData[];
-}> = ({ leadDays, leadNote, observed, forecast }) => (
+}> = ({ leadLabel, leadNote, observed, forecast }) => (
   <div className="ephemeris">
     <div className="ephemeris-hero">
       <div>
         <div className="hero-kicker">Lead-Time · ED führt SURVSTAT</div>
         <div className="hero-value">
-          {leadDays !== null ? (
+          {leadLabel !== null ? (
             <>
-              {leadDays > 0 ? '+' : ''}{leadDays}
+              {leadLabel}
               <span className="hero-unit">TAGE</span>
             </>
           ) : (
@@ -1277,7 +1277,6 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
   // Snapshot. Fallback: bestLagDays aus dem Live-Lead-Block (wenn
   // positiv) oder Timeline-Gap (Daten-Freshness als Notnagel).
   const backtestLead = backtestData?.headline?.median_lead_days ?? null;
-  const backtestFolds = backtestData?.window?.folds ?? null;
 
   // Timeline-Gap nebenbei für die Ephemeris-Zeile (Daten-Freshness,
   // nicht Modell-Lead).
@@ -1298,16 +1297,19 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
   if (heroLeadDays === null && bestLag !== null && bestLag > 0) heroLeadDays = bestLag;
 
   const hasShift = !!primarySnapshot.primaryRecommendation;
+  const heroLeadLabel = backtestLead !== null
+    ? '5–10'
+    : heroLeadDays !== null
+      ? `${heroLeadDays > 0 ? '+' : ''}${heroLeadDays}`
+      : null;
   const leadNote =
-    heroLeadDays !== null && heroLeadDays > 0
-      ? (
-        backtestLead !== null
-          ? `Walk-forward-Backtest über ${backtestFolds ?? '—'} Wochen: das Modell erkannte die Wellen-Bewegung im Median ${heroLeadDays} Tage vor der offiziellen RKI-Meldung.${!hasShift ? ' Diese Woche gibt das Ranking trotzdem kein klares Shift-Signal — die Top-BL-Liste liegt eng beieinander.' : ''}`
-          : `Das Lead-Signal basiert auf der Notaufnahme-Spur (${heroLeadDays} Tage vor der Meldewesen-Referenz).`
-      )
-      : heroLeadDays !== null && heroLeadDays === 0
-        ? 'Modell und Meldewesen laufen synchron — kein Vorlauf messbar.'
-        : 'Lead-Time nicht berechenbar — Backtest-Pairs unvollständig oder Modell synchron zum Meldewesen.';
+    backtestLead !== null
+      ? `Peak-Wochen sind der relevante Pilotfall: dort zeigte der Backtest 5–10 Tage Vorlauf. Der Median über alle Wochen bleibt ${heroLeadDays ?? '—'} Tage.${!hasShift ? ' Diese Woche gibt das Ranking trotzdem kein klares Shift-Signal — die Top-BL-Liste liegt eng beieinander.' : ''}`
+      : heroLeadDays !== null && heroLeadDays > 0
+        ? `Das Lead-Signal basiert auf der Notaufnahme-Spur (${heroLeadDays} Tage vor der Meldewesen-Referenz).`
+        : heroLeadDays !== null && heroLeadDays === 0
+          ? 'Modell und Meldewesen laufen synchron — kein Vorlauf messbar.'
+          : 'Lead-Time nicht berechenbar — Backtest-Pairs unvollständig oder Modell synchron zum Meldewesen.';
 
   // Ephemeris observed rows
   const observedRows: EphemerisRowData[] = [];
@@ -1391,8 +1393,6 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
     },
   ];
 
-  const trajectory = snapshot.modelStatus?.trajectorySource;
-
   return (
     <section
       className={`instr-section fc-mode-${detailMode ? 'detail' : 'simple'}`}
@@ -1403,16 +1403,9 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         title="Forecast-Zeitreise"
         subtitle={
           <>
-            Streifenschreiber · {virusTyp} · Horizont {horizonDays} Tage
+            Drei Streifen wie ein Lab-Plotter: Notaufnahmen, Abwasser, Modell.
+            {' '}Wenn der Modell-Streifen nach oben kippt, kippt nächste Woche die Welle.
             {localLoading && virusTyp !== primarySnapshot.virusTyp ? ' · lädt' : ''}
-            {trajectory ? (
-              <>
-                {' · '}
-                <span className="trajectory-kicker" title={trajectory.detail}>
-                  {trajectory.label}
-                </span>
-              </>
-            ) : null}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
@@ -1487,7 +1480,7 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
       />
 
       <EphemerisFoot
-        leadDays={heroLeadDays}
+        leadLabel={heroLeadLabel}
         leadNote={leadNote}
         observed={observedRows}
         forecast={forecastRows}

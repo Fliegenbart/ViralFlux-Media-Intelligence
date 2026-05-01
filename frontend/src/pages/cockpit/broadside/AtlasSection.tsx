@@ -91,7 +91,7 @@ const SiteEarlyWarningLayer: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapsh
       <div className="site-warning-head">
         <div>
           <div className="site-warning-kicker">AMELAG Standort-Frühwarnung</div>
-          <h3>Lokale Baseline statt letzter Einzelwert</h3>
+          <h3>Wir vergleichen jeden Standort mit sich selbst, nicht mit dem Schnitt</h3>
         </div>
         <div className="site-warning-counts">
           <span className="red">{redCount} rot</span>

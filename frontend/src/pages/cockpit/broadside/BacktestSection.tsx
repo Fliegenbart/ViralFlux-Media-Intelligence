@@ -267,6 +267,31 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
       })()}
 
       <div className="backtest-head">
+        <div className="bt-monument is-primary">
+          <div className="label">Top-3 richtig</div>
+          <div className="num">
+            {prec !== null ? (prec * 100).toFixed(1) : '—'}
+            <span className="unit">%</span>
+          </div>
+          <div className="ref">
+            vs. Persistenz{' '}
+            <b>
+              {persistPrec !== null ? `${(persistPrec * 100).toFixed(1)} %` : '—'}
+            </b>
+            {' · '}
+            {ppDelta !== null ? (
+              <span style={{ color: 'var(--signal)', fontWeight: 500 }}>
+                {ppDelta >= 0 ? '+' : ''}
+                {ppDelta.toFixed(1)}pp
+              </span>
+            ) : (
+              '—'
+            )}
+            <br />
+            In so vielen Wochen lag die richtige Region in unseren Top 3.
+          </div>
+        </div>
+
         <div className="bt-monument">
           <div className="label">PR-AUC Gesamt</div>
           <div className="num">{fmtPrAuc(prAuc)}</div>
@@ -286,29 +311,6 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
         </div>
 
         <div className="bt-monument">
-          <div className="label">Precision @ Top-3</div>
-          <div className="num">
-            {prec !== null ? (prec * 100).toFixed(1) : '—'}
-            <span className="unit">%</span>
-          </div>
-          <div className="ref">
-            vs. Persistenz{' '}
-            <b>
-              {persistPrec !== null ? `${(persistPrec * 100).toFixed(1)} %` : '—'}
-            </b>
-            {' · '}
-            {ppDelta !== null ? (
-              <span style={{ color: 'var(--signal)', fontWeight: 500 }}>
-                {ppDelta >= 0 ? '+' : ''}
-                {ppDelta.toFixed(1)}pp
-              </span>
-            ) : (
-              '—'
-            )}
-          </div>
-        </div>
-
-        <div className="bt-monument">
           <div className="label">Median Lead-Zeit</div>
           <div className="num">
             {medianLead !== null ? medianLead : '—'}
@@ -319,6 +321,13 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           </div>
         </div>
       </div>
+
+      <p className="backtest-ranking-note">
+        Lies das Ranking als historische Modellgüte pro Region — nicht als
+        heutige Welle. Hamburg steht heute oben (§I), historisch unten (hier).
+        Das ist kein Widerspruch: das Ranking misst Vergangenheit, das Signal
+        misst Gegenwart.
+      </p>
 
       <div className="bt-controls">
         <div className="virus-switcher" role="tablist">

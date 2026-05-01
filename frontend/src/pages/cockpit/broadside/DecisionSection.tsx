@@ -438,11 +438,9 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Erst nach Evidenz, Forecast und Validierung kommt Media.
-            Dieses Panel trennt darum zwischen <b>diagnostischem Signal</b>,
-            <b> Shadow-Vorschlag</b>, <b>freigegebenem Budget-Effekt</b>
-            und <b>blockierten Gates</b>. Ein Forecast-GO ist hier keine
-            Budgetfreigabe; `can_change_budget=false` bleibt maßgeblich.
+            Wir empfehlen heute keinen Klick. Wir empfehlen einen
+            <b> Shadow-Lauf</b>: was wäre passiert, wenn ihr verschoben
+            hättet? Antwort kommt mit euren Daten.
           </>
         }
       />

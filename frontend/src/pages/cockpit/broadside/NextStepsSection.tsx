@@ -222,7 +222,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
             return (
               <a
                 key={card.id}
-                className={`next-step-card tone-${card.tone}`}
+                className={`next-step-card tone-${card.tone}${card.id === 'upload-csv' ? ' is-primary' : ''}`}
                 href={card.href}
                 target={card.href.startsWith('mailto:') ? undefined : '_blank'}
                 rel="noreferrer"
@@ -235,7 +235,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
             return (
               <Link
                 key={card.id}
-                className={`next-step-card tone-${card.tone}`}
+                className={`next-step-card tone-${card.tone}${card.id === 'upload-csv' ? ' is-primary' : ''}`}
                 to={card.href}
               >
                 {content}
@@ -243,7 +243,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
             );
           }
           return (
-            <div key={card.id} className={`next-step-card tone-${card.tone}`}>
+            <div key={card.id} className={`next-step-card tone-${card.tone}${card.id === 'upload-csv' ? ' is-primary' : ''}`}>
               {content}
             </div>
           );

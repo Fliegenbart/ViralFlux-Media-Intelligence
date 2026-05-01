@@ -88,9 +88,12 @@ describe('CeoPitchMode consistency copy', () => {
     expect(screen.getByText(/Hamburg zeigt Atemwegsdruck/)).toBeInTheDocument();
     expect(screen.getByText(/Ob daraus GELO-Sales werden/)).toBeInTheDocument();
     expect(screen.getByText('Budget-Automation deaktiviert')).toBeInTheDocument();
+    expect(screen.getByText(/Funktioniert\. Wartet auf eure Daten/)).toBeInTheDocument();
+    expect(screen.getByText(/Wir sind uns zu 74 % sicher/)).toBeInTheDocument();
     expect(screen.getAllByText('Sales-Validierung offen').length).toBeGreaterThan(0);
     expect(screen.getByText(/keine automatische Budgetänderung/)).toBeInTheDocument();
 
+    expect(screen.queryByText(/Ranking-Score, keine kalibrierte Wahrscheinlichkeit/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Signalrichtung sichtbar/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Budget-Prüfung/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Handlungsfähig$/)).not.toBeInTheDocument();

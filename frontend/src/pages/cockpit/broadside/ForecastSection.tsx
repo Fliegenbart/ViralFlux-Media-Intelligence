@@ -1200,12 +1200,25 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
   const gateTone: GateTone =
     readiness === 'GO_RANKING' || readiness === 'RANKING_OK'
       ? 'go'
-      : readiness === 'WATCH' || readiness === 'LEAD_ONLY'
+      : readiness === 'WATCH' ||
+        readiness === 'LEAD_ONLY' ||
+        readiness === 'DATA_STALE' ||
+        readiness === 'DRIFT_WARN' ||
+        readiness === 'SEASON_OFF'
         ? 'watch'
         : 'unknown';
   const gateLabel =
-    gateTone === 'go' ? 'Gate · GO' :
-      gateTone === 'watch' ? 'Gate · WATCH' : 'Gate · UNKNOWN';
+    readiness === 'DATA_STALE'
+      ? 'Forecast · data stale'
+      : readiness === 'DRIFT_WARN'
+        ? 'Forecast · drift warning'
+        : readiness === 'SEASON_OFF'
+          ? 'Forecast · season off'
+          : gateTone === 'go'
+            ? 'Forecast · usable'
+            : gateTone === 'watch'
+              ? 'Forecast · watch'
+              : 'Forecast · review';
 
   // Build ephemeris rows from live data
   const edSeries = buildSeries(timeline, (p) => p.edActivity);

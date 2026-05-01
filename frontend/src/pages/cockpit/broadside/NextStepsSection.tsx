@@ -68,8 +68,9 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
         body:
           'Eine Datei mit Wochenwerten (Spend + Sales + Reichweite) ' +
           'pro Produkt × Bundesland reicht, damit das Cockpit aus ' +
-          'Prognose Rechenschaft macht. § IV füllt sich am Abend, ' +
-          '§ II zeigt konkrete EUR-Shifts ab Woche 2.',
+          'Prognose Rechenschaft macht. Der Feedback-Loop füllt sich ' +
+          'am Abend; das Media-Panel zeigt erst nach Validierung ' +
+          'prüfbare Shift-Kandidaten.',
         cta: 'Data Office öffnen',
         href: '/cockpit/data',
         tone: 'action',
@@ -112,12 +113,12 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
       cards.push({
         id: 'request-forecast',
         kicker: 'Wenn der Media-Plan anliegt',
-        title: 'Forecast mit Budget-Anchor neu anfordern',
+        title: 'Forecast mit Sales-/Media-Anchor neu prüfen',
         body:
           'Das Wellen-Signal ist aktuell deutlich, aber ohne ' +
           'Media-Plan keine EUR-Empfehlung. Sobald der Plan im Data ' +
-          'Office sitzt, reicht ein Refresh und § II zieht den ' +
-          'prüfbaren Shift-Kandidaten.',
+          'Office sitzt, reicht ein Refresh und das Media-Panel zieht ' +
+          'den prüfbaren, weiter gesperrten Shift-Kandidaten.',
         cta: 'Cockpit neu laden',
         tone: 'wait',
         priority: 70,

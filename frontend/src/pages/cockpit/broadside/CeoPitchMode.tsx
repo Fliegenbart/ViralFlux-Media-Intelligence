@@ -19,9 +19,39 @@ type TrustTone = 'go' | 'caution' | 'stop';
 
 const STRONG_RISER_THRESHOLD = 0.15;
 
+function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
+  for (const value of values) {
+    if (typeof value === 'boolean') return value;
+  }
+  return null;
+}
+
 function formatLag(days: number | null | undefined): string {
   if (typeof days !== 'number' || !Number.isFinite(days)) return '—';
   return `${Math.abs(days)} Tage`;
+}
+
+function budgetCanChange(snapshot: CockpitSnapshot): boolean {
+  return firstBool(
+    snapshot.systemStatus?.can_change_budget,
+    snapshot.systemStatus?.canChangeBudget,
+    snapshot.systemStatus?.budget_can_change,
+    snapshot.systemStatus?.budgetCanChange,
+    snapshot.mediaSpendingTruth?.can_change_budget,
+    snapshot.mediaSpendingTruth?.canChangeBudget,
+    snapshot.mediaSpendingTruth?.budget_can_change,
+    snapshot.mediaSpendingTruth?.budgetCanChange,
+  ) === true;
+}
+
+function diagnosticOnly(snapshot: CockpitSnapshot): boolean {
+  const explicit = firstBool(
+    snapshot.systemStatus?.diagnostic_only,
+    snapshot.systemStatus?.diagnosticOnly,
+    snapshot.mediaSpendingTruth?.diagnostic_only,
+    snapshot.mediaSpendingTruth?.diagnosticOnly,
+  );
+  return explicit === true || !budgetCanChange(snapshot);
 }
 
 function trustFromSnapshot(snapshot: CockpitSnapshot): {
@@ -32,6 +62,25 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
   const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
   const lagDays = snapshot.modelStatus?.forecastFreshness?.featureLagDays;
   const hasFeatureLag = typeof lagDays === 'number' && lagDays > 7;
+  const scienceStatus =
+    snapshot.systemStatus?.science_status ?? snapshot.systemStatus?.scienceStatus ?? null;
+
+  if (diagnosticOnly(snapshot)) {
+    return {
+      tone: 'caution',
+      label: 'Diagnose nutzbar',
+      note:
+        'Operativ stabil, aber Budget-Automation deaktiviert. Erst echte Sales-Validierung kann daraus Freigabe machen.',
+    };
+  }
+
+  if (scienceStatus === 'review') {
+    return {
+      tone: 'caution',
+      label: 'Review-Modus',
+      note: 'Science-Layer ist noch im Review. Signal lesen, aber nicht als automatische Freigabe behandeln.',
+    };
+  }
 
   if (readiness === 'DATA_STALE' || readiness === 'DRIFT_WARN') {
     return {
@@ -55,15 +104,15 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
   if (hasFeatureLag) {
     return {
       tone: 'caution',
-      label: 'Handlungsfähig mit Vorsicht',
+      label: 'Signal nutzbar mit Vorsicht',
       note: `AMELAG-Feature-Stand ist ${formatLag(lagDays)} alt. Empfehlung pitchen, aber Risiko offen zeigen.`,
     };
   }
 
   return {
     tone: 'go',
-    label: 'Handlungsfähig',
-    note: 'Ranking, Lead-Time und Datenfrische sind für eine Pilot-Empfehlung konsistent.',
+    label: 'Budgetfreigabe aktiv',
+    note: 'Budget-Gates erlauben eine operative Übergabe. Dies sollte nur nach separater Freigabe sichtbar sein.',
   };
 }
 
@@ -105,27 +154,28 @@ export const CeoPitchMode: React.FC<Props> = ({
   const featureLagDays = snapshot.modelStatus?.forecastFreshness?.featureLagDays;
   const ranking = snapshot.modelStatus?.ranking;
   const lead = snapshot.modelStatus?.lead;
-  const salesProofLabel = 'GELO-Sales-Lift offen';
+  const budgetDisabled = !budgetCanChange(snapshot);
+  const salesProofLabel = 'Sales-Validierung offen';
 
   const headline = hasStrongSignal
-    ? `${toName} priorisieren`
-    : 'Diese Woche noch nicht schalten';
+    ? `${toName} als Signal-Kandidat prüfen`
+    : 'Kein Budgettrigger diese Woche';
 
   const recommendationCopy = hasStrongSignal
     ? rec?.amountEur !== null && typeof rec?.amountEur === 'number'
-      ? `Prüfe ${amountLabel} als kontrollierten Shift-Kandidaten von ${fromName} nach ${toName}.`
-      : `Richtung steht: ${toName} ist Budget-Kandidat, ${fromName} ist Spar-Kandidat. Der EUR-Betrag wartet auf den finalen Media-Plan.`
-    : 'Kein sauberer regionaler Trigger. Budget im Bestand lassen und nächste Datenwelle abwarten.';
+      ? `Diagnostisch prüfen: ${amountLabel} als kontrollierten Shift-Kandidaten von ${fromName} nach ${toName}.`
+      : `Signalrichtung sichtbar: ${toName} ist Priorisierungskandidat, ${fromName} Entlastungskandidat. Der EUR-Betrag wartet auf den finalen Media-Plan.`
+    : 'Kein sauberer regionaler Trigger. Budget bleibt gesperrt und die nächste Datenwelle entscheidet.';
 
   return (
     <section className="ceo-pitch" id="sec-ceo-pitch" aria-labelledby="ceo-pitch-title">
       <div className="ceo-pitch-layout">
         <div className="ceo-pitch-copy">
           <div className="ceo-eyebrow">
-            PEIX CEO Pitch Mode · {snapshot.client} Pilot · {snapshot.isoWeek}
+            Evidence Summary · {snapshot.client} Pilot · {snapshot.isoWeek}
           </div>
           <h1 id="ceo-pitch-title">
-            Budget-Prüfung:{' '}
+            Management Summary:{' '}
             <span>{headline}</span>
           </h1>
           <p className="ceo-lede">
@@ -138,14 +188,20 @@ export const CeoPitchMode: React.FC<Props> = ({
             ) : (
               <>Das Tool schützt in ruhigen Wochen vor Schein-Aktionismus.</>
             )}
+            {' '}
+            {budgetDisabled ? (
+              <b>Keine automatische Budgetänderung.</b>
+            ) : (
+              <b>Budget-Gate aktiv.</b>
+            )}
           </p>
 
           <div className="ceo-action-row" aria-label="Pitch-Aktionen">
             <a className="ceo-primary-link" href="#sec-atlas">
-              Evidenz ansehen
+              Signal-Evidenz ansehen
             </a>
             <a className="ceo-secondary-link" href="#sec-impact">
-              Sales-Loop prüfen
+              Sales-Validierung prüfen
             </a>
             <button
               type="button"
@@ -173,6 +229,11 @@ export const CeoPitchMode: React.FC<Props> = ({
           <small>{trust.note}</small>
         </div>
         <div>
+          <span>Budget-Gate</span>
+          <b>{budgetDisabled ? 'Budget-Automation deaktiviert' : 'Budget-Gate aktiv'}</b>
+          <small>{budgetDisabled ? 'can_change_budget=false' : 'separate Freigabe aktiv'}</small>
+        </div>
+        <div>
           <span>Signal</span>
           <b>{fmtSignalStrength(signalScore)}</b>
           <small>Ranking-Score, keine kalibrierte Wahrscheinlichkeit</small>
@@ -192,14 +253,14 @@ export const CeoPitchMode: React.FC<Props> = ({
           <small>gegen {lead?.targetLabel ?? 'Meldewesen'}</small>
         </div>
         <div>
-          <span>Backtest</span>
+          <span>Regionaler Modelltest</span>
           <b>{fmtPctOrDash(ranking?.precisionAtTop3, 1)}</b>
           <small>Precision @ Top-3 · PR-AUC {ranking?.prAuc?.toFixed(3) ?? '—'}</small>
         </div>
         <div>
           <span>Wirkungsbeweis</span>
           <b>{salesProofLabel}</b>
-          <small>{mediaConnected ? 'Media-Plan verbunden' : 'Media-Plan wartet'} · Sales-Rückkanal als nächster Hebel</small>
+          <small>{mediaConnected ? 'Media-Plan verbunden' : 'Media-Plan wartet'} · echte GELO-Salesdaten sind der nächste Prüfstein</small>
         </div>
         <div>
           <span>5-Tage-Ziel</span>

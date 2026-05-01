@@ -204,6 +204,36 @@ const BLOCKER_LABELS: Record<string, string> = {
 const formatBlocker = (value: string): string =>
   BLOCKER_LABELS[value] ?? value.replace(/_/g, ' ');
 
+function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
+  for (const value of values) {
+    if (typeof value === 'boolean') return value;
+  }
+  return null;
+}
+
+function decisionBudgetCanChange(snapshot: CockpitSnapshot): boolean {
+  return firstBool(
+    snapshot.systemStatus?.can_change_budget,
+    snapshot.systemStatus?.canChangeBudget,
+    snapshot.systemStatus?.budget_can_change,
+    snapshot.systemStatus?.budgetCanChange,
+    snapshot.mediaSpendingTruth?.can_change_budget,
+    snapshot.mediaSpendingTruth?.canChangeBudget,
+    snapshot.mediaSpendingTruth?.budget_can_change,
+    snapshot.mediaSpendingTruth?.budgetCanChange,
+  ) === true;
+}
+
+function decisionDiagnosticOnly(snapshot: CockpitSnapshot): boolean {
+  const explicit = firstBool(
+    snapshot.systemStatus?.diagnostic_only,
+    snapshot.systemStatus?.diagnosticOnly,
+    snapshot.mediaSpendingTruth?.diagnostic_only,
+    snapshot.mediaSpendingTruth?.diagnosticOnly,
+  );
+  return explicit === true || !decisionBudgetCanChange(snapshot);
+}
+
 const EvidenceScorePanel: React.FC<{
   evidence: CockpitSnapshot['evidenceScore'];
 }> = ({ evidence }) => {
@@ -284,23 +314,23 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const cov80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
   const cov95 = snapshot.modelStatus?.intervalCoverage95Pct ?? null;
 
-  const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
-  const gateTone: GateTone =
-    readiness === 'GO_RANKING' || readiness === 'RANKING_OK'
-      ? 'go'
-      : readiness === 'WATCH' || readiness === 'LEAD_ONLY'
-        ? 'watch'
-        : 'unknown';
-  const gateLabel =
-    readiness === 'GO_RANKING'
-      ? 'Gate · GO'
-      : readiness === 'RANKING_OK'
-        ? 'Gate · GO (Ranking)'
-        : readiness === 'LEAD_ONLY'
-          ? 'Gate · WATCH (Lead)'
-          : readiness === 'WATCH'
-            ? 'Gate · WATCH'
-            : 'Gate · UNKNOWN';
+  const budgetCanChange = decisionBudgetCanChange(snapshot);
+  const isDiagnosticOnly = decisionDiagnosticOnly(snapshot);
+  const releaseMode =
+    snapshot.mediaSpendingTruth?.release_mode ??
+    snapshot.mediaSpendingTruth?.releaseMode ??
+    snapshot.mediaSpendingTruth?.globalDecision ??
+    snapshot.mediaSpendingTruth?.global_status ??
+    snapshot.mediaSpendingTruth?.globalStatus ??
+    null;
+  const gateTone: GateTone = budgetCanChange ? 'go' : 'watch';
+  const gateLabel = budgetCanChange
+    ? 'Budget · active'
+    : isDiagnosticOnly
+      ? 'Budget · diagnostic'
+      : releaseMode
+        ? `Budget · ${String(releaseMode).replace(/_/g, ' ')}`
+        : 'Budget · blocked';
 
   // Rec-Delta-Signalstärke: use region's delta7d if we can find it
   const toRegion = rec
@@ -410,8 +440,9 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
           <>
             Erst nach Evidenz, Forecast und Validierung kommt Media.
             Dieses Panel trennt darum zwischen <b>diagnostischem Signal</b>,
-            <b> freigegebenem Budget-Effekt</b> und <b>blockierten Gates</b>.
-            Wenn Budget nicht freigegeben ist, muss das hier lesbar sein.
+            <b> Shadow-Vorschlag</b>, <b>freigegebenem Budget-Effekt</b>
+            und <b>blockierten Gates</b>. Ein Forecast-GO ist hier keine
+            Budgetfreigabe; `can_change_budget=false` bleibt maßgeblich.
           </>
         }
       />

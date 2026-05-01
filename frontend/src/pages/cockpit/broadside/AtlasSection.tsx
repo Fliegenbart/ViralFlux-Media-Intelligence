@@ -814,13 +814,13 @@ const AtlasTooltip: React.FC<{
     const sign = pct >= 0 ? '+' : '';
     const abs = Math.abs(pct).toFixed(0);
     if (tone === 'strong-rise') {
-      return `Frühsignal: deutlicher Anstieg der ${virusLabel}-Aktivität im Prognosefenster — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region als Budget-Kandidat prüfen.`;
+      return `Frühsignal: deutlicher Anstieg der ${virusLabel}-Aktivität im Prognosefenster — rund ${sign}${abs} % gegenüber heute. Klassischer Wellen-Anfang; in Marketing-Sprache: Region als Priorisierungskandidat prüfen, kein freigegebener Shift.`;
     }
     if (tone === 'rise') {
       return `Frühsignal: moderater Anstieg um etwa ${sign}${abs} % im Prognosefenster — Welle noch nicht klar, aber Tendenz nach oben. In Marketing-Sprache: genauer beobachten, nicht überreagieren.`;
     }
     if (tone === 'strong-fall') {
-      return `Frühsignal: ${virusLabel}-Aktivität geht im Prognosefenster deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Budget nicht automatisch verschieben, sondern Spar-Region prüfen.`;
+      return `Frühsignal: ${virusLabel}-Aktivität geht im Prognosefenster deutlich zurück, um etwa ${sign}${abs} %. Wellen-Ende oder Sommer-Delle; in Marketing-Sprache: Entlastungskandidat prüfen, Budget aber nicht automatisch verschieben.`;
     }
     if (tone === 'fall') {
       return `Frühsignal: leichter Rückgang von rund ${sign}${abs} % im Prognosefenster. Keine Welle hier; in Marketing-Sprache: kein aktiver Trigger, aber auch kein Anlass zum Aktivieren.`;
@@ -902,16 +902,16 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         : 'unknown';
   const gateLabel =
     readiness === 'DATA_STALE'
-      ? 'Gate · DATA STALE'
+      ? 'Signal · data stale'
       : readiness === 'DRIFT_WARN'
-        ? 'Gate · DRIFT WARN'
+        ? 'Signal · drift warning'
         : readiness === 'SEASON_OFF'
-          ? 'Gate · SEASON OFF'
+          ? 'Signal · season off'
           : gateTone === 'go'
-            ? 'Gate · GO'
+            ? 'Signal · active'
             : gateTone === 'watch'
-              ? 'Gate · WATCH'
-              : 'Gate · UNKNOWN';
+              ? 'Signal · watch'
+              : 'Signal · unknown';
 
   // For HUD: show the shift line "BY → BB" when we have it.
   const shiftHudLine =
@@ -969,7 +969,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
             ) : null}
             {shiftHudLine && (
               <div>
-                Budget-Kandidat · <span className="sig">{shiftHudLine}</span>
+                Signal-Kandidat · <span className="sig">{shiftHudLine}</span>
               </div>
             )}
           </div>

@@ -36,7 +36,7 @@ export const ImpactSection: React.FC<Props> = ({ snapshot }) => {
 
   const mediaConnected = snapshot.mediaPlan?.connected === true;
 
-  const gateLabel = mediaConnected ? 'Gate · GO' : 'Gate · WATCH';
+  const gateLabel = mediaConnected ? 'Sales loop · connected' : 'Sales loop · awaiting data';
   const gateTone: GateTone = mediaConnected ? 'go' : 'watch';
 
   // Build log rows — synthesised from recent secondary recommendations.
@@ -98,9 +98,9 @@ export const ImpactSection: React.FC<Props> = ({ snapshot }) => {
             <b> vollständig verdrahtet</b> (Ingest-Endpoint, Match-Key,
             Reconciliation-Layout stehen); es wartet auf die erste
             CSV oder den ersten M2M-Push aus GELO, um aus Prognose
-            Rechenschaft zu machen. Genau hier entsteht der Unterschied
-            zwischen einem schönen Forecast-Bild und einem Tool, das
-            beweisen muss, dass es hilft.
+            Rechenschaft zu machen. Bis echte GELO-Salesdaten anliegen,
+            bleibt Wirkung offen: Dieses Panel ist der Prüfpfad, nicht der
+            Beweis.
           </>
         }
       />

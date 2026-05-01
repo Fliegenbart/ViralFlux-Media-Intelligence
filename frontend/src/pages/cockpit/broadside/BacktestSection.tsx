@@ -141,21 +141,16 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
       });
     }, [data?.weekly_hits]);
 
-  const readiness = snapshot.modelStatus?.forecastReadiness ?? 'UNKNOWN';
-  // 2026-04-21 Integrity-Fix + Pfad-C: DATA_STALE / DRIFT_WARN / SEASON_OFF
-  // readinesses get the watch tone und ein eigenes Label.
+  const validation = validationFrom(snapshot);
+  const researchRecommendation = firstText(validation?.recommendation) ?? 'review';
   const gateTone: GateTone =
-    readiness === 'GO_RANKING' || readiness === 'RANKING_OK' ? 'go' : 'watch';
+    researchRecommendation === 'go_for_simulation' ? 'go' : 'watch';
   const gateLabel =
-    readiness === 'DATA_STALE'
-      ? 'Gate · DATA STALE'
-      : readiness === 'DRIFT_WARN'
-        ? 'Gate · DRIFT WARN'
-        : readiness === 'SEASON_OFF'
-          ? 'Gate · SEASON OFF'
-          : gateTone === 'go'
-            ? 'Gate · GO'
-            : 'Gate · WATCH';
+    researchRecommendation === 'go_for_simulation'
+      ? 'Research · simulation candidate'
+      : researchRecommendation === 'no_go'
+        ? 'Research · no-go'
+        : 'Research · review';
 
   return (
     <section className="instr-section" id="sec-backtest">
@@ -190,7 +185,6 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
       />
 
       {(() => {
-        const validation = validationFrom(snapshot);
         const decisionBacktest =
           snapshot.mediaSpendingTruth?.decision_backtest ??
           snapshot.mediaSpendingTruth?.decisionBacktest ??

@@ -32,13 +32,35 @@ Endpoint:
 
 Meaning:
 
-- database reachable
-- broker reachable or explicitly tolerated
-- startup schema summary available
-- national forecast monitoring snapshot loaded
-- regional model inventory checked
-- source freshness checked
-- forecast recency checked
+- the system is technically deployable
+- the API can serve the production core scope
+- hard operational blockers are absent
+- science and forecast warnings remain visible, but do not automatically block deployment
+
+Current public readiness is layered:
+
+- `operational_status`
+- `science_status`
+- `forecast_monitoring_status`
+- `budget_status`
+
+Important:
+
+```text
+Operational Readiness != Scientific Validation != Budget Permission
+```
+
+A green `/health/ready` does not mean that Forecast Quality, Viral Pressure or
+budget automation are scientifically approved.
+
+Expected v1.2a state:
+
+```text
+Operational: healthy
+Science: review
+Forecast Monitoring: warning
+Budget: diagnostic_only
+```
 
 ### 3. Startup audit trail
 
@@ -177,8 +199,9 @@ Action:
 ### Daily
 
 - read `/health/ready`
-- review blocker list
+- review `operational_status`, `science_status`, `forecast_monitoring_status` and `budget_status`
 - confirm broker availability
+- confirm `budget_status=diagnostic_only` unless a separate budget-release decision exists
 
 ### Before a pilot readout
 
@@ -214,6 +237,81 @@ Interpretation:
 - `live_failed` means `/health/live` failed
 - `business_smoke_failed` means Forecast / Allocation / Recommendation are not release-safe
 - `ready_blocked` means the service lives, but the environment is not operationally freigegeben
+- pure science warnings should not block release smoke when top-level readiness is `healthy`
+
+## Virus Wave Backtest v1.3
+
+The virus wave backtest is research-only. It compares SurvStat-only against
+AMELAG+SurvStat variants and must never change live budget decisions.
+
+Safe product-relevant mode:
+
+```text
+historical_cutoff
+```
+
+Manual run inside the backend container:
+
+```bash
+python - <<'PY'
+from app.db.session import get_db_context
+from app.services.media.cockpit.virus_wave_backtest import run_all_virus_wave_backtests
+
+with get_db_context() as db:
+    result = run_all_virus_wave_backtests(
+        db,
+        mode="historical_cutoff",
+        scope_mode="canonical",
+        seasonal_windows=True,
+    )
+    db.commit()
+    print(result)
+PY
+```
+
+Legacy acceptance scopes can be run separately when individual Influenza A/B
+and RSV A checks are needed:
+
+```bash
+python - <<'PY'
+from app.db.session import get_db_context
+from app.services.media.cockpit.virus_wave_backtest import run_all_virus_wave_backtests
+
+with get_db_context() as db:
+    result = run_all_virus_wave_backtests(
+        db,
+        mode="historical_cutoff",
+        scope_mode="legacy",
+        seasonal_windows=True,
+    )
+    db.commit()
+    print(result)
+PY
+```
+
+Generate operator-readable reports:
+
+```bash
+python - <<'PY'
+from app.db.session import get_db_context
+from app.services.media.cockpit.virus_wave_backtest_report import write_virus_wave_backtest_evaluation_report
+
+with get_db_context() as db:
+    write_virus_wave_backtest_evaluation_report(db, mode="historical_cutoff", scope_mode="canonical")
+    write_virus_wave_backtest_evaluation_report(
+        db,
+        mode="historical_cutoff",
+        scope_mode="legacy",
+        output_path="/app/data/processed/virus_wave_backtest_evaluation_report_legacy.md",
+    )
+PY
+```
+
+Required invariant:
+
+```text
+budget_can_change=false
+```
 
 ## Operational Notes
 

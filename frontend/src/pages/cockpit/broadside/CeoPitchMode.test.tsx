@@ -85,10 +85,13 @@ describe('CeoPitchMode consistency copy', () => {
         name: /Management Summary:\s+Hamburg als Signal-Kandidat prüfen/i,
       }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/Hamburg zeigt Atemwegsdruck/)).toBeInTheDocument();
+    expect(screen.getByText(/Ob daraus GELO-Sales werden/)).toBeInTheDocument();
     expect(screen.getByText('Budget-Automation deaktiviert')).toBeInTheDocument();
     expect(screen.getAllByText('Sales-Validierung offen').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Keine automatische Budgetänderung/)).toBeInTheDocument();
+    expect(screen.getByText(/keine automatische Budgetänderung/)).toBeInTheDocument();
 
+    expect(screen.queryByText(/Signalrichtung sichtbar/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Budget-Prüfung/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Handlungsfähig$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Hamburg priorisieren/)).not.toBeInTheDocument();

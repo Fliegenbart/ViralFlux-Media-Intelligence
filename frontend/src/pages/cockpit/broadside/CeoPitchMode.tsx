@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { CockpitSnapshot } from '../types';
 import {
-  fmtEurCompactOrDash,
   fmtPctOrDash,
   fmtSignedPct,
   fmtSignalStrength,
@@ -139,7 +138,6 @@ export const CeoPitchMode: React.FC<Props> = ({
   const fromName = rec?.fromName ?? topFaller?.name ?? 'Spar-Region';
   const toCode = rec?.toCode ?? topRiser?.code ?? '—';
   const fromCode = rec?.fromCode ?? topFaller?.code ?? '—';
-  const amountLabel = fmtEurCompactOrDash(rec?.amountEur);
   const toDelta = topRiser?.delta7d ?? null;
   const fromDelta = topFaller?.delta7d ?? null;
   const hasStrongSignal =
@@ -161,12 +159,6 @@ export const CeoPitchMode: React.FC<Props> = ({
     ? `${toName} als Signal-Kandidat prüfen`
     : 'Kein Budgettrigger diese Woche';
 
-  const recommendationCopy = hasStrongSignal
-    ? rec?.amountEur !== null && typeof rec?.amountEur === 'number'
-      ? `Diagnostisch prüfen: ${amountLabel} als kontrollierten Shift-Kandidaten von ${fromName} nach ${toName}.`
-      : `Signalrichtung sichtbar: ${toName} ist Priorisierungskandidat, ${fromName} Entlastungskandidat. Der EUR-Betrag wartet auf den finalen Media-Plan.`
-    : 'Kein sauberer regionaler Trigger. Budget bleibt gesperrt und die nächste Datenwelle entscheidet.';
-
   return (
     <section className="ceo-pitch" id="sec-ceo-pitch" aria-labelledby="ceo-pitch-title">
       <div className="ceo-pitch-layout">
@@ -179,20 +171,26 @@ export const CeoPitchMode: React.FC<Props> = ({
             <span>{headline}</span>
           </h1>
           <p className="ceo-lede">
-            {recommendationCopy}{' '}
             {hasStrongSignal ? (
               <>
-                {toName} steigt {fmtSignedPct(toDelta)}, {fromName} fällt{' '}
-                {fmtSignedPct(fromDelta)}.
+                {toName} zeigt Atemwegsdruck ({fmtSignedPct(toDelta)}),{' '}
+                {fromName} entspannt ({fmtSignedPct(fromDelta)}). Ob daraus
+                GELO-Sales werden, zeigen erst Media-Plan und Sales-Daten;{' '}
+                <b>
+                  {budgetDisabled
+                    ? 'keine automatische Budgetänderung.'
+                    : 'Budget-Gate aktiv.'}
+                </b>
               </>
             ) : (
-              <>Das Tool schützt in ruhigen Wochen vor Schein-Aktionismus.</>
-            )}
-            {' '}
-            {budgetDisabled ? (
-              <b>Keine automatische Budgetänderung.</b>
-            ) : (
-              <b>Budget-Gate aktiv.</b>
+              <>
+                Kein sauberer regionaler Trigger.{' '}
+                <b>
+                  {budgetDisabled
+                    ? 'Budget bleibt gesperrt, bis die nächste Datenwelle klarer ist.'
+                    : 'Budget-Gate aktiv.'}
+                </b>
+              </>
             )}
           </p>
 

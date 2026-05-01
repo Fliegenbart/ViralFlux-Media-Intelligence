@@ -940,14 +940,12 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         primer={
           <>
             Deutschland-Karte mit allen 16 Bundesländern.{' '}
-            <b>Farbe</b>: rot = Früh-Signal (Region aktivieren), grün =
-            flach oder rückläufig (<b>Sparmodus</b> — Budget nicht
-            verbrennen, wo keine Welle ist). Die Schattierungs-Intensität
-            zeigt die Stärke des aktiven Prognosefensters. Riser <b>pulsieren</b>;
-            der stärkste Riser bekommt einen weißen Outline + kräftigen
-            Glow. Das Tool ist ein <b>Früherkennungs-System</b> gegen
-            das RKI-Meldewesen (typisch 7–10 Tage voraus), keine
-            absolute Fallzahl-Prognose.
+            <b>Farbe</b>: rot = steigendes regionales Signal, grün =
+            flach oder rückläufig. Die Intensität zeigt die Stärke des
+            aktiven Prognosefensters. Riser <b>pulsieren</b>; der stärkste
+            Riser wird zusätzlich markiert. Das Tool ist ein
+            <b> Früherkennungs-System</b> gegen das RKI-Meldewesen, keine
+            automatische Budgetfreigabe und keine absolute Fallzahl-Prognose.
           </>
         }
       />
@@ -1003,7 +1001,7 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
                   className="swatch"
                   style={{ background: '#D8632F', boxShadow: '0 0 8px rgba(216,99,47,0.6)' }}
                 />
-                Transfer-Beam
+                Signalrichtung
               </span>
             )}
           </div>

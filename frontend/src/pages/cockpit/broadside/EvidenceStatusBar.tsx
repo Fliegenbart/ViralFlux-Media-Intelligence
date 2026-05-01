@@ -42,6 +42,15 @@ function readableStatus(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
+function budgetModeLabel(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'diagnostic only' || normalized === 'diagnostic_only') return 'Diagnosemodus';
+  if (normalized === 'budget active' || normalized === 'approved') return 'Budgetfreigabe aktiv';
+  if (normalized === 'limited budget mode' || normalized === 'limited') return 'Begrenzter Budgetmodus';
+  if (normalized === 'planner assist' || normalized === 'shadow_only') return 'Planer-Prüfung';
+  return readableStatus(value);
+}
+
 function getActiveAlertCount(snapshot: CockpitSnapshot): number | null {
   const site = snapshot.siteEarlyWarning ?? snapshot.site_early_warning ?? null;
   if (!site) return null;
@@ -92,11 +101,11 @@ function deriveBudgetMode(
     mediaTruth?.diagnosticOnly,
   );
 
-  if (diagnosticOnly === true || !canChangeBudget) return 'Diagnostic only';
-  if (explicit === 'approved') return 'Budget active';
-  if (explicit === 'limited') return 'Limited budget mode';
-  if (explicit === 'shadow_only') return 'Planner assist';
-  return explicit ?? 'Diagnostic only';
+  if (diagnosticOnly === true || !canChangeBudget) return 'Diagnosemodus';
+  if (explicit === 'approved') return 'Budgetfreigabe aktiv';
+  if (explicit === 'limited') return 'Begrenzter Budgetmodus';
+  if (explicit === 'shadow_only') return 'Planer-Prüfung';
+  return explicit ?? 'Diagnosemodus';
 }
 
 export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
@@ -160,15 +169,15 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
   const activeAlertCount = getActiveAlertCount(snapshot);
   const amelagSignal =
     activeAlertCount !== null && activeAlertCount > 0
-      ? `active early signal (${activeAlertCount})`
+      ? `aktives Frühsignal (${activeAlertCount})`
       : firstText(waveTruth?.amelag?.phase)
         ? `${waveTruth?.amelag?.phase}`
         : 'waiting for signal';
 
   return (
-    <div className="evidence-status-bar" aria-label="Epidemic evidence system status">
+    <div className="evidence-status-bar" aria-label="Epidemiologischer Systemstatus">
       <div className="evidence-status-cell primary">
-        <span className="evidence-status-label">System Status</span>
+        <span className="evidence-status-label">Systembetrieb</span>
         <span className="evidence-status-value">{globalStatus}</span>
         {operationalStatus ? (
           <span className="evidence-status-note">Operational: {readableStatus(operationalStatus)}</span>
@@ -178,32 +187,32 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
         ) : null}
       </div>
       <div className="evidence-status-cell">
-        <span className="evidence-status-label">Budget Mode</span>
-        <span className="evidence-status-value">{budgetMode}</span>
+        <span className="evidence-status-label">Budget-Modus</span>
+        <span className="evidence-status-value">{budgetModeLabel(budgetMode)}</span>
         <span className="evidence-status-note">Budget: {readableStatus(budgetStatus)}</span>
         <span className="evidence-status-note">
-          {canChangeBudget ? 'Budget changes enabled' : 'Budget changes disabled'}
+          {canChangeBudget ? 'Budgetänderungen aktiviert' : 'Budgetänderungen deaktiviert'}
         </span>
         <span className="evidence-status-code">
           can_change_budget={String(canChangeBudget)}
         </span>
       </div>
       <div className="evidence-status-cell">
-        <span className="evidence-status-label">Data Freshness</span>
+        <span className="evidence-status-label">Datenstand</span>
         <span className="evidence-status-value">{dataFreshness}</span>
         <span className="evidence-status-note">
           latest wastewater data: {amelagDate}
         </span>
       </div>
       <div className="evidence-status-cell">
-        <span className="evidence-status-label">Latest AMELAG Date</span>
+        <span className="evidence-status-label">AMELAG-Datum</span>
         <span className="evidence-status-value">{amelagDate}</span>
         <span className="evidence-status-note">AMELAG: {amelagSignal}</span>
       </div>
       <div className="evidence-status-cell">
-        <span className="evidence-status-label">Latest SurvStat Date</span>
+        <span className="evidence-status-label">SurvStat-Datum</span>
         <span className="evidence-status-value">{survstatDate}</span>
-        <span className="evidence-status-note">SurvStat: confirmed signal</span>
+        <span className="evidence-status-note">SurvStat: bestätigendes Signal</span>
       </div>
     </div>
   );

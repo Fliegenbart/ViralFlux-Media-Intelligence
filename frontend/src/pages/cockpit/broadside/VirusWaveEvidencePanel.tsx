@@ -131,7 +131,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
         title="Epidemiologische Beweislage"
         subtitle={
           <>
-            AMELAG-Frühsignal · SurvStat-Bestätigung · Budget diagnostic_only
+            AMELAG-Frühsignal · SurvStat-Bestätigung · Budget-Gates separat
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}

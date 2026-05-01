@@ -31,7 +31,7 @@ describe('VirusWaveEvidencePanel', () => {
     expect(screen.getByText('Epidemiologische Beweislage')).toBeInTheDocument();
     expect(screen.getByText(/AMELAG-Frühsignal/)).toBeInTheDocument();
     expect(screen.getByText(/SurvStat-Bestätigung/)).toBeInTheDocument();
-    expect(screen.getByText(/Budget diagnostic_only/)).toBeInTheDocument();
+    expect(screen.getByText(/Budget-Gates separat/)).toBeInTheDocument();
     expect(screen.getByText('AMELAG · Frühsignal')).toBeInTheDocument();
     expect(screen.getByText('SurvStat · Bestätigung')).toBeInTheDocument();
 

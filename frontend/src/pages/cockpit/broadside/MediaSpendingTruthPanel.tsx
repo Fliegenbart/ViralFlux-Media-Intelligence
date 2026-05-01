@@ -7,7 +7,7 @@ const STATUS_LABELS: Record<string, string> = {
   planner_assist: 'Manuelle Prüfung',
   spendable: 'Freigegeben mit Cap',
   shadow_only: 'Manuelle Prüfung',
-  limited: 'Limited',
+  limited: 'Begrenzt',
   approved: 'Freigegeben mit Cap',
   increase_approved: 'Erhöhen freigegeben',
   preposition_approved: 'Früh positionieren',
@@ -146,7 +146,7 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
         <div className="media-truth-permission">
           <span>{PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' ')}</span>
           <b>{budgetCanChange ? 'budget_can_change=true' : 'budget_can_change=false'}</b>
-          {diagnosticOnly ? <b>Diagnostic only</b> : null}
+          {diagnosticOnly ? <b>Diagnosemodus</b> : null}
         </div>
       </div>
 
@@ -174,7 +174,7 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
 
       {attentionGates.length ? (
         <div className="media-truth-gates">
-          <span>Gate Trace</span>
+          <span>Gate-Prüfung</span>
           {attentionGates.map((gate) => (
             <b key={gate.gate} title={gate.explanation ?? gate.reason}>
               {gate.gate.replace(/_/g, ' ')}: {gate.status}
@@ -235,7 +235,7 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
                   <span>Freigegeben {formatPct(approvedDelta(region))}</span>
                 </div>
                 <div className="media-truth-region-metrics">
-                  <span>Confidence {formatConfidence(region.confidence)}</span>
+                  <span>Sicherheit {formatConfidence(region.confidence)}</span>
                   <span>Cap {formatPct(region.max_delta_pct)}</span>
                 </div>
                 {reasons.length ? (

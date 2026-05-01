@@ -156,7 +156,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
     <section className="instr-section" id="sec-backtest">
       <SectionHeader
         numeral="IV"
-        title="Evidence Validation"
+        title="Evidenz-Validierung"
         subtitle={
           <>
             Walk-forward über {window?.folds ?? '—'} Wochen · gegen Persistenz-Baseline
@@ -226,38 +226,38 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           <div className="validation-panel">
             <div className="validation-head">
               <div>
-                <div className="validation-kicker">Research layer</div>
+                <div className="validation-kicker">Research-Layer</div>
                 <h3>SurvStat-only vs AMELAG + SurvStat</h3>
               </div>
               <span className="research-chip">
-                {researchOnly ? 'research_only=true' : 'budget gate connected'}
+                {researchOnly ? 'research_only=true' : 'Budget-Gate angebunden'}
               </span>
             </div>
             <div className="validation-grid">
               <div>
-                <span className="metric-label">Candidate status</span>
+                <span className="metric-label">Kandidatenstatus</span>
                 <span className="metric-value">{candidateStatus}</span>
                 <span className="metric-note">noch kein direkter Budget-Effekt</span>
               </div>
               <div>
-                <span className="metric-label">Onset gain</span>
+                <span className="metric-label">Früherkennung</span>
                 <span className="metric-value">
                   {onsetGain !== null ? `${onsetGain} d` : '—'}
                 </span>
                 <span className="metric-note">Früherkennung gegen Meldewesen</span>
               </div>
               <div>
-                <span className="metric-label">False warning risk</span>
+                <span className="metric-label">Fehlwarnrisiko</span>
                 <span className="metric-value">{pctLabel(falseWarningRisk)}</span>
                 <span className="metric-note">nur Research, kein Budgettrigger</span>
               </div>
               <div>
-                <span className="metric-label">Phase accuracy</span>
+                <span className="metric-label">Phasentreffer</span>
                 <span className="metric-value">{pctLabel(phaseAccuracy)}</span>
                 <span className="metric-note">Wellenphase richtig getroffen</span>
               </div>
               <div>
-                <span className="metric-label">Recommendation</span>
+                <span className="metric-label">Empfehlung</span>
                 <span className="metric-value">{recommendation}</span>
                 <span className="metric-note">Simulation vor operativer Freigabe</span>
               </div>
@@ -393,7 +393,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           = das Modell hatte die Welle in der Top-3.{' '}
           <b>Dunkel</b> = Top-3 verfehlt. <b>Grau</b> = <b>noch nicht
           bewertet</b> — die Backtest-Artefakte enden mit dem letzten
-          Retraining-Zyklus. SURVSTAT-Ground-Truth ist aktuell, aber
+          Retraining-Zyklus. SURVSTAT-Vergleichsdaten sind aktuell, aber
           Wochen nach dem letzten Training-Stichtag warten auf den
           nächsten Monats-Retrain, um eingerechnet zu werden. Grau ist{' '}
           <b>kein Miss</b>.
@@ -407,7 +407,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           return (
             <div className="barcode-scoreboard">
               <div className="score-cell hit-rate">
-                <div className="score-label">Trefferquote · wo Ground Truth existiert</div>
+                <div className="score-label">Trefferquote · wo Vergleichsdaten existieren</div>
                 <div className="score-value">
                   {hitPct !== null ? `${hitPct} %` : '—'}
                   <span className="score-denom">

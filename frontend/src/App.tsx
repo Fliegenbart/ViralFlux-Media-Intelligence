@@ -32,15 +32,6 @@ import './index.css';
 
 const CockpitShell = lazy(() => import('./pages/cockpit/CockpitShell'));
 const DataOfficePage = lazy(() => import('./pages/cockpit/data/DataOfficePage'));
-const VarianteExecutivePage = lazy(
-  () => import('./pages/cockpit/variants/VarianteExecutivePage'),
-);
-const VarianteTerminalPage = lazy(
-  () => import('./pages/cockpit/variants/VarianteTerminalPage'),
-);
-// 2026-04-23 Atlas-Lab: drei alternative Atlas-Designs zum Probefahren
-// (/cockpit/atlas-lab). Eigene Page, teilt Cookie-Auth mit /cockpit.
-const AtlasLabPage = lazy(() => import('./pages/cockpit/atlas-lab/AtlasLabPage'));
 
 const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -91,6 +82,9 @@ const RETIRED_ROUTES = [
   '/empfehlungen/:id',
   '/validierung',
   '/backtest',
+  '/cockpit/variante-1',
+  '/cockpit/variante-2',
+  '/cockpit/atlas-lab',
 ];
 
 const App: React.FC = () => {
@@ -106,9 +100,6 @@ const App: React.FC = () => {
                 <Route path="/" element={<Navigate to="/cockpit" replace />} />
                 <Route path="/cockpit" element={<CockpitShell />} />
                 <Route path="/cockpit/data" element={<DataOfficePage />} />
-                <Route path="/cockpit/variante-1" element={<VarianteExecutivePage />} />
-                <Route path="/cockpit/variante-2" element={<VarianteTerminalPage />} />
-                <Route path="/cockpit/atlas-lab" element={<AtlasLabPage />} />
                 {RETIRED_ROUTES.map((path) => (
                   <Route
                     key={path}

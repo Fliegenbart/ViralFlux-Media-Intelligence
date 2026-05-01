@@ -41,9 +41,9 @@ describe('EvidenceStatusBar', () => {
       />,
     );
 
-    expect(screen.getByText('Budget Mode')).toBeInTheDocument();
-    expect(screen.getByText('Diagnostic only')).toBeInTheDocument();
-    expect(screen.getByText('Budget changes disabled')).toBeInTheDocument();
+    expect(screen.getByText('Budget-Modus')).toBeInTheDocument();
+    expect(screen.getByText('Diagnosemodus')).toBeInTheDocument();
+    expect(screen.getByText('Budgetänderungen deaktiviert')).toBeInTheDocument();
     expect(screen.getByText('can_change_budget=false')).toBeInTheDocument();
     expect(screen.getByText('Operational: healthy')).toBeInTheDocument();
     expect(screen.getByText('Science: review')).toBeInTheDocument();

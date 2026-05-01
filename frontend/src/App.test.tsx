@@ -12,16 +12,6 @@ jest.mock('./pages/cockpit/data/DataOfficePage', () => ({
   default: () => <div>Data Office Mock</div>,
 }));
 
-jest.mock('./pages/cockpit/variants/VarianteExecutivePage', () => ({
-  __esModule: true,
-  default: () => <div>Variante Executive Mock</div>,
-}));
-
-jest.mock('./pages/cockpit/variants/VarianteTerminalPage', () => ({
-  __esModule: true,
-  default: () => <div>Variante Terminal Mock</div>,
-}));
-
 import App from './App';
 
 describe('App routing', () => {
@@ -57,21 +47,21 @@ describe('App routing', () => {
     expect(window.location.pathname).toBe('/cockpit/data');
   });
 
-  it('keeps cockpit variants reachable', async () => {
+  it('redirects cockpit design variants to the current cockpit', async () => {
     window.history.pushState({}, '', '/cockpit/variante-1');
 
     const view = render(<App />);
 
-    expect(await screen.findByText('Variante Executive Mock')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/cockpit/variante-1');
+    expect(await screen.findByText('Cockpit Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cockpit');
 
     view.unmount();
     window.history.pushState({}, '', '/cockpit/variante-2');
 
     render(<App />);
 
-    expect(await screen.findByText('Variante Terminal Mock')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/cockpit/variante-2');
+    expect(await screen.findByText('Cockpit Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cockpit');
   });
 
   it('soft-redirects retired routes to the cockpit', async () => {

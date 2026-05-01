@@ -190,7 +190,7 @@ describe('MediaSpendingTruthPanel', () => {
       />,
     );
 
-    expect(screen.getByText('Limited')).toBeInTheDocument();
+    expect(screen.getByText('Begrenzt')).toBeInTheDocument();
     expect(screen.getByText(/maximal 5 Prozent/)).toBeInTheDocument();
     expect(screen.getByText('Shadow +11,2%')).toBeInTheDocument();
     expect(screen.getAllByText('Freigegeben +5%').length).toBeGreaterThan(0);

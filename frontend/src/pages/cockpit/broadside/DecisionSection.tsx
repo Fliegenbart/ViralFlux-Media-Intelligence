@@ -400,15 +400,15 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
     demoTo && demoFrom
       ? Math.round((demoBudget * Math.min(0.35, (demoTo.delta7d ?? 0) * 0.4)) / 1_000) * 1_000
       : 0;
-  // Demo-Szene zeigt sich sobald kein echter Media-Plan verbunden ist
+  // Simulation zeigt sich sobald kein echter Media-Plan verbunden ist
   // und das Ranking ein From/To-Paar liefert — unabhängig davon ob rec
   // existiert (signalMode-rec hat keinen EUR-Betrag, aber der User
   // will trotzdem sehen, welche Zahl daraus würde).
   const showDemo = !mediaPlanConnected && demoTo && demoFrom;
 
-  // Historische Peak-Woche für den Pitch — hart codierte Szene aus
-  // KW06/2026 (Influenza-A-Peak). Als "Historischer Beweis"
-  // dargestellt, um der Demo-Szene narrative Evidenz zu geben.
+  // Historische Peak-Woche — hart codierte Szene aus KW06/2026
+  // (Influenza-A-Peak). Als "Historischer Beleg" dargestellt, um der
+  // Simulation narrative Evidenz zu geben.
   const historicalPeak = {
     kw: 'KW 06 / 2026',
     fromName: 'Bremen',
@@ -424,7 +424,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
     <section className="instr-section" id="sec-decision">
       <SectionHeader
         numeral="V"
-        title="Media Budget Decision"
+        title="Media-Budget-Entscheidung"
         subtitle={
           <>
             {snapshot.isoWeek} · {virusLabel} ·{' '}
@@ -590,7 +590,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
       {!mediaPlanConnected ? (
         <div className="decision-evidence-row">
           <div className="historical-proof">
-            <div className="proof-kicker">Historischer Beweis · Peak-Saison</div>
+            <div className="proof-kicker">Historischer Beleg · Peak-Saison</div>
             <div className="proof-value">
               {historicalPeak.kw}:{' '}
               <b>{historicalPeak.amountEur.toLocaleString('de-DE')} €</b>{' '}
@@ -617,13 +617,13 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
                 className="demo-budget-toggle"
                 onClick={() => setDemoOpen(!demoOpen)}
               >
-                <span className="demo-badge">Demo-Szene · aktuelle Woche</span>
-                {demoOpen ? 'Was-wäre-wenn schließen' : 'Was wäre wenn? EUR mit angenommenem Budget rechnen'}
+                <span className="demo-badge">Simulation · aktuelle Woche</span>
+                {demoOpen ? 'Simulation schließen' : 'EUR-Kandidat mit angenommenem Budget rechnen'}
               </button>
               {demoOpen ? (
                 <div className="demo-budget-body">
                   <div className="demo-note">
-                    <b>Demo — keine echten GELO-Zahlen.</b> Mit einem
+                    <b>Simulation — keine echten GELO-Zahlen.</b> Mit einem
                     angenommenen Wochenbudget rechnet das System aus,
                     welchen EUR-Shift das Signal als Kandidat markiert. Sobald
                     der Media-Plan verbunden ist, ersetzt die echte

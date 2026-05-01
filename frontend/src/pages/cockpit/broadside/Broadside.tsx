@@ -122,7 +122,7 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
         <div>
           <b>{snapshot.client} · Marketing</b>
         </div>
-        <div>Vertraulich · Pitch-Asset</div>
+        <div>Vertraulich · Pilot-Cockpit</div>
       </div>
     </footer>
   );

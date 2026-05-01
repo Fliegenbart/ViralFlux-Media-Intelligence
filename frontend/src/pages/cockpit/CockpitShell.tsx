@@ -74,6 +74,9 @@ export const CockpitShell: React.FC = () => {
             padding: '120px 40px',
             textAlign: 'center',
             minHeight: '60vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <div className="flux-loading-mark">◆</div>

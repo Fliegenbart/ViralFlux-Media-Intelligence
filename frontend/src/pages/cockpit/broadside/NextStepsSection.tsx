@@ -98,7 +98,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
         kicker: 'Operationaler Hinweis',
         title: 'Drift-Warnung: nächsten Retraining-Zyklus abwarten',
         body:
-          'Das Modell weicht systematisch vom Truth-Signal ab. Das ' +
+          'Das Modell weicht systematisch vom Vergleichssignal ab. Das ' +
           'nächste monatliche Retraining kalibriert nach; bis dahin ' +
           'sind Empfehlungen mit Vorsicht zu lesen. Der Cron läuft am ' +
           '1. des Monats um 07:10 UTC.',
@@ -135,7 +135,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
           'Panel vor — die Atlas-Kacheln stehen auf "Training pending". ' +
           'Mehr SURVSTAT-Tiefe oder das nächste Retraining mit breiterer ' +
           'Datenbasis füllt die Lücke.',
-        cta: 'Truth-Coverage prüfen',
+        cta: 'Datenabdeckung prüfen',
         href: '/cockpit/data',
         tone: 'wait',
         priority: 50,
@@ -157,20 +157,20 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
 
     // Wirkungsquantifizierung als sichtbarer Pilot-Meilenstein.
     // Ehrliche Versprechen: das wird quantifiziert, sobald GELO-Outcomes
-    // 8 Wochen lang reingelaufen sind. Dem Pitch-Publikum macht das
+    // 8 Wochen lang reingelaufen sind. Dem Pilot-Publikum macht das
     // den Roadmap-Moment greifbar, ohne dass das Tool heute schon eine
-    // 'wir haben X % Media-Waste vermieden'-Zahl behaupten muss.
+    // vermeintliche Wirkungszahl behaupten muss.
     cards.push({
       id: 'pilot-milestone',
       kicker: 'Pilot-Meilenstein · Woche 8',
-      title: 'Erstes „Media-Waste vermieden"-Statement',
+      title: 'Erste belastbare Budget-Effizienz-Auswertung',
       body:
         'Sobald acht Wochen GELO-Sell-Out-Daten zurückgeflossen sind, ' +
         'rechnet § IV das erste belastbare Wirkungsdelta aus: wie viel ' +
         'Reichweite die Shifts gebracht haben, wo Empfehlungen geirrt ' +
-        'haben, welche Prozent-Punkte Budget-Effizienz gewonnen wurden. ' +
+        'haben und welche Prozentpunkte Budget-Effizienz gewonnen wurden. ' +
         'Heute ein Versprechen, dann eine Zahl.',
-      cta: 'Im Pitch-Deck als Meilenstein',
+      cta: 'Als Pilot-Meilenstein merken',
       tone: 'wait',
       priority: 30,
     });
@@ -197,8 +197,8 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
         primer={
           <>
             Alles was du gleich morgen anstoßen kannst, damit dieses
-            Cockpit vom Demo-Asset zum operativen Werkzeug wird. Die
-            Karten sind nach Hebel sortiert — oben der grösste Schritt
+            Cockpit vom Review-Werkzeug zum operativen Werkzeug wird. Die
+            Karten sind nach Hebel sortiert — oben der größte Schritt
             Richtung Pilot-Go-Live.
           </>
         }

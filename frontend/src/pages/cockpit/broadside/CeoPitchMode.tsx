@@ -222,9 +222,9 @@ export const CeoPitchMode: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="ceo-readout" aria-label="Pitch-Kennzahlen">
+      <div className="ceo-readout" aria-label="Cockpit-Kennzahlen">
         <div className={`ceo-trust ceo-trust-${trust.tone}`}>
-          <span>Trust-Status</span>
+          <span>Prüfstatus</span>
           <b>{trust.label}</b>
           <small>{trust.note}</small>
         </div>
@@ -258,7 +258,7 @@ export const CeoPitchMode: React.FC<Props> = ({
           <small>Precision @ Top-3 · PR-AUC {ranking?.prAuc?.toFixed(3) ?? '—'}</small>
         </div>
         <div>
-          <span>Wirkungsbeweis</span>
+          <span>Sales-Prüfung</span>
           <b>{salesProofLabel}</b>
           <small>{mediaConnected ? 'Media-Plan verbunden' : 'Media-Plan wartet'} · echte GELO-Salesdaten sind der nächste Prüfstein</small>
         </div>

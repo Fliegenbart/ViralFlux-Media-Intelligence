@@ -80,7 +80,7 @@ function evidenceSummary(waveTruth: VirusWaveTruth | null): string[] {
   } else {
     lines.push('Die Quellenlage ist noch vorsichtig zu lesen.');
   }
-  lines.push('AMELAG ist Early Signal, SurvStat ist die klinische Bestätigung.');
+  lines.push('AMELAG ist das Frühsignal, SurvStat ist die klinische Bestätigung.');
   return waveTruth.evidence?.summary?.length ? waveTruth.evidence.summary : lines;
 }
 
@@ -119,36 +119,35 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           : 'unknown';
   const gateLabel =
     waveTruth?.status === 'disabled'
-      ? 'Evidence · disabled'
+      ? 'Evidenz · deaktiviert'
       : waveTruth
-        ? 'Evidence · active'
-        : 'Evidence · missing';
+        ? 'Evidenz · aktiv'
+        : 'Evidenz · fehlt';
 
   return (
     <section className="instr-section evidence-first-section" id="sec-evidence">
       <SectionHeader
         numeral="I"
-        title="Virus Wave Evidence"
+        title="Epidemiologische Beweislage"
         subtitle={
           <>
-            Epidemiologische Evidenz vor Forecast und Budget
+            AMELAG-Frühsignal · SurvStat-Bestätigung · Budget diagnostic_only
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Diese Ansicht beantwortet zuerst die fachliche Frage:
-            <b> Was passiert epidemiologisch gerade?</b> AMELAG ist das
-            frühe Abwasser-Signal, SurvStat ist die spätere klinische
-            Bestätigung. Budget darf daraus erst entstehen, wenn die
-            Gates danach ebenfalls tragen.
+            Diese Fläche zeigt, warum das System eine Wellenlage annimmt.
+            <b> AMELAG ist das frühe Abwasser-Signal.</b> SurvStat ist die
+            spätere klinische Bestätigung. Budget bleibt diagnostic_only,
+            bis Validierung und Gates tragen.
           </>
         }
       />
 
       <div className="wave-evidence-grid">
         <div className="wave-source early">
-          <div className="wave-source-kicker">AMELAG · Early Signal</div>
+          <div className="wave-source-kicker">AMELAG · Frühsignal</div>
           <div className="wave-source-phase">
             {phaseLabel(waveTruth?.amelag?.phase)}
           </div>
@@ -158,7 +157,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           </p>
         </div>
         <div className="wave-source confirmed">
-          <div className="wave-source-kicker">SurvStat · Confirmed Signal</div>
+          <div className="wave-source-kicker">SurvStat · Bestätigung</div>
           <div className="wave-source-phase">
             {phaseLabel(waveTruth?.survstat?.phase)}
           </div>
@@ -179,7 +178,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
 
       <div className="wave-metrics">
         <div>
-          <span className="metric-label">AMELAG lead days</span>
+          <span className="metric-label">AMELAG-Vorsprung</span>
           <span className="metric-value">
             {leadLag !== null ? `${leadLag < 0 ? Math.abs(leadLag) : leadLag} d` : '—'}
           </span>
@@ -188,17 +187,17 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           </span>
         </div>
         <div>
-          <span className="metric-label">Alignment score</span>
+          <span className="metric-label">Quellen-Abgleich</span>
           <span className="metric-value">{scoreLabel(alignment)}</span>
           <span className="metric-note">Passen die Quellen zusammen?</span>
         </div>
         <div>
-          <span className="metric-label">Divergence score</span>
+          <span className="metric-label">Quellen-Abweichung</span>
           <span className="metric-value">{scoreLabel(divergence)}</span>
           <span className="metric-note">Wie stark widersprechen sie sich?</span>
         </div>
         <div>
-          <span className="metric-label">Confidence</span>
+          <span className="metric-label">Evidenz-Sicherheit</span>
           <span className="metric-value">{scoreLabel(confidence)}</span>
           <span className="metric-note">
             {confidenceMethod === 'heuristic_v1'
@@ -207,7 +206,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           </span>
         </div>
         <div>
-          <span className="metric-label">Effective weights</span>
+          <span className="metric-label">Quellen-Gewichtung</span>
           <span className="metric-value">
             AMELAG {weightLabel(weights?.amelag)} · SurvStat {weightLabel(weights?.survstat)}
           </span>

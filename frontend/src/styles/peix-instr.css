@@ -31,6 +31,8 @@ html {
 }
 
 .peix-instr {
+  overflow-x: clip;
+
   /* ----- Color system — 2026-04-22 Refresh: Off-White statt Creme,
      schärferes Ink, kühleres Slate. Salbei (oxide) auf Slate gemappt.
      Signal kräftiger (Vermilion statt Terracotta). ----- */

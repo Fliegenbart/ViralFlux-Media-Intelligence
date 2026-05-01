@@ -197,7 +197,7 @@ export const CeoPitchMode: React.FC<Props> = ({
           </p>
 
           <div className="ceo-action-row" aria-label="Pitch-Aktionen">
-            <a className="ceo-primary-link" href="#sec-atlas">
+            <a className="ceo-primary-link" href="#sec-evidence">
               Signal-Evidenz ansehen
             </a>
             <a className="ceo-secondary-link" href="#sec-impact">

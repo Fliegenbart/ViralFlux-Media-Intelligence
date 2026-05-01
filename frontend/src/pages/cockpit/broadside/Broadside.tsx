@@ -148,8 +148,8 @@ export const Broadside: React.FC<Props> = ({
       />
       <EvidenceStatusBar snapshot={snapshot} />
       <main className="page">
-        <VirusWaveEvidencePanel snapshot={snapshot} />
         <CeoPitchMode snapshot={snapshot} supportedViruses={supportedViruses} onReload={onReload} />
+        <VirusWaveEvidencePanel snapshot={snapshot} />
         <AtlasSection snapshot={snapshot} />
         <ForecastSection snapshot={snapshot} />
         <BacktestSection snapshot={snapshot} />

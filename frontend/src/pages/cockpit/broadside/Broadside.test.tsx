@@ -41,8 +41,8 @@ function expectBefore(left: HTMLElement, right: HTMLElement) {
   expect(left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 }
 
-describe('Broadside evidence-first order', () => {
-  it('keeps the management summary visible after evidence but before detailed panels', () => {
+describe('Broadside opening order', () => {
+  it('starts with the management summary map before the evidence details', () => {
     render(
       <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
         <Broadside
@@ -55,7 +55,9 @@ describe('Broadside evidence-first order', () => {
     );
 
     expectBefore(screen.getByTestId('status'), screen.getByTestId('evidence'));
-    expectBefore(screen.getByTestId('evidence'), screen.getByTestId('summary'));
+    expectBefore(screen.getByTestId('status'), screen.getByTestId('summary'));
+    expectBefore(screen.getByTestId('summary'), screen.getByTestId('evidence'));
+    expectBefore(screen.getByTestId('evidence'), screen.getByTestId('atlas'));
     expectBefore(screen.getByTestId('summary'), screen.getByTestId('atlas'));
     expectBefore(screen.getByTestId('backtest'), screen.getByTestId('decision'));
   });

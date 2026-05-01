@@ -9,6 +9,8 @@ import {
   type VintageRun,
 } from '../useForecastVintage';
 import type { BacktestPayload } from '../backtestTypes';
+import EphemerisFoot, { type EphemerisRowData } from './EphemerisFoot';
+import { deriveForecastLeadHero } from './forecastLeadHero';
 
 /**
  * § III — Forecast-Zeitreise.
@@ -862,62 +864,6 @@ const CornerMark: React.FC<{
 };
 
 // -----------------------------------------------------------------
-// Ephemeris Foot — Lead-Hero + zweispaltige Meta
-// -----------------------------------------------------------------
-
-interface EphemerisRowData {
-  label: string;
-  value: React.ReactNode;
-  warn?: boolean;
-}
-
-const EphemerisFoot: React.FC<{
-  leadLabel: string | null;
-  leadNote: string;
-  observed: EphemerisRowData[];
-  forecast: EphemerisRowData[];
-}> = ({ leadLabel, leadNote, observed, forecast }) => (
-  <div className="ephemeris">
-    <div className="ephemeris-hero">
-      <div>
-        <div className="hero-kicker">Lead-Time · ED führt SURVSTAT</div>
-        <div className="hero-value">
-          {leadLabel !== null ? (
-            <>
-              {leadLabel}
-              <span className="hero-unit">TAGE</span>
-            </>
-          ) : (
-            <>—</>
-          )}
-        </div>
-      </div>
-      <p className="hero-note">{leadNote}</p>
-    </div>
-    <div className="ephemeris-cols">
-      <div className="ephemeris-col">
-        <div className="col-kicker">Observed · bis HEUTE</div>
-        {observed.map((r, i) => (
-          <div className="ephem-row" key={`o-${i}`}>
-            <span className="label">{r.label}</span>
-            <span className={`value${r.warn ? ' warn' : ''}`}>{r.value}</span>
-          </div>
-        ))}
-      </div>
-      <div className="ephemeris-col">
-        <div className="col-kicker">Forecast · Modell</div>
-        {forecast.map((r, i) => (
-          <div className="ephem-row" key={`f-${i}`}>
-            <span className="label">{r.label}</span>
-            <span className={`value${r.warn ? ' warn' : ''}`}>{r.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-// -----------------------------------------------------------------
 // ForecastControls — Virus-Switcher + Vintage-Toggle über dem Chart
 // -----------------------------------------------------------------
 
@@ -1293,23 +1239,8 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
     );
   }
 
-  let heroLeadDays: number | null = backtestLead;
-  if (heroLeadDays === null && bestLag !== null && bestLag > 0) heroLeadDays = bestLag;
-
   const hasShift = !!primarySnapshot.primaryRecommendation;
-  const heroLeadLabel = backtestLead !== null
-    ? '5–10'
-    : heroLeadDays !== null
-      ? `${heroLeadDays > 0 ? '+' : ''}${heroLeadDays}`
-      : null;
-  const leadNote =
-    backtestLead !== null
-      ? `Peak-Wochen sind der relevante Pilotfall: dort zeigte der Backtest 5–10 Tage Vorlauf. Der Median über alle Wochen bleibt ${heroLeadDays ?? '—'} Tage.${!hasShift ? ' Diese Woche gibt das Ranking trotzdem kein klares Shift-Signal — die Top-BL-Liste liegt eng beieinander.' : ''}`
-      : heroLeadDays !== null && heroLeadDays > 0
-        ? `Das Lead-Signal basiert auf der Notaufnahme-Spur (${heroLeadDays} Tage vor der Meldewesen-Referenz).`
-        : heroLeadDays !== null && heroLeadDays === 0
-          ? 'Modell und Meldewesen laufen synchron — kein Vorlauf messbar.'
-          : 'Lead-Time nicht berechenbar — Backtest-Pairs unvollständig oder Modell synchron zum Meldewesen.';
+  const leadHero = deriveForecastLeadHero({ backtestLead, bestLag, hasShift });
 
   // Ephemeris observed rows
   const observedRows: EphemerisRowData[] = [];
@@ -1344,7 +1275,7 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
 
   // Backend-bestLagDays = Modell vs. Target-Signal. Vorzeichen-Konvention:
   // >= 0 = Modell führt Target, < 0 = Modell hinkt Target hinterher.
-  // Wird separat von heroLeadDays gezeigt, weil es technisch eine andere
+  // Wird separat vom Hero-Lead gezeigt, weil es technisch eine andere
   // Frage beantwortet: "wie gut verfolgt das Modell den schnellen Sensor?"
   const modelTarget = snapshot.modelStatus?.lead?.targetLabel ?? 'Target';
   const modelLagLabel = bestLag !== null
@@ -1480,8 +1411,8 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
       />
 
       <EphemerisFoot
-        leadLabel={heroLeadLabel}
-        leadNote={leadNote}
+        leadLabel={leadHero.leadLabel}
+        leadNote={leadHero.leadNote}
         observed={observedRows}
         forecast={forecastRows}
       />

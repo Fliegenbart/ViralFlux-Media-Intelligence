@@ -9,6 +9,7 @@ import { fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
 import AtlasChoropleth from './AtlasChoropleth';
+import { firstNumber } from './snapshotAccessors';
 
 // 2026-04-23 Atlas-Refactor: 3D-Türme + Hex-Toggle entfernt zugunsten
 // einer realen Deutschland-Karte (Choropleth). AtlasScene und AtlasHexgrid
@@ -33,13 +34,6 @@ import AtlasChoropleth from './AtlasChoropleth';
 
 interface Props {
   snapshot: CockpitSnapshot;
-}
-
-function firstNumber(...values: Array<number | null | undefined>): number | null {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-  }
-  return null;
 }
 
 function compactValue(value: number | null): string {

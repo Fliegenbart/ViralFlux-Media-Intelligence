@@ -5,23 +5,10 @@ import type {
   MediaSpendingTruthPayload,
   SourceStatus,
 } from '../types';
+import { firstBool, firstText } from './snapshotAccessors';
 
 interface Props {
   snapshot: CockpitSnapshot;
-}
-
-function firstText(...values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
-  for (const value of values) {
-    if (typeof value === 'boolean') return value;
-  }
-  return null;
 }
 
 function sourceDate(sources: SourceStatus[], pattern: RegExp): string | null {

@@ -7,6 +7,7 @@ import {
 } from '../format';
 import AtlasChoropleth from './AtlasChoropleth';
 import MediaPlanUploadModal from './MediaPlanUploadModal';
+import { canChangeBudget, isDiagnosticOnly } from './snapshotAccessors';
 
 interface Props {
   snapshot: CockpitSnapshot;
@@ -18,39 +19,9 @@ type TrustTone = 'go' | 'caution' | 'stop';
 
 const STRONG_RISER_THRESHOLD = 0.15;
 
-function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
-  for (const value of values) {
-    if (typeof value === 'boolean') return value;
-  }
-  return null;
-}
-
 function formatLag(days: number | null | undefined): string {
   if (typeof days !== 'number' || !Number.isFinite(days)) return '—';
   return `${Math.abs(days)} Tage`;
-}
-
-function budgetCanChange(snapshot: CockpitSnapshot): boolean {
-  return firstBool(
-    snapshot.systemStatus?.can_change_budget,
-    snapshot.systemStatus?.canChangeBudget,
-    snapshot.systemStatus?.budget_can_change,
-    snapshot.systemStatus?.budgetCanChange,
-    snapshot.mediaSpendingTruth?.can_change_budget,
-    snapshot.mediaSpendingTruth?.canChangeBudget,
-    snapshot.mediaSpendingTruth?.budget_can_change,
-    snapshot.mediaSpendingTruth?.budgetCanChange,
-  ) === true;
-}
-
-function diagnosticOnly(snapshot: CockpitSnapshot): boolean {
-  const explicit = firstBool(
-    snapshot.systemStatus?.diagnostic_only,
-    snapshot.systemStatus?.diagnosticOnly,
-    snapshot.mediaSpendingTruth?.diagnostic_only,
-    snapshot.mediaSpendingTruth?.diagnosticOnly,
-  );
-  return explicit === true || !budgetCanChange(snapshot);
 }
 
 function trustFromSnapshot(snapshot: CockpitSnapshot): {
@@ -64,7 +35,7 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
   const scienceStatus =
     snapshot.systemStatus?.science_status ?? snapshot.systemStatus?.scienceStatus ?? null;
 
-  if (diagnosticOnly(snapshot)) {
+  if (isDiagnosticOnly(snapshot)) {
     return {
       tone: 'caution',
       label: 'Diagnose nutzbar',
@@ -151,7 +122,7 @@ export const CeoPitchMode: React.FC<Props> = ({
   const featureLagDays = snapshot.modelStatus?.forecastFreshness?.featureLagDays;
   const ranking = snapshot.modelStatus?.ranking;
   const lead = snapshot.modelStatus?.lead;
-  const budgetDisabled = !budgetCanChange(snapshot);
+  const budgetDisabled = !canChangeBudget(snapshot);
   const salesProofLabel = 'Sales-Validierung offen';
   const signalPct =
     typeof signalScore === 'number' && Number.isFinite(signalScore)

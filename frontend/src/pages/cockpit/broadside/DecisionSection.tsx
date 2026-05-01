@@ -4,6 +4,7 @@ import { fmtEurCompactOrDash, fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
 import MediaSpendingTruthPanel from './MediaSpendingTruthPanel';
 import type { GateTone } from './SectionHeader';
+import { canChangeBudget, isDiagnosticOnly } from './snapshotAccessors';
 
 // A region qualifies as a 'strong riser' when its 7-day delta crosses this
 // absolute threshold. The value is deliberately conservative: we only want
@@ -204,36 +205,6 @@ const BLOCKER_LABELS: Record<string, string> = {
 const formatBlocker = (value: string): string =>
   BLOCKER_LABELS[value] ?? value.replace(/_/g, ' ');
 
-function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
-  for (const value of values) {
-    if (typeof value === 'boolean') return value;
-  }
-  return null;
-}
-
-function decisionBudgetCanChange(snapshot: CockpitSnapshot): boolean {
-  return firstBool(
-    snapshot.systemStatus?.can_change_budget,
-    snapshot.systemStatus?.canChangeBudget,
-    snapshot.systemStatus?.budget_can_change,
-    snapshot.systemStatus?.budgetCanChange,
-    snapshot.mediaSpendingTruth?.can_change_budget,
-    snapshot.mediaSpendingTruth?.canChangeBudget,
-    snapshot.mediaSpendingTruth?.budget_can_change,
-    snapshot.mediaSpendingTruth?.budgetCanChange,
-  ) === true;
-}
-
-function decisionDiagnosticOnly(snapshot: CockpitSnapshot): boolean {
-  const explicit = firstBool(
-    snapshot.systemStatus?.diagnostic_only,
-    snapshot.systemStatus?.diagnosticOnly,
-    snapshot.mediaSpendingTruth?.diagnostic_only,
-    snapshot.mediaSpendingTruth?.diagnosticOnly,
-  );
-  return explicit === true || !decisionBudgetCanChange(snapshot);
-}
-
 const EvidenceScorePanel: React.FC<{
   evidence: CockpitSnapshot['evidenceScore'];
 }> = ({ evidence }) => {
@@ -314,8 +285,8 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const cov80 = snapshot.modelStatus?.intervalCoverage80Pct ?? null;
   const cov95 = snapshot.modelStatus?.intervalCoverage95Pct ?? null;
 
-  const budgetCanChange = decisionBudgetCanChange(snapshot);
-  const isDiagnosticOnly = decisionDiagnosticOnly(snapshot);
+  const budgetCanChange = canChangeBudget(snapshot);
+  const diagnosticOnly = isDiagnosticOnly(snapshot);
   const releaseMode =
     snapshot.mediaSpendingTruth?.release_mode ??
     snapshot.mediaSpendingTruth?.releaseMode ??
@@ -326,7 +297,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
   const gateTone: GateTone = budgetCanChange ? 'go' : 'watch';
   const gateLabel = budgetCanChange
     ? 'Budget · active'
-    : isDiagnosticOnly
+    : diagnosticOnly
       ? 'Budget · diagnostic'
       : releaseMode
         ? `Budget · ${String(releaseMode).replace(/_/g, ' ')}`

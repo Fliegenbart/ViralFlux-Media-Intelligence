@@ -2,23 +2,10 @@ import React from 'react';
 import type { CockpitSnapshot, MediaSpendingTruthPayload, VirusWaveTruth } from '../types';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
+import { firstNumber, firstText } from './snapshotAccessors';
 
 interface Props {
   snapshot: CockpitSnapshot;
-}
-
-function firstText(...values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function firstNumber(...values: Array<number | null | undefined>): number | null {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-  }
-  return null;
 }
 
 function scoreLabel(value: number | null): string {

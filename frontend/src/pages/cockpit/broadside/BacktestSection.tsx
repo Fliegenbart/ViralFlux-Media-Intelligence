@@ -3,6 +3,7 @@ import type { CockpitSnapshot, EvidenceValidationStatus } from '../types';
 import { useBacktest } from '../useBacktest';
 import SectionHeader from './SectionHeader';
 import type { GateTone } from './SectionHeader';
+import { firstBool, firstNumber, firstText } from './snapshotAccessors';
 
 /**
  * § V — Backtest.
@@ -24,27 +25,6 @@ import type { GateTone } from './SectionHeader';
 
 interface Props {
   snapshot: CockpitSnapshot;
-}
-
-function firstText(...values: Array<string | null | undefined>): string | null {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function firstNumber(...values: Array<number | null | undefined>): number | null {
-  for (const value of values) {
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-  }
-  return null;
-}
-
-function firstBool(...values: Array<boolean | null | undefined>): boolean | null {
-  for (const value of values) {
-    if (typeof value === 'boolean') return value;
-  }
-  return null;
 }
 
 function validationFrom(snapshot: CockpitSnapshot): EvidenceValidationStatus | null {

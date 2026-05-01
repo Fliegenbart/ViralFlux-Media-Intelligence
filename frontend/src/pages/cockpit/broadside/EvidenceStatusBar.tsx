@@ -108,6 +108,19 @@ function deriveBudgetMode(
   return explicit ?? 'Diagnosemodus';
 }
 
+function derivePitchStatus(snapshot: CockpitSnapshot): string {
+  const businessValidation = snapshot.evidenceScore?.businessValidation ?? null;
+  const missingRequirements = businessValidation?.missing_requirements ?? [];
+
+  if (businessValidation?.validated_for_budget_activation === true) {
+    return 'GELO-Daten validiert';
+  }
+  if (missingRequirements.length > 0 || snapshot.mediaPlan?.connected !== true) {
+    return 'wartet auf GELO-Daten';
+  }
+  return 'Sales-Validierung läuft';
+}
+
 export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
   const mediaTruth = snapshot.mediaSpendingTruth ?? null;
   const systemStatus = snapshot.systemStatus ?? null;
@@ -116,13 +129,7 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
 
   const canChangeBudget = deriveCanChangeBudget(systemStatus, mediaTruth);
   const budgetMode = deriveBudgetMode(systemStatus, mediaTruth, canChangeBudget);
-  const globalStatus = firstText(
-    systemStatus?.global_status,
-    systemStatus?.globalStatus,
-    mediaTruth?.global_status,
-    mediaTruth?.globalStatus,
-    snapshot.modelStatus?.forecastReadiness,
-  ) ?? 'unknown';
+  const pitchStatus = derivePitchStatus(snapshot);
   const operationalStatus = firstText(
     systemStatus?.operational_status,
     systemStatus?.operationalStatus,
@@ -177,8 +184,8 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
   return (
     <div className="evidence-status-bar" aria-label="Epidemiologischer Systemstatus">
       <div className="evidence-status-cell primary">
-        <span className="evidence-status-label">Systembetrieb</span>
-        <span className="evidence-status-value">{globalStatus}</span>
+        <span className="evidence-status-label">Status</span>
+        <span className="evidence-status-value">{pitchStatus}</span>
         {operationalStatus ? (
           <span className="evidence-status-note">Operational: {readableStatus(operationalStatus)}</span>
         ) : null}
@@ -192,9 +199,6 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
         <span className="evidence-status-note">Budget: {readableStatus(budgetStatus)}</span>
         <span className="evidence-status-note">
           {canChangeBudget ? 'Budgetänderungen aktiviert' : 'Budgetänderungen deaktiviert'}
-        </span>
-        <span className="evidence-status-code">
-          can_change_budget={String(canChangeBudget)}
         </span>
       </div>
       <div className="evidence-status-cell">

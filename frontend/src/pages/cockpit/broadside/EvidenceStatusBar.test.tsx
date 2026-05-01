@@ -5,7 +5,7 @@ import { render, screen } from '@testing-library/react';
 import { EvidenceStatusBar } from './EvidenceStatusBar';
 
 describe('EvidenceStatusBar', () => {
-  it('keeps can_change_budget=false visible in diagnostic mode', () => {
+  it('shows customer-data status without exposing the raw budget flag', () => {
     render(
       <EvidenceStatusBar
         snapshot={{
@@ -30,6 +30,21 @@ describe('EvidenceStatusBar', () => {
             budget_permission: 'manual_approval_required',
             max_approved_delta_pct: 0,
           },
+          evidenceScore: {
+            overallScore: 62.5,
+            releaseStatus: 'blocked',
+            label: 'Signal prüfen, Budget blockiert',
+            components: [],
+            blockers: ['missing_media_spend'],
+            businessValidation: {
+              validated_for_budget_activation: false,
+              missing_requirements: ['missing_media_spend'],
+            },
+            plainLanguage: 'Budget bleibt blockiert, bis Business-Daten reichen.',
+          },
+          mediaPlan: {
+            connected: false,
+          },
           siteEarlyWarning: {
             active_alert_count: 6,
             active_yellow_alerts: 3,
@@ -41,10 +56,14 @@ describe('EvidenceStatusBar', () => {
       />,
     );
 
+    expect(screen.getByText('Status')).toBeInTheDocument();
+    expect(screen.getByText('wartet auf GELO-Daten')).toBeInTheDocument();
+    expect(screen.queryByText('Systembetrieb')).not.toBeInTheDocument();
+    expect(screen.queryByText('diagnostic_only')).not.toBeInTheDocument();
     expect(screen.getByText('Budget-Modus')).toBeInTheDocument();
     expect(screen.getByText('Diagnosemodus')).toBeInTheDocument();
     expect(screen.getByText('Budgetänderungen deaktiviert')).toBeInTheDocument();
-    expect(screen.getByText('can_change_budget=false')).toBeInTheDocument();
+    expect(screen.queryByText('can_change_budget=false')).not.toBeInTheDocument();
     expect(screen.getByText('Operational: healthy')).toBeInTheDocument();
     expect(screen.getByText('Science: review')).toBeInTheDocument();
     expect(screen.getByText('Budget: diagnostic only')).toBeInTheDocument();

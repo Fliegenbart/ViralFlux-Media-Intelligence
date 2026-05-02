@@ -87,7 +87,6 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
 
 export const CeoPitchMode: React.FC<Props> = ({
   snapshot,
-  supportedViruses,
   onReload,
 }) => {
   const [mediaPlanModalOpen, setMediaPlanModalOpen] = useState(false);
@@ -117,7 +116,6 @@ export const CeoPitchMode: React.FC<Props> = ({
     (r) => r.decisionLabel !== 'TrainingPending',
   ).length;
   const pendingRegions = Math.max(0, 16 - activeRegions);
-  const virusCount = supportedViruses?.length ?? 0;
   const signalScore = rec?.signalScore ?? rec?.confidence ?? null;
   const featureLagDays = snapshot.modelStatus?.forecastFreshness?.featureLagDays;
   const ranking = snapshot.modelStatus?.ranking;
@@ -248,9 +246,14 @@ export const CeoPitchMode: React.FC<Props> = ({
           <small>AMELAG-Feature-Lag</small>
         </div>
         <div>
-          <span>Viren</span>
-          <b>{virusCount || '—'}/4</b>
-          <small>{snapshot.virusLabel || snapshot.virusTyp}</small>
+          <span>Erfasste Erreger</span>
+          <b>Influenza + RSV</b>
+          <small>
+            Wir erfassen die Erreger, die scharfe saisonale Wellen erzeugen —
+            Influenza und RSV. Rhinoviren (typische Erkältungen) sind in
+            AMELAG nicht enthalten. Das macht das Cockpit besonders wertvoll
+            in den Winter-Peak-Wochen.
+          </small>
         </div>
       </div>
 

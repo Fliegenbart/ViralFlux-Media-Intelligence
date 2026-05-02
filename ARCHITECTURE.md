@@ -12,6 +12,9 @@ In einfachen Worten macht das System drei Dinge:
 Die wichtigste Produktoberflaeche dafuer ist aktuell:
 - [`/cockpit`](https://fluxengine.labpulse.ai/cockpit) (password-gated, single user-facing surface seit 2026-04-17)
 
+Experimentelle Cockpit-Unterseite:
+- `/cockpit/tri-layer` ist eine geschuetzte Research-Subroute fuer Tri-Layer Evidence Fusion. Sie zeigt diagnostische Evidenz, Backtests und Gate-Zustaende, veraendert aber keine Live-Allokation, keine Kampagnenempfehlungen und keine bestehenden Budget-Freigaben.
+
 Historie:
 - Bis April 2026 war `/virus-radar` die Hauptseite, begleitet von `/jetzt`, `/regionen`, `/kampagnen`, `/evidenz` und der MediaShell. Diese Routes wurden im Zuge des GELO-Pilots konsolidiert und leiten client-seitig nach `/cockpit` um. Der Code liegt teilweise noch im Repo, wird aber nicht mehr gerendert.
 
@@ -286,6 +289,20 @@ Die Plattform hat viele Endpunkte. Fuer das aktuelle Produktbild sind diese beso
   - liefert die gesamte Payload des `/cockpit`: Hero, Regions, Timeline, ModelStatus, Sources
   - geschuetzt ueber Session-Cookie ODER `X-API-Key` (M2M) ODER `cockpit_unlock`-Cookie (shared password gate, 30 Tage HMAC-signiert)
 
+- `GET /api/v1/media/cockpit/tri-layer/snapshot?virus_typ=...&horizon_days=...`
+  - experimenteller Research-Endpoint fuer `/cockpit/tri-layer`
+  - getrennt vom Live-`/cockpit/snapshot`
+  - gibt Tri-Layer Scores, Source-Status, Gates und konservative Budget-Permission-Zustaende zurueck
+  - `budget_can_change` bleibt fuer diese Research-Schicht nicht-produktiv
+
+- `POST /api/v1/media/cockpit/tri-layer/backtest`
+  - startet einen research-only Celery-Backtest
+  - keine synchrone schwere Berechnung im Request
+
+- `GET /api/v1/media/cockpit/tri-layer/backtest/latest`
+  - liest nur vorhandene fertige Tri-Layer-Backtest-Metadaten
+  - startet keine Berechnung und liefert `report: null`, wenn kein Report existiert
+
 - `POST /api/v1/media/cockpit/unlock`
   - validiert das shared password aus `COCKPIT_ACCESS_PASSWORD` und setzt das gate-Cookie
 
@@ -467,3 +484,4 @@ So wird vermieden, dass:
 - [docs/OPERATORS_GUIDE.md](docs/OPERATORS_GUIDE.md)
 - [docs/forecast_probability_stack.md](docs/forecast_probability_stack.md)
 - [docs/forecast_world_class_architecture.md](docs/forecast_world_class_architecture.md)
+- [docs/tri_layer_evidence_fusion.md](docs/tri_layer_evidence_fusion.md)

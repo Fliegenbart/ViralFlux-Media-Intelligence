@@ -116,6 +116,11 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
             Data Office ↗
           </Link>
         </div>
+        <div>
+          <Link to="/cockpit/tri-layer" className="page-foot-link">
+            Tri-Layer Research ↗
+          </Link>
+        </div>
       </div>
       <div className="col-right">
         <div>Präsentiert für</div>

@@ -130,7 +130,7 @@ export const CeoPitchMode: React.FC<Props> = ({
       : '—';
 
   const headline = hasStrongSignal
-    ? `${toName} als Signal-Kandidat prüfen`
+    ? `${toName} zeigt ein Frühsignal.`
     : 'Kein Budgettrigger diese Woche';
 
   return (
@@ -141,8 +141,10 @@ export const CeoPitchMode: React.FC<Props> = ({
             Evidence Summary · {snapshot.client} Pilot · {snapshot.isoWeek}
           </div>
           <h1 id="ceo-pitch-title">
-            Management Summary:{' '}
-            <span>{headline}</span>
+            {headline}{' '}
+            {hasStrongSignal && (
+              <span>Was wir noch nicht wissen: ob es sich in Sales übersetzt.</span>
+            )}
           </h1>
           <p className="ceo-lede">
             {hasStrongSignal ? (

@@ -302,13 +302,6 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
         </div>
       </div>
 
-      <p className="backtest-ranking-note">
-        Lies das Ranking als historische Modellgüte pro Region — nicht als
-        heutige Welle. Hamburg steht heute oben (§I), historisch unten (hier).
-        Das ist kein Widerspruch: das Ranking misst Vergangenheit, das Signal
-        misst Gegenwart.
-      </p>
-
       <div className="bt-controls">
         <div className="virus-switcher" role="tablist">
           {VIRUS_OPTIONS.map((opt) => (
@@ -370,6 +363,15 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           );
         })}
       </div>
+
+      <p className="backtest-ranking-note">
+        Lies das Ranking als historische Modellgüte pro Region — nicht als
+        heutige Welle. Hamburg steht heute im Frühsignal (§I) oben, im
+        historischen Ranking unten. Das ist kein Widerspruch: Das Ranking
+        misst Vergangenheit, das Signal misst Gegenwart. Konsequenz: Ein
+        Hamburg-Signal heute hat methodisch breitere Konfidenzintervalle als
+        ein Schleswig-Holstein-Signal.
+      </p>
 
       <div className="barcode-section">
         <div className="barcode-head">

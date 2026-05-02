@@ -381,7 +381,7 @@ html {
   font-size: clamp(48px, 7.4vw, 98px);
   line-height: 0.95;
   letter-spacing: -0.045em;
-  max-width: 10ch;
+  max-width: 15ch;
 }
 
 .peix-instr .ceo-pitch h1 span {
@@ -3543,7 +3543,7 @@ html {
   }
 
   .peix-instr .ceo-pitch h1 {
-    max-width: 12ch;
+    max-width: 15ch;
   }
 
   .peix-instr .ceo-map-stage {
@@ -3658,7 +3658,7 @@ html {
   }
 
   .peix-instr .ceo-pitch h1 {
-    max-width: 11ch;
+    max-width: 100%;
     font-size: clamp(40px, 13vw, 54px);
   }
 

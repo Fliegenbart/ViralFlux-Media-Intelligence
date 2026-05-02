@@ -87,7 +87,6 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
 
 export const CeoPitchMode: React.FC<Props> = ({
   snapshot,
-  supportedViruses,
   onReload,
 }) => {
   const [mediaPlanModalOpen, setMediaPlanModalOpen] = useState(false);
@@ -117,7 +116,6 @@ export const CeoPitchMode: React.FC<Props> = ({
     (r) => r.decisionLabel !== 'TrainingPending',
   ).length;
   const pendingRegions = Math.max(0, 16 - activeRegions);
-  const virusCount = supportedViruses?.length ?? 0;
   const signalScore = rec?.signalScore ?? rec?.confidence ?? null;
   const featureLagDays = snapshot.modelStatus?.forecastFreshness?.featureLagDays;
   const ranking = snapshot.modelStatus?.ranking;
@@ -130,7 +128,7 @@ export const CeoPitchMode: React.FC<Props> = ({
       : '—';
 
   const headline = hasStrongSignal
-    ? `${toName} als Signal-Kandidat prüfen`
+    ? `${toName} zeigt ein Frühsignal.`
     : 'Kein Budgettrigger diese Woche';
 
   return (
@@ -141,20 +139,19 @@ export const CeoPitchMode: React.FC<Props> = ({
             Evidence Summary · {snapshot.client} Pilot · {snapshot.isoWeek}
           </div>
           <h1 id="ceo-pitch-title">
-            Management Summary:{' '}
-            <span>{headline}</span>
+            {headline}{' '}
+            {hasStrongSignal && (
+              <span>Was wir noch nicht wissen: ob es sich in Sales übersetzt.</span>
+            )}
           </h1>
           <p className="ceo-lede">
             {hasStrongSignal ? (
               <>
-                {toName} zeigt Atemwegsdruck ({fmtSignedPct(toDelta)}),{' '}
-                {fromName} entspannt ({fmtSignedPct(fromDelta)}). Ob daraus
-                GELO-Sales werden, zeigen erst Media-Plan und Sales-Daten;{' '}
-                <b>
-                  {budgetDisabled
-                    ? 'keine automatische Budgetänderung.'
-                    : 'Budget-Gate aktiv.'}
-                </b>
+                Das Cockpit zeigt seit Donnerstag: {toName}{' '}
+                {fmtSignedPct(toDelta)}, {fromName} {fmtSignedPct(fromDelta)}{' '}
+                im Abwasser-Frühsignal — sieben Tage vor dem RKI. Ob diese
+                Bewegung mit GELO-Sales korreliert, wissen wir noch nicht.
+                Genau das wollen wir mit euren Daten herausfinden.
               </>
             ) : (
               <>
@@ -173,7 +170,7 @@ export const CeoPitchMode: React.FC<Props> = ({
               Signal-Evidenz ansehen
             </a>
             <a className="ceo-secondary-link" href="#sec-impact">
-              Sales-Validierung prüfen
+              Daten-Check starten
             </a>
             <button
               type="button"
@@ -222,7 +219,11 @@ export const CeoPitchMode: React.FC<Props> = ({
               ? `${lead.bestLagDays >= 0 ? '+' : ''}${lead.bestLagDays} d`
               : '—'}
           </b>
-          <small>gegen {lead?.targetLabel ?? 'Meldewesen'}</small>
+          <small>
+            Methodischer Vorsprung gegen die klinische Kontrollquelle (AKTIN).
+            In Peak-Wochen 5–10 Tage, im Saisonmittel kleiner. Operative
+            Latenzen bis zur Mediaschaltung sind nicht enthalten.
+          </small>
         </div>
         <div>
           <span>Regionaler Modelltest</span>
@@ -245,9 +246,14 @@ export const CeoPitchMode: React.FC<Props> = ({
           <small>AMELAG-Feature-Lag</small>
         </div>
         <div>
-          <span>Viren</span>
-          <b>{virusCount || '—'}/4</b>
-          <small>{snapshot.virusLabel || snapshot.virusTyp}</small>
+          <span>Erfasste Erreger</span>
+          <b>Influenza + RSV</b>
+          <small>
+            Wir erfassen die Erreger, die scharfe saisonale Wellen erzeugen —
+            Influenza und RSV. Rhinoviren (typische Erkältungen) sind in
+            AMELAG nicht enthalten. Das macht das Cockpit besonders wertvoll
+            in den Winter-Peak-Wochen.
+          </small>
         </div>
       </div>
 

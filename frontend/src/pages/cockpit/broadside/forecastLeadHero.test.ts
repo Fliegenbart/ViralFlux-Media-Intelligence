@@ -9,9 +9,9 @@ describe('deriveForecastLeadHero', () => {
     });
 
     expect(hero.leadDays).toBe(1);
-    expect(hero.leadLabel).toBe('5–10');
-    expect(hero.leadNote).toContain('Peak-Wochen');
-    expect(hero.leadNote).toContain('Median über alle Wochen bleibt 1 Tage');
+    expect(hero.leadLabel).toBe('+1');
+    expect(hero.leadNote).toContain('Im Saisonmittel 1 Tag Vorsprung');
+    expect(hero.leadNote).toContain('Die 5–10 Tage sind die Zahl, die in der Saison zählt.');
   });
 
   it('falls back to the live lead when no backtest lead exists', () => {

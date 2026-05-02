@@ -221,7 +221,11 @@ export const CeoPitchMode: React.FC<Props> = ({
               ? `${lead.bestLagDays >= 0 ? '+' : ''}${lead.bestLagDays} d`
               : '—'}
           </b>
-          <small>gegen {lead?.targetLabel ?? 'Meldewesen'}</small>
+          <small>
+            Methodischer Vorsprung gegen die klinische Kontrollquelle (AKTIN).
+            In Peak-Wochen 5–10 Tage, im Saisonmittel kleiner. Operative
+            Latenzen bis zur Mediaschaltung sind nicht enthalten.
+          </small>
         </div>
         <div>
           <span>Regionaler Modelltest</span>

@@ -149,14 +149,11 @@ export const CeoPitchMode: React.FC<Props> = ({
           <p className="ceo-lede">
             {hasStrongSignal ? (
               <>
-                {toName} zeigt Atemwegsdruck ({fmtSignedPct(toDelta)}),{' '}
-                {fromName} entspannt ({fmtSignedPct(fromDelta)}). Ob daraus
-                GELO-Sales werden, zeigen erst Media-Plan und Sales-Daten;{' '}
-                <b>
-                  {budgetDisabled
-                    ? 'keine automatische Budgetänderung.'
-                    : 'Budget-Gate aktiv.'}
-                </b>
+                Das Cockpit zeigt seit Donnerstag: {toName}{' '}
+                {fmtSignedPct(toDelta)}, {fromName} {fmtSignedPct(fromDelta)}{' '}
+                im Abwasser-Frühsignal — sieben Tage vor dem RKI. Ob diese
+                Bewegung mit GELO-Sales korreliert, wissen wir noch nicht.
+                Genau das wollen wir mit euren Daten herausfinden.
               </>
             ) : (
               <>
@@ -175,7 +172,7 @@ export const CeoPitchMode: React.FC<Props> = ({
               Signal-Evidenz ansehen
             </a>
             <a className="ceo-secondary-link" href="#sec-impact">
-              Sales-Validierung prüfen
+              Daten-Check starten
             </a>
             <button
               type="button"

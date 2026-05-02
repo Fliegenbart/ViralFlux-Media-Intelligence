@@ -67,3 +67,20 @@ export function isDiagnosticOnly(snapshot: CockpitSnapshot): boolean {
   );
   return explicit === true || !canChangeBudget(snapshot);
 }
+
+export function sellOutWeeks(snapshot: CockpitSnapshot): number {
+  return firstNumber(
+    snapshot.evidenceScore?.businessValidation?.weeks,
+    snapshot.evidenceScore?.businessValidation?.rows,
+  ) ?? 0;
+}
+
+export function signalRiserCount(snapshot: CockpitSnapshot, threshold = 0.15): number {
+  return (snapshot.regions ?? []).filter(
+    (region) =>
+      typeof region.delta7d === 'number' &&
+      Number.isFinite(region.delta7d) &&
+      region.delta7d > threshold &&
+      region.decisionLabel !== 'TrainingPending',
+  ).length;
+}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { CockpitSnapshot } from '../types';
 import SectionHeader from './SectionHeader';
 import { useForecastVintage } from '../useForecastVintage';
+import { sellOutWeeks } from './snapshotAccessors';
 
 /**
  * § VI — Nächste Schritte.
@@ -10,11 +11,11 @@ import { useForecastVintage } from '../useForecastVintage';
  * Schluss-Kachel-Set für einen Entscheider, der bis hier durchgescrollt
  * hat. Statt einen stillen Seiten-Fuß zu servieren, listen wir 2-4
  * konkrete, zustandsabhängige Aktionen auf:
- *   - "CSV hochladen" — wenn der Media-Plan noch nicht verbunden ist
- *   - "GELO-IT kontaktieren" — für den M2M-Key-Rollout
+ *   - "CSV hochladen" — wenn noch keine Sell-Out-Wochen verbunden sind
+ *   - "M2M-API anbinden" — wenn manuelle Imports laufen
  *   - "Retraining abwarten" — wenn Drift erkannt wurde
- *   - "Forecast neu anfordern" — wenn das Signal stark ist aber EUR fehlen
- *   - "Data Office öffnen" — Standard-Diagnose-Einstieg
+ *   - "Forecast neu rechnen" — wenn neue Daten oder ein starkes Signal anliegen
+ *   - "Data Office öffnen" — Standard-Einstieg ins Kalibrierungsfenster
  *
  * Die Cards werden in priority-Reihenfolge gerendert; leer bleibt das
  * Panel nie, weil der Data-Office-Link als Default am Ende steht.
@@ -50,7 +51,7 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
     );
   }, [snapshot.regions]);
 
-  const mediaPlanConnected = snapshot.mediaPlan?.connected === true;
+  const dataWeeks = sellOutWeeks(snapshot);
   const driftDetected = vintagePayload?.reconciliation?.drift_detected === true;
   const hasRec = snapshot.primaryRecommendation !== null;
   const pendingRegions = snapshot.regions.filter(
@@ -60,35 +61,60 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
   const cards = useMemo<StepCard[]>(() => {
     const cards: StepCard[] = [];
 
-    if (!mediaPlanConnected) {
+    if (dataWeeks <= 0) {
       cards.push({
         id: 'upload-csv',
-        kicker: 'Pilot-Start · Woche 1',
+        kicker: 'Pilot-Start',
         title: 'Erste GELO-CSV hochladen',
-        body:
-          'Eine Datei mit Wochenwerten (Spend + Sales + Reichweite) ' +
-          'pro Produkt × Bundesland reicht, damit das Cockpit aus ' +
-          'Prognose Rechenschaft macht. Der Feedback-Loop füllt sich ' +
-          'am Abend; das Media-Panel zeigt erst nach Validierung ' +
-          'prüfbare Shift-Kandidaten.',
+        body: 'Drei Monate Verkaufsdaten machen das Modell empfehlungsfähig.',
         cta: 'Data Office öffnen',
         href: '/cockpit/data',
         tone: 'action',
-        priority: 100,
+        priority: 120,
       });
+    }
+
+    if (dataWeeks > 0 && dataWeeks < 12) {
       cards.push({
         id: 'm2m-api',
-        kicker: 'Dauerbetrieb · nach Pilot',
-        title: 'M2M-API an GELO-BI anbinden',
+        kicker: 'Dauerbetrieb',
+        title: 'M2M-API anbinden',
         body:
-          'Wöchentliches CSV-Handschieben ist Bridge, nicht Ziel. Der ' +
-          'POST-Endpoint nimmt die gleichen Zeilen als JSON aus dem ' +
-          'GELO-BI-Stack direkt entgegen — ein API-Key-Austausch.',
-        cta: 'data@peix.de',
-        href: 'mailto:data@peix.de?subject=M2M-API-Key%20f%C3%BCr%20GELO',
-        external: true,
+          'Damit der Forecast jede Nacht von selbst auf eure aktuellen ' +
+          'Sales läuft.',
+        cta: 'Endpoint zeigen',
+        href: '/cockpit/data',
         tone: 'action',
         priority: 90,
+      });
+    }
+
+    if ((hasRec || hasStrongSignal) && dataWeeks > 0) {
+      cards.push({
+        id: 'recompute-sales-anchor',
+        kicker: 'Neue Daten',
+        title: 'Forecast mit Sales-Anchor neu rechnen',
+        body:
+          'Wenn neue GELO-Daten anliegen, rechnen wir Signal und Media-Gates ' +
+          'gegen eure Realität neu.',
+        cta: 'Neu rechnen',
+        tone: 'action',
+        priority: dataWeeks >= 12 ? 110 : 70,
+      });
+    }
+
+    if (dataWeeks >= 12) {
+      cards.push({
+        id: 'budget-efficiency',
+        kicker: 'Auswertung',
+        title: 'Erste belastbare Budget-Effizienz-Auswertung',
+        body:
+          'Zwölf Wochen Sell-Out reichen, um erste Shift-Kandidaten gegen ' +
+          'echte Outcomes zu prüfen.',
+        cta: 'Auswertung öffnen',
+        href: '/cockpit/data',
+        tone: 'action',
+        priority: 100,
       });
     }
 
@@ -106,22 +132,6 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
         href: '/cockpit/data',
         tone: 'wait',
         priority: 80,
-      });
-    }
-
-    if (!hasRec && hasStrongSignal && !mediaPlanConnected) {
-      cards.push({
-        id: 'request-forecast',
-        kicker: 'Wenn der Media-Plan anliegt',
-        title: 'Forecast mit Sales-/Media-Anchor neu prüfen',
-        body:
-          'Das Wellen-Signal ist aktuell deutlich, aber ohne ' +
-          'Media-Plan keine EUR-Empfehlung. Sobald der Plan im Data ' +
-          'Office sitzt, reicht ein Refresh und das Media-Panel zieht ' +
-          'den prüfbaren, weiter gesperrten Shift-Kandidaten.',
-        cta: 'Cockpit neu laden',
-        tone: 'wait',
-        priority: 70,
       });
     }
 
@@ -155,29 +165,9 @@ export const NextStepsSection: React.FC<Props> = ({ snapshot }) => {
       priority: 10,
     });
 
-    // Wirkungsquantifizierung als sichtbarer Pilot-Meilenstein.
-    // Ehrliche Versprechen: das wird quantifiziert, sobald GELO-Outcomes
-    // 8 Wochen lang reingelaufen sind. Dem Pilot-Publikum macht das
-    // den Roadmap-Moment greifbar, ohne dass das Tool heute schon eine
-    // vermeintliche Wirkungszahl behaupten muss.
-    cards.push({
-      id: 'pilot-milestone',
-      kicker: 'Pilot-Meilenstein · Woche 8',
-      title: 'Erste belastbare Budget-Effizienz-Auswertung',
-      body:
-        'Sobald acht Wochen GELO-Sell-Out-Daten zurückgeflossen sind, ' +
-        'rechnet § IV das erste belastbare Wirkungsdelta aus: wie viel ' +
-        'Reichweite die Shifts gebracht haben, wo Empfehlungen geirrt ' +
-        'haben und welche Prozentpunkte Budget-Effizienz gewonnen wurden. ' +
-        'Heute ein Versprechen, dann eine Zahl.',
-      cta: 'Als Pilot-Meilenstein merken',
-      tone: 'wait',
-      priority: 30,
-    });
-
     return cards.sort((a, b) => b.priority - a.priority).slice(0, 5);
   }, [
-    mediaPlanConnected,
+    dataWeeks,
     driftDetected,
     hasRec,
     hasStrongSignal,

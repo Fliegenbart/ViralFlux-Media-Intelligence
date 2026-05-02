@@ -5,10 +5,10 @@ const STATUS_LABELS: Record<string, string> = {
   blocked: 'Blockiert',
   watch_only: 'Nur beobachten',
   planner_assist: 'Manuelle Prüfung',
-  spendable: 'Freigegeben mit Cap',
+  spendable: 'Budget-Gate offen mit Cap',
   shadow_only: 'Manuelle Prüfung',
   limited: 'Begrenzt',
-  approved: 'Freigegeben mit Cap',
+  approved: 'Budget-Gate offen mit Cap',
   increase_approved: 'Erhöhen freigegeben',
   preposition_approved: 'Früh positionieren',
   maintain: 'Halten',
@@ -19,11 +19,11 @@ const STATUS_LABELS: Record<string, string> = {
 const PERMISSION_LABELS: Record<string, string> = {
   blocked: 'Keine Budgetfreigabe',
   manual_approval_required: 'Manuelle Freigabe nötig',
-  approved_with_cap: 'Freigegeben mit Cap',
+  approved_with_cap: 'Budget-Gate offen mit Cap',
 };
 
 const RELEASE_HELP: Record<string, string> = {
-  blocked: 'Keine verwertbare Media-Empfehlung. Die Ausgabe ist Diagnose, nicht Planung.',
+  blocked: 'Keine verwertbare Media-Empfehlung. Das System beobachtet im Kalibrierungsfenster.',
   shadow_only: 'Empfehlungen werden berechnet, aber kein Budgetdelta ist freigegeben.',
   limited: 'Kleine budgetneutrale Deltas sind freigegeben, maximal 5 Prozent.',
   approved: 'Budgetneutrale Deltas sind innerhalb der normalen Caps freigegeben.',
@@ -146,7 +146,7 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
         <div className="media-truth-permission">
           <span>{PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' ')}</span>
           <b>{budgetCanChange ? 'budget_can_change=true' : 'budget_can_change=false'}</b>
-          {diagnosticOnly ? <b>Diagnosemodus</b> : null}
+          {diagnosticOnly ? <b>Kalibrierungsfenster</b> : null}
         </div>
       </div>
 

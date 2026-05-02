@@ -94,12 +94,11 @@ export const CockpitShell: React.FC = () => {
     return (
       <div className="peix">
         <div className="peix-shell" style={{ padding: 80 }}>
-          <span className="peix-kicker">Cockpit nicht verfügbar</span>
+          <span className="peix-kicker">Cockpit nicht erreichbar</span>
           <p style={{ marginTop: 12 }}>
-            Der Cockpit-Endpoint antwortet gerade nicht. Das Cockpit fällt
-            bewusst <strong>nicht</strong> auf alte Fixture-Zahlen
-            zurück, weil das Produktions-Konfidenz vortäuschen würde.
-            Fehlermeldung: {error.message}
+            Wir laden gerade einen sauberen Snapshot. Bitte gleich erneut
+            versuchen — wir zeigen euch keine alten Zahlen, nur weil das
+            einfacher wäre. Fehlermeldung: {error.message}
           </p>
           <button
             type="button"

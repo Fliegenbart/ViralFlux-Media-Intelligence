@@ -31,12 +31,13 @@ describe('VirusWaveEvidencePanel', () => {
     expect(screen.getByText('Was wir sehen — und was uns fehlt')).toBeInTheDocument();
     expect(screen.getAllByText(/AMELAG-Frühsignal/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/SurvStat-Bestätigung/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Budget-Gates separat/)).toBeInTheDocument();
+    expect(screen.getByText(/Kalibrierungsfenster/)).toBeInTheDocument();
     expect(screen.getAllByText('AMELAG-Frühsignal').length).toBeGreaterThan(0);
     expect(screen.getAllByText('SurvStat-Bestätigung').length).toBeGreaterThan(0);
     expect(screen.getByText('GELO Sell-Out')).toBeInTheDocument();
-    expect(screen.getAllByText('Lebt schon.')).toHaveLength(2);
+    expect(screen.getAllByText('Lebt.')).toHaveLength(2);
     expect(screen.getByText(/Wartet auf euch/)).toBeInTheDocument();
+    expect(screen.getByText('CSV anschließen')).toBeInTheDocument();
 
     expect(screen.queryByText('Virus Wave Evidence')).not.toBeInTheDocument();
     expect(screen.queryByText('Epidemiologische Evidenz vor Forecast und Budget')).not.toBeInTheDocument();

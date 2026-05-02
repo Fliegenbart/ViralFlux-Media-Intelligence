@@ -4,7 +4,7 @@ import { fmtEurCompactOrDash, fmtSignedPct } from '../format';
 import SectionHeader from './SectionHeader';
 import MediaSpendingTruthPanel from './MediaSpendingTruthPanel';
 import type { GateTone } from './SectionHeader';
-import { canChangeBudget, isDiagnosticOnly } from './snapshotAccessors';
+import { canChangeBudget, isDiagnosticOnly, sellOutWeeks } from './snapshotAccessors';
 
 // A region qualifies as a 'strong riser' when its 7-day delta crosses this
 // absolute threshold. The value is deliberately conservative: we only want
@@ -271,6 +271,76 @@ const EvidenceScorePanel: React.FC<{
   );
 };
 
+type GateState = 'green' | 'yellow' | 'red';
+
+const gateStateLabel: Record<GateState, string> = {
+  green: 'grün',
+  yellow: 'gelb',
+  red: 'rot',
+};
+
+const GateStatus: React.FC<{
+  confidence: number | null;
+  leadDays: number | null;
+  salesWeeks: number;
+  coverageRegions: number;
+  budgetCanChange: boolean;
+}> = ({ confidence, leadDays, salesWeeks, coverageRegions, budgetCanChange }) => {
+  const gates = [
+    {
+      label: 'Signal-Konfidenz',
+      current: confidence !== null ? confidence.toFixed(2) : '—',
+      threshold: 'Schwelle: 0.70',
+      status: confidence !== null && confidence >= 0.7 ? 'green' : confidence !== null && confidence >= 0.55 ? 'yellow' : 'red',
+    },
+    {
+      label: 'Lead-Time',
+      current: leadDays !== null ? `${leadDays} d` : '—',
+      threshold: 'Schwelle: 5 d',
+      status: leadDays !== null && leadDays >= 5 ? 'green' : leadDays !== null && leadDays >= 1 ? 'yellow' : 'red',
+    },
+    {
+      label: 'Sales-Validierung',
+      current: salesWeeks > 0 ? `${salesWeeks} Wochen` : '—',
+      threshold: 'Schwelle: 12 Wochen Daten',
+      status: salesWeeks >= 12 ? 'green' : salesWeeks > 0 ? 'yellow' : 'red',
+    },
+    {
+      label: 'Coverage',
+      current: `${coverageRegions}/16`,
+      threshold: 'Schwelle: 14/16',
+      status: coverageRegions >= 14 ? 'green' : coverageRegions >= 10 ? 'yellow' : 'red',
+    },
+  ] as const;
+
+  return (
+    <div className="gate-status-panel" aria-label="Budget-Gate-Prüfung">
+      <p className="gate-primer">
+        Eine Budget-Empfehlung muss vier Gates passieren: Signal-Konfidenz,
+        Lead-Time, Sales-Validierung, Coverage. In den meisten Wochen sind
+        nicht alle vier grün — und dann empfehlen wir nichts. Das ist nicht
+        Schwäche des Tools, sondern seine Disziplin. Discounted Action ist
+        teurer als kein Action.
+      </p>
+      <div className="gate-status-grid">
+        {gates.map((gate) => (
+          <div className={`gate-row gate-row-${gate.status}`} key={gate.label}>
+            <span className={`gate-dot gate-dot-${gate.status}`} aria-label={gateStateLabel[gate.status]} />
+            <b>{gate.label}</b>
+            <span>aktuell: {gate.current}</span>
+            <span>{gate.threshold}</span>
+          </div>
+        ))}
+      </div>
+      <div className="gate-status-summary">
+        <span>Modus: {budgetCanChange ? 'Budget-Gate offen' : 'Kalibrierungsfenster'}</span>
+        <span>Aktuelle Gate-Prüfung: {gates.filter((gate) => gate.status === 'green').length} von 4 grün</span>
+        <span>Shadow-Lauf läuft mit. Echtgeld pausiert.</span>
+      </div>
+    </div>
+  );
+};
+
 // -----------------------------------------------------------------
 // Root — Decision Section
 // -----------------------------------------------------------------
@@ -296,12 +366,12 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
     null;
   const gateTone: GateTone = budgetCanChange ? 'go' : 'watch';
   const gateLabel = budgetCanChange
-    ? 'Budget · active'
+    ? 'Budget-Gate offen'
     : diagnosticOnly
-      ? 'Budget · diagnostic'
+      ? 'Kalibrierungsfenster'
       : releaseMode
-        ? `Budget · ${String(releaseMode).replace(/_/g, ' ')}`
-        : 'Budget · blocked';
+        ? `Budget-Gate · ${String(releaseMode).replace(/_/g, ' ')}`
+        : 'Budget-Gate geschlossen';
 
   // Rec-Delta-Signalstärke: use region's delta7d if we can find it
   const toRegion = rec
@@ -320,6 +390,19 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
       : '—';
 
   const virusLabel = snapshot.virusLabel || snapshot.virusTyp;
+  const salesWeeks = sellOutWeeks(snapshot);
+  const activeCoverageRegions = snapshot.regions.filter(
+    (r) => r.decisionLabel !== 'TrainingPending',
+  ).length;
+  const recConfidence = rec?.confidence ?? rec?.signalScore ?? null;
+  const allBudgetGatesGreen =
+    recConfidence !== null &&
+    recConfidence >= 0.7 &&
+    bestLag !== null &&
+    bestLag >= 5 &&
+    salesWeeks >= 12 &&
+    activeCoverageRegions >= 14 &&
+    budgetCanChange;
 
   // Strong-signal regions for the "Signal da, EUR fehlt" empty state.
   // Rendered only when there is no primaryRecommendation — i.e. when the
@@ -399,21 +482,29 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
         subtitle={
           <>
             {snapshot.isoWeek} · {virusLabel} ·{' '}
-            {rec
-              ? 'Ein Signal, eine Empfehlung.'
+            {hasStrongSignal && salesWeeks >= 12
+              ? 'Empfehlung steht. Shift wartet auf Freigabe.'
               : hasStrongSignal
-                ? 'Signal klar — Euro-Shift wartet auf Media-Plan.'
-                : 'Signallage zu eng für einen Shift.'}
+                ? 'Signal vorhanden. Daten noch nicht reif für einen Euro-Shift.'
+                : 'Keine Bewegung empfohlen. Beobachten genügt.'}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Wir empfehlen heute keinen Klick. Wir empfehlen einen
-            <b> Shadow-Lauf</b>: was wäre passiert, wenn ihr verschoben
-            hättet? Antwort kommt mit euren Daten.
+            Eine Budget-Empfehlung muss vier Gates passieren. Erst wenn
+            Signal, Timing, Sales-Validierung und Coverage tragen, entsteht
+            aus einem Signal eine freigabefähige Media-Entscheidung.
           </>
         }
+      />
+
+      <GateStatus
+        confidence={recConfidence}
+        leadDays={bestLag}
+        salesWeeks={salesWeeks}
+        coverageRegions={activeCoverageRegions}
+        budgetCanChange={budgetCanChange}
       />
 
       <div className="decision-grid">
@@ -422,7 +513,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
             Empfehlung · {snapshot.isoWeek}
           </p>
 
-          {rec ? (
+          {rec && allBudgetGatesGreen ? (
             <>
               {rec.signalMode ? (
                 <div className="rec-mode-chip" title="Empfehlung kommt aus dem Signal-Ranking (Top-Riser → Top-Faller). Der EUR-Betrag wartet auf die Anbindung des Media-Plans; Richtung und Begründung stehen jetzt schon.">

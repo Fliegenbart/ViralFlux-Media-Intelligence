@@ -77,26 +77,54 @@ const snapshot = {
 } as any;
 
 describe('CeoPitchMode consistency copy', () => {
-  it('frames a strong regional signal as diagnostic instead of budget-active', () => {
+  it('frames a strong regional signal as calibration-window instead of budget-active', () => {
     render(<CeoPitchMode snapshot={snapshot} supportedViruses={['Influenza A']} />);
 
     expect(
       screen.getByRole('heading', {
-        name: /Management Summary:\s+Hamburg als Signal-Kandidat prüfen/i,
+        name: /Atemwegsdruck steigt in Hamburg\. Prüfen, ob ein Media-Shift sich lohnt\./i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Hamburg zeigt Atemwegsdruck/)).toBeInTheDocument();
-    expect(screen.getByText(/Ob daraus GELO-Sales werden/)).toBeInTheDocument();
-    expect(screen.getByText('Budget-Automation deaktiviert')).toBeInTheDocument();
+    expect(screen.getByText(/Frühsignal aus Abwasser und Notaufnahmen/)).toBeInTheDocument();
+    expect(screen.getAllByText('Budget-Gate geschlossen').length).toBeGreaterThan(0);
     expect(screen.getByText(/Funktioniert\. Wartet auf eure Daten/)).toBeInTheDocument();
-    expect(screen.getByText(/Wir sind uns zu 74 % sicher/)).toBeInTheDocument();
-    expect(screen.getAllByText('Sales-Validierung offen').length).toBeGreaterThan(0);
-    expect(screen.getByText(/keine automatische Budgetänderung/)).toBeInTheDocument();
+    expect(screen.getByText('Signal-Evidenz öffnen')).toBeInTheDocument();
+    expect(screen.getByText('Signal-Status')).toBeInTheDocument();
+    expect(screen.getByText('1 Region riser')).toBeInTheDocument();
+    expect(screen.getByText('Daten-Reife')).toBeInTheDocument();
+    expect(screen.getByText('0 / 12 Wochen Sell-Out')).toBeInTheDocument();
+    expect(screen.getByText('Nächster Schritt')).toBeInTheDocument();
+    expect(screen.getByText('Alle Metriken anzeigen')).toBeInTheDocument();
 
     expect(screen.queryByText(/Ranking-Score, keine kalibrierte Wahrscheinlichkeit/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Signalrichtung sichtbar/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Budget-Prüfung/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Handlungsfähig$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Hamburg priorisieren/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Management Summary/)).not.toBeInTheDocument();
+    expect(screen.getByText('Kalibrierungsfenster')).toBeInTheDocument();
+  });
+
+  it('uses the insufficient-data state when there is no signal and no sell-out history', () => {
+    render(
+      <CeoPitchMode
+        snapshot={{
+          ...snapshot,
+          primaryRecommendation: null,
+          regions: [
+            { ...snapshot.regions[0], delta7d: 0.01, decisionLabel: 'Watch' },
+            { ...snapshot.regions[1], delta7d: -0.01, decisionLabel: 'Watch' },
+          ],
+        }}
+        supportedViruses={['Influenza A']}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', {
+        name: /Datenlage zu eng für eine Empfehlung\. System sammelt weiter\./i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Erste GELO-CSV hochladen')).toBeInTheDocument();
   });
 });

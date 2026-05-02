@@ -887,7 +887,7 @@ const DriftBanner: React.FC<{
 }> = ({ mape, correlation, samples, virusTyp }) => (
   <div className="fc-drift-banner" role="alert">
     <div className="fc-drift-banner-head">
-      <span className="fc-drift-badge">Drift erkannt</span>
+      <span className="fc-drift-badge">Drift erkannt — Modell weicht systematisch von Beobachtung ab.</span>
       <span className="fc-drift-scope">{virusTyp} · {samples} Wochen-Paare</span>
     </div>
     <p className="fc-drift-body">
@@ -1334,32 +1334,17 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         title="Forecast-Zeitreise"
         subtitle={
           <>
-            Drei Streifen wie ein Lab-Plotter: Notaufnahmen, Abwasser, Modell.
-            {' '}Wenn der Modell-Streifen nach oben kippt, kippt nächste Woche die Welle.
+            Drei Zeitreihen übereinander: Notaufnahmen, Abwasser, Modell.
             {localLoading && virusTyp !== primarySnapshot.virusTyp ? ' · lädt' : ''}
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Drei Streifen wie ein Lab-Messschreiber: <b>Notaufnahmen</b>,{' '}
-            <b>Abwasser-Viruslast</b> (AMELAG) und <b>Q-Quantile</b> des
-            Forecasts. Links die letzten Wochen als Ist-Wert, ab <b>HEUTE</b>{' '}
-            der Fächer aus Q10 / Q50 / Q90 — alle auf derselben AMELAG-Skala.
-            Enger Fächer = Modell ist sich sicher, breiter Fächer = mehr
-            Unsicherheit, typisch kurz vor einem Wellenwechsel. Darunter die
-            „Lead-Time" gegen das RKI-Meldewesen: wie viele Tage früher
-            hätten Abwasser-Signale die Welle angekündigt als die offizielle
-            Inzidenz-Meldung.
-            {' '}
-            <b>Glossar:</b> Die <b>Ephemeride</b> oben ist die Zeitachse
-            mit den Peaks beider Truth-Quellen und dem HEUTE-Marker (der
-            Begriff kommt aus der Astronomie — eine Tabelle der
-            Position-zu-einem-Zeitpunkt). Aktivierst du{' '}
-            <b>Vintage-Spuren</b>, werden vergangene Forecast-Versionen
-            als schwache graue Linien eingeblendet — ein Vertrauens-Check:
-            hat das Modell dieselbe Welle die letzten Wochen stabil
-            vorhergesagt oder hin-und-her geschwenkt?
+            Notaufnahmen zeigen die klinische Lage, AMELAG zeigt Abwasser,
+            das Modell zeigt Median und Unsicherheit. Links liegt Beobachtung,
+            rechts beginnt der Forecast. Vintage-Spuren zeigen, was das Modell
+            in vergangenen Wochen prognostiziert hat.
           </>
         }
       />
@@ -1381,8 +1366,8 @@ export const ForecastSection: React.FC<Props> = ({ snapshot: primarySnapshot }) 
         </button>
         <span className="fc-mode-hint">
           {detailMode
-            ? 'Drei Streifen · Ephemeride · Q-Quantile · Vintage-Spuren'
-            : 'Nur Q50 + HEUTE + Lead-Time — komplett ehrlich, weniger Noise'}
+            ? 'Drei Quellen + Q-Quantile + Vintage-Spuren + Drift-Banner.'
+            : 'Modell-Median + heute + Lead-Time-Marker.'}
         </span>
       </div>
 

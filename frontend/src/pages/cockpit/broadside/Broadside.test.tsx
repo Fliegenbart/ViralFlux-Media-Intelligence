@@ -42,6 +42,10 @@ function expectBefore(left: HTMLElement, right: HTMLElement) {
 }
 
 describe('Broadside opening order', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it('starts with the management summary map before the evidence details', () => {
     render(
       <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
@@ -60,5 +64,35 @@ describe('Broadside opening order', () => {
     expectBefore(screen.getByTestId('evidence'), screen.getByTestId('atlas'));
     expectBefore(screen.getByTestId('summary'), screen.getByTestId('atlas'));
     expectBefore(screen.getByTestId('backtest'), screen.getByTestId('decision'));
+  });
+
+  it('shows a calibration banner while GELO sell-out data is missing', () => {
+    render(
+      <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+        <Broadside
+          snapshot={{
+            ...snapshot,
+            evidenceScore: {
+              overallScore: 20,
+              releaseStatus: 'blocked',
+              label: 'Sales-Daten fehlen',
+              components: [],
+              blockers: [],
+              businessValidation: { weeks: 0 },
+              plainLanguage: 'Sales-Daten fehlen.',
+            },
+          }}
+          virusTyp="Influenza A"
+          onVirusChange={jest.fn()}
+          supportedViruses={['Influenza A']}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Cockpit läuft im Kalibrierungsfenster/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Erste GELO-CSV anschließen/i })).toHaveAttribute(
+      'href',
+      '/cockpit/data',
+    );
   });
 });

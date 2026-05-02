@@ -84,7 +84,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
         title="Was wir sehen — und was uns fehlt"
         subtitle={
           <>
-            AMELAG-Frühsignal · SurvStat-Bestätigung · Budget-Gates separat
+            Drei Datenströme. Zwei laufen, einer wartet auf euch.
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
@@ -92,7 +92,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           <>
             Diese Fläche zeigt, warum das System eine Wellenlage annimmt.
             <b> AMELAG ist das frühe Abwasser-Signal.</b> SurvStat ist die
-            spätere klinische Bestätigung. Budget bleibt diagnostic_only,
+            spätere klinische Bestätigung. Budget bleibt im Kalibrierungsfenster,
             bis Validierung und Gates tragen.
           </>
         }
@@ -101,14 +101,14 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
       <div className="wave-evidence-grid">
         <div className="wave-source early">
           <div className="wave-source-kicker">AMELAG-Frühsignal</div>
-          <div className="wave-source-phase">Lebt schon.</div>
+          <div className="wave-source-phase">Lebt.</div>
           <p>
             {topRiserNames(snapshot)} sind die heutigen Top-Riser.
           </p>
         </div>
         <div className="wave-source confirmed">
           <div className="wave-source-kicker">SurvStat-Bestätigung</div>
-          <div className="wave-source-phase">Lebt schon.</div>
+          <div className="wave-source-phase">Lebt.</div>
           <p>
             Bestätigt klinisch, mit 7 Tagen Verzug.
           </p>
@@ -117,9 +117,9 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           <div className="wave-source-kicker">GELO Sell-Out</div>
           <div className="wave-source-phase">Wartet auf euch.</div>
           <p>
-            Mit 3 Jahren historischen Sales-Daten zeigen wir, was die Karte
-            in den letzten 6 Saisons wert gewesen wäre.
+            Drei Monate Sales-Daten machen das Modell budget-fähig.
           </p>
+          <a href="/cockpit/data" className="wave-source-link">CSV anschließen</a>
         </div>
       </div>
 

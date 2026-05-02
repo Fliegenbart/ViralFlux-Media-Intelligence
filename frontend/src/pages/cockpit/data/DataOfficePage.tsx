@@ -828,7 +828,7 @@ export const DataOfficePage: React.FC = () => {
             <h1>
               Data Office
               <span className="sub">
-                Truth-Coverage · Outcome-Uploads · Import-Historie · M2M-Integration
+                Sell-Out, Spend, Outcome. CSV oder API. Hier wird das Modell auf eure Realität kalibriert.
               </span>
             </h1>
           </div>
@@ -847,7 +847,7 @@ export const DataOfficePage: React.FC = () => {
           Im <b>Data Office</b> lebt die Wirklichkeit, die das Cockpit zu
           seinen Prognosen in Beziehung setzt — Woche für Woche, pro
           Bundesland, pro Produkt. Ohne diese Daten sind alle EUR-Werte im
-          Cockpit Dashes und der Feedback-Loop in § IV bleibt leer.
+          Cockpit Striche und der Feedback-Loop in § VI bleibt leer.
           Eingegeben wird wahlweise <b>manuell per CSV</b> (siehe unten) oder
           automatisiert über die <b>M2M-API</b> (unterster Block). Jede
           Zeile ist ein Tupel <i>(Woche, Region, Produkt) → Media-Spend +
@@ -1010,8 +1010,8 @@ export const DataOfficePage: React.FC = () => {
             Media-System die Outcome-Zeilen direkt per HTTP-POST an die
             M2M-API pushen. Derselbe Datensatz-Standard wie oben, aber
             als JSON-Array statt CSV. Nutzt einen pro-Kunden-API-Key;
-            Kontakt für Key und Integration-Support steht unten im
-            Footer.
+            wenn die manuelle CSV-Phase steht, schalten wir auf nächtliche
+            M2M-Imports um. Ab dann seht ihr das Cockpit jeden Morgen frisch.
           </p>
           <M2MCard />
         </div>

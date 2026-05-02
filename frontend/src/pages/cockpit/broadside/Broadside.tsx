@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { CockpitSnapshot } from '../types';
 
@@ -12,6 +12,7 @@ import NextStepsSection from './NextStepsSection';
 import CeoPitchMode from './CeoPitchMode';
 import EvidenceStatusBar from './EvidenceStatusBar';
 import VirusWaveEvidencePanel from './VirusWaveEvidencePanel';
+import { sellOutWeeks } from './snapshotAccessors';
 
 /**
  * Broadside — Story-Scroll-Renovation 2026-04-22.
@@ -35,96 +36,49 @@ interface Props {
   onReload?: () => void;
 }
 
-function fmtNextMondayCountdown(now: Date): string {
-  const next = new Date(now);
-  const dow = now.getDay();
-  const daysToMon = ((8 - dow) % 7) || 7;
-  next.setDate(next.getDate() + daysToMon);
-  next.setHours(8, 0, 0, 0);
-  const diffMs = Math.max(0, next.getTime() - now.getTime());
-  const d = Math.floor(diffMs / 86_400_000);
-  const h = String(Math.floor((diffMs % 86_400_000) / 3_600_000)).padStart(2, '0');
-  const m = String(Math.floor((diffMs % 3_600_000) / 60_000)).padStart(2, '0');
-  const s = String(Math.floor((diffMs % 60_000) / 1000)).padStart(2, '0');
-  return `${d}d ${h}:${m}:${s}`;
-}
-
-const FooterTicker: React.FC = () => {
-  const [now, setNow] = useState<Date>(() => new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <>
-      <div>
-        EPOCH <b>{Math.floor(now.getTime() / 1000)}</b>
-      </div>
-      <div>
-        NEXT RUN <b>{fmtNextMondayCountdown(now)}</b>
-      </div>
-    </>
-  );
-};
-
 const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
-  const generated = snapshot.generatedAt ? new Date(snapshot.generatedAt) : null;
-  const generatedLabel = generated
-    ? generated.toLocaleDateString('de-DE', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })
-    : '—';
-
-  const calibMode =
-    snapshot.modelStatus?.calibrationMode === 'calibrated'
-      ? 'isotonic'
-      : snapshot.modelStatus?.calibrationMode === 'heuristic'
-        ? 'heuristisch'
-        : '—';
-  const folds =
-    snapshot.modelStatus?.ranking?.dataPoints ??
-    snapshot.modelStatus?.lead?.horizonDays ??
-    '—';
-
-  const trainingPanel = snapshot.modelStatus?.trainingPanel;
-  const trainingLabel =
-    trainingPanel && trainingPanel.maturityTier !== 'unknown'
-      ? `Training-Panel: ${trainingPanel.maturityLabel}`
-      : null;
-
   return (
     <footer className="page-foot">
       <div>
-        <div>
-          <b>ViralFlux · Cockpit</b>
-        </div>
-        <div>Ausgabe {snapshot.isoWeek} · {generatedLabel}</div>
-        <div>peix gmbh · Berlin</div>
-        <FooterTicker />
+        <b>ViralFlux · Cockpit</b>
+        <div>Ausgabe 1.0.0 · {snapshot.isoWeek} · Quellen: AMELAG, SurvStat</div>
       </div>
       <div>
-        <div>Quellen</div>
-        <div>RKI SURVSTAT · AI-AKI ED · {snapshot.client}-Media-Plan</div>
-        <div>
-          Kalibrierung: {calibMode}, {folds} Walk-forward Folds
-        </div>
-        {trainingLabel ? <div>{trainingLabel}</div> : null}
         <div>
           <Link to="/cockpit/data" className="page-foot-link">
             Data Office ↗
           </Link>
+          {' · '}
+          <a href="#sec-backtest" className="page-foot-link">Methodik ↗</a>
         </div>
       </div>
       <div className="col-right">
-        <div>Präsentiert für</div>
         <div>
-          <b>{snapshot.client} · Marketing</b>
+          <b>Pilot mit {snapshot.client} Marketing</b>
         </div>
-        <div>Vertraulich · Pilot-Cockpit</div>
       </div>
     </footer>
+  );
+};
+
+const CalibrationBanner: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
+  const [closed, setClosed] = useState(false);
+  if (closed || sellOutWeeks(snapshot) > 0) return null;
+  return (
+    <div className="calibration-banner" role="status">
+      <span>
+        Cockpit läuft im Kalibrierungsfenster. Erste GELO-CSV anschließen,
+        um das Modell auf eure Realität zu kalibrieren
+      </span>
+      <Link to="/cockpit/data">Erste GELO-CSV anschließen</Link>
+      <button
+        type="button"
+        aria-label="Kalibrierungsbanner schließen"
+        onClick={() => setClosed(true)}
+      >
+        ×
+      </button>
+    </div>
   );
 };
 
@@ -148,6 +102,7 @@ export const Broadside: React.FC<Props> = ({
       />
       <EvidenceStatusBar snapshot={snapshot} />
       <main className="page">
+        <CalibrationBanner snapshot={snapshot} />
         <CeoPitchMode snapshot={snapshot} supportedViruses={supportedViruses} onReload={onReload} />
         <VirusWaveEvidencePanel snapshot={snapshot} />
         <AtlasSection snapshot={snapshot} />

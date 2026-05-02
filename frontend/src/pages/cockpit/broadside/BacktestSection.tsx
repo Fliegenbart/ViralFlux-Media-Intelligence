@@ -139,27 +139,16 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
         title="Evidenz-Validierung"
         subtitle={
           <>
-            Walk-forward über {window?.folds ?? '—'} Wochen · gegen Persistenz-Baseline
+            So gut war das Modell historisch. Walk-forward, gegen Persistenz-Baseline.
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Das Modell wird rückwirkend gegen echte Vergangenheit
-            getestet: Jede Woche wird der Forecast mit Wissen bis dahin
-            neu berechnet und gegen das tatsächliche Ergebnis verglichen.
-            Die drei Monument-Zahlen sind <b>PR-AUC</b> (Ranking-Güte,
-            höher besser), <b>Precision@Top-3</b> (wie oft die drei
-            gerankten Bundesländer auch die echten Top-Wellen waren) und
-            <b> Median-Lead-Zeit</b> (um wie viele Tage das Signal dem
-            Meldewesen vorausläuft). Vergleich ist immer die
-            Persistenz-Baseline — also „was wäre, wenn wir einfach die
-            letzte Woche wiederholt hätten". Beachte den <b>Pilot-Kontext</b>:
-            in Post-Saison-Wochen hat die Persistenz-Baseline einen
-            Saison-Bonus (gestern=heute ist dann fast immer richtig),
-            weshalb Peak-Wochen den ehrlichen Qualitätsbeweis liefern —
-            dort schlägt das Modell die Baseline regelmäßig um 3-5×
-            PR-AUC und liefert 5-10 Tage Lead-Zeit.
+            Wir tun rückblickend so, als hätten wir die Zukunft nicht
+            gekannt. Das ist die ehrlichste Messung von Frühwarnqualität.
+            Verglichen wird gegen Persistenz — also gegen die Frage, ob
+            „letzte Woche wiederholen" schon gereicht hätte.
           </>
         }
       />
@@ -206,7 +195,7 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
           <div className="validation-panel">
             <div className="validation-head">
               <div>
-                <div className="validation-kicker">Research-Layer</div>
+            <div className="validation-kicker">Research-Layer</div>
                 <h3>SurvStat-only vs AMELAG + SurvStat</h3>
               </div>
               <span className="research-chip">
@@ -303,10 +292,9 @@ export const BacktestSection: React.FC<Props> = ({ snapshot }) => {
       </div>
 
       <p className="backtest-ranking-note">
-        Lies das Ranking als historische Modellgüte pro Region — nicht als
-        heutige Welle. Hamburg steht heute oben (§I), historisch unten (hier).
-        Das ist kein Widerspruch: das Ranking misst Vergangenheit, das Signal
-        misst Gegenwart.
+        Heutige Welle ≠ historische Modellgüte. Das aktuelle Bild kann besser
+        oder schlechter aussehen als die Validierung. Beides bedeutet das
+        Gleiche: weiter beobachten, nicht voreilig handeln.
       </p>
 
       <div className="bt-controls">

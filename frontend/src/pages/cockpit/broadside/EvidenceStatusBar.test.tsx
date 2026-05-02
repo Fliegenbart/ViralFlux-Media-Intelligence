@@ -56,18 +56,29 @@ describe('EvidenceStatusBar', () => {
       />,
     );
 
-    expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('wartet auf GELO-Daten')).toBeInTheDocument();
+    expect(screen.getByText('System')).toBeInTheDocument();
+    expect(screen.getByText('läuft')).toBeInTheDocument();
+    expect(screen.getByText('System').closest('.evidence-status-cell')).toHaveAttribute(
+      'title',
+      expect.stringContaining('wartet auf GELO-Daten'),
+    );
     expect(screen.queryByText('Systembetrieb')).not.toBeInTheDocument();
     expect(screen.queryByText('diagnostic_only')).not.toBeInTheDocument();
-    expect(screen.getByText('Budget-Modus')).toBeInTheDocument();
-    expect(screen.getByText('Diagnosemodus')).toBeInTheDocument();
-    expect(screen.getByText('Budgetänderungen deaktiviert')).toBeInTheDocument();
+    expect(screen.getByText('Wissenschaft')).toBeInTheDocument();
+    expect(screen.getByText('Review')).toBeInTheDocument();
+    expect(screen.getByText('Daten')).toBeInTheDocument();
+    expect(screen.getByText('2 von 3 Quellen')).toBeInTheDocument();
+    expect(screen.getByText('Budget-Gate')).toBeInTheDocument();
+    expect(screen.getByText('geschlossen — Kalibrierungsfenster')).toBeInTheDocument();
     expect(screen.queryByText('can_change_budget=false')).not.toBeInTheDocument();
-    expect(screen.getByText('Operational: healthy')).toBeInTheDocument();
-    expect(screen.getByText('Science: review')).toBeInTheDocument();
-    expect(screen.getByText('Budget: diagnostic only')).toBeInTheDocument();
-    expect(screen.getByText('2026-04-22')).toBeInTheDocument();
-    expect(screen.getByText('2026-04-20')).toBeInTheDocument();
+
+    expect(screen.getByText('Daten').closest('.evidence-status-cell')).toHaveAttribute(
+      'title',
+      expect.stringContaining('AMELAG: 2026-04-22'),
+    );
+    expect(screen.getByText('Daten').closest('.evidence-status-cell')).toHaveAttribute(
+      'title',
+      expect.stringContaining('SurvStat: 2026-04-20'),
+    );
   });
 });

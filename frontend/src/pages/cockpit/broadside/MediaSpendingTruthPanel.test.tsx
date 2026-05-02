@@ -234,7 +234,7 @@ describe('MediaSpendingTruthPanel', () => {
       />,
     );
 
-    expect(screen.getAllByText('Freigegeben mit Cap').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Budget-Gate offen mit Cap').length).toBeGreaterThan(0);
     expect(screen.getByText('Erhöhen freigegeben')).toBeInTheDocument();
     expect(screen.getByText('+12%')).toBeInTheDocument();
     expect(screen.getByText('hohe 7-Tage-Wachstumswahrscheinlichkeit')).toBeInTheDocument();

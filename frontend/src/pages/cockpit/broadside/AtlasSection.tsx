@@ -925,21 +925,15 @@ export const AtlasSection: React.FC<Props> = ({ snapshot }) => {
         title="AMELAG Standort-Frühwarnung"
         subtitle={
           <>
-            {activeRegionCount} / 16 Bundesländer
-            {pendingRegionCount > 0 ? ` (${pendingRegionCount} Training pending)` : ''}{' '}
-            · Färbung = Δ über {RANKING_HORIZON_LABEL}
+            {activeRegionCount} von 16 Bundesländern aktiv. Jeder Standort wird gegen sich selbst gemessen — nicht gegen den Schnitt.
           </>
         }
         gate={{ label: gateLabel, tone: gateTone }}
         primer={
           <>
-            Deutschland-Karte mit allen 16 Bundesländern.{' '}
-            <b>Farbe</b>: rot = steigendes regionales Signal, grün =
-            flach oder rückläufig. Die Intensität zeigt die Stärke des
-            aktiven Prognosefensters. Riser <b>pulsieren</b>; der stärkste
-            Riser wird zusätzlich markiert. Das Tool ist ein
-            <b> Früherkennungs-System</b> gegen das RKI-Meldewesen, keine
-            automatische Budgetfreigabe und keine absolute Fallzahl-Prognose.
+            Rote Punkte = Anstieg gegen die eigene Baseline. Frühwarnung,
+            kein Budget-Trigger. Lokale Abwasserkurven kippen oft Tage bevor
+            Notaufnahmen es melden — deshalb schauen wir hier zuerst hin.
           </>
         }
       />

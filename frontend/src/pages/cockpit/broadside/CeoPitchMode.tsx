@@ -7,7 +7,7 @@ import {
 } from '../format';
 import AtlasChoropleth from './AtlasChoropleth';
 import MediaPlanUploadModal from './MediaPlanUploadModal';
-import { canChangeBudget, isDiagnosticOnly } from './snapshotAccessors';
+import { canChangeBudget, isDiagnosticOnly, sellOutWeeks, signalRiserCount } from './snapshotAccessors';
 
 interface Props {
   snapshot: CockpitSnapshot;
@@ -38,7 +38,7 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
   if (isDiagnosticOnly(snapshot)) {
     return {
       tone: 'caution',
-      label: 'Diagnose nutzbar',
+      label: 'Kalibrierungsfenster',
       note: 'Funktioniert. Wartet auf eure Daten, bevor wir Budget bewegen.',
     };
   }
@@ -80,7 +80,7 @@ function trustFromSnapshot(snapshot: CockpitSnapshot): {
 
   return {
     tone: 'go',
-    label: 'Budgetfreigabe aktiv',
+    label: 'Budget-Gate offen',
     note: 'Budget-Gates erlauben eine operative Übergabe. Dies sollte nur nach separater Freigabe sichtbar sein.',
   };
 }
@@ -105,11 +105,9 @@ export const CeoPitchMode: React.FC<Props> = ({
   const mediaConnected = snapshot.mediaPlan?.connected === true;
 
   const toName = rec?.toName ?? topRiser?.name ?? 'Top-Region';
-  const fromName = rec?.fromName ?? topFaller?.name ?? 'Spar-Region';
   const toCode = rec?.toCode ?? topRiser?.code ?? '—';
   const fromCode = rec?.fromCode ?? topFaller?.code ?? '—';
   const toDelta = topRiser?.delta7d ?? null;
-  const fromDelta = topFaller?.delta7d ?? null;
   const hasStrongSignal =
     typeof toDelta === 'number' && toDelta > STRONG_RISER_THRESHOLD && topRiser !== null;
 
@@ -124,14 +122,45 @@ export const CeoPitchMode: React.FC<Props> = ({
   const lead = snapshot.modelStatus?.lead;
   const budgetDisabled = !canChangeBudget(snapshot);
   const salesProofLabel = 'Sales-Validierung offen';
+  const dataWeeks = sellOutWeeks(snapshot);
+  const riserCount = signalRiserCount(snapshot);
   const signalPct =
     typeof signalScore === 'number' && Number.isFinite(signalScore)
       ? `${Math.round(signalScore * 100)} %`
       : '—';
 
-  const headline = hasStrongSignal
-    ? `${toName} als Signal-Kandidat prüfen`
-    : 'Kein Budgettrigger diese Woche';
+  const signalStatus =
+    hasStrongSignal
+      ? 'signal_present'
+      : dataWeeks < 12
+        ? 'insufficient_data'
+        : 'stable';
+  const headline =
+    signalStatus === 'signal_present'
+      ? `Atemwegsdruck steigt in ${toName}. Prüfen, ob ein Media-Shift sich lohnt.`
+      : signalStatus === 'stable'
+        ? 'Signallage stabil. Beobachten genügt diese Woche.'
+        : 'Datenlage zu eng für eine Empfehlung. System sammelt weiter.';
+  const primaryCta =
+    signalStatus === 'signal_present'
+      ? 'Signal-Evidenz öffnen'
+      : signalStatus === 'stable'
+        ? 'Forecast ansehen'
+        : 'Erste GELO-CSV hochladen';
+  const primaryHref =
+    signalStatus === 'signal_present'
+      ? '#sec-evidence'
+      : signalStatus === 'stable'
+        ? '#sec-forecast'
+        : '/cockpit/data';
+  const nextStep =
+    dataWeeks <= 0
+      ? 'GELO-CSV anschließen'
+      : dataWeeks < 12
+        ? 'Sales-Historie erweitern'
+        : hasStrongSignal
+          ? 'Forecast neu rechnen'
+          : 'Beobachten';
 
   return (
     <section className="ceo-pitch" id="sec-ceo-pitch" aria-labelledby="ceo-pitch-title">
@@ -141,39 +170,20 @@ export const CeoPitchMode: React.FC<Props> = ({
             Evidence Summary · {snapshot.client} Pilot · {snapshot.isoWeek}
           </div>
           <h1 id="ceo-pitch-title">
-            Management Summary:{' '}
-            <span>{headline}</span>
+            {headline}
           </h1>
           <p className="ceo-lede">
-            {hasStrongSignal ? (
-              <>
-                {toName} zeigt Atemwegsdruck ({fmtSignedPct(toDelta)}),{' '}
-                {fromName} entspannt ({fmtSignedPct(fromDelta)}). Ob daraus
-                GELO-Sales werden, zeigen erst Media-Plan und Sales-Daten;{' '}
-                <b>
-                  {budgetDisabled
-                    ? 'keine automatische Budgetänderung.'
-                    : 'Budget-Gate aktiv.'}
-                </b>
-              </>
-            ) : (
-              <>
-                Kein sauberer regionaler Trigger.{' '}
-                <b>
-                  {budgetDisabled
-                    ? 'Budget bleibt gesperrt, bis die nächste Datenwelle klarer ist.'
-                    : 'Budget-Gate aktiv.'}
-                </b>
-              </>
-            )}
+            Frühsignal aus Abwasser und Notaufnahmen. Eine Budget-Empfehlung
+            gibt es erst, wenn euer Sell-Out drei Monate angeschlossen ist
+            und das Modell auf eure Sortimente kalibriert ist.
           </p>
 
           <div className="ceo-action-row" aria-label="Pitch-Aktionen">
-            <a className="ceo-primary-link" href="#sec-evidence">
-              Signal-Evidenz ansehen
+            <a className="ceo-primary-link" href={primaryHref}>
+              {primaryCta}
             </a>
-            <a className="ceo-secondary-link" href="#sec-impact">
-              Sales-Validierung prüfen
+            <a className="ceo-secondary-link" href="#sec-backtest">
+              Methodik
             </a>
             <button
               type="button"
@@ -194,7 +204,27 @@ export const CeoPitchMode: React.FC<Props> = ({
         </div>
       </div>
 
-      <div className="ceo-readout" aria-label="Cockpit-Kennzahlen">
+      <div className="ceo-readout ceo-readout-primary" aria-label="Cockpit-Kennzahlen">
+        <div title="Bundesländer mit signifikantem Anstieg über die eigene Baseline.">
+          <span>Signal-Status</span>
+          <b>{riserCount === 1 ? '1 Region riser' : riserCount > 1 ? `${riserCount} Regionen riser` : 'keine Riser'}</b>
+          <small>{hasStrongSignal ? `${toName} führt die Liste an.` : 'Keine Region über Trigger-Schwelle.'}</small>
+        </div>
+        <div title="Wochen verknüpfter GELO-Sales-Daten. Ab 12 Wochen empfehlungsfähig.">
+          <span>Daten-Reife</span>
+          <b>{dataWeeks} / 12 Wochen Sell-Out</b>
+          <small>{dataWeeks >= 12 ? 'Sales-Anker vorhanden' : 'Kalibrierungsfenster läuft'}</small>
+        </div>
+        <div title="Der nächste operative Schritt aus Signal, Datenreife und Gate-Status.">
+          <span>Nächster Schritt</span>
+          <b>{nextStep}</b>
+          <small>{budgetDisabled ? 'Budget-Gate geschlossen' : 'Budget-Gate offen'}</small>
+        </div>
+      </div>
+
+      <details className="ceo-metrics-expander">
+        <summary>Alle Metriken anzeigen</summary>
+        <div className="ceo-readout ceo-readout-detail" aria-label="Cockpit-Detailkennzahlen">
         <div className={`ceo-trust ceo-trust-${trust.tone}`}>
           <span>Prüfstatus</span>
           <b>{trust.label}</b>
@@ -202,7 +232,7 @@ export const CeoPitchMode: React.FC<Props> = ({
         </div>
         <div>
           <span>Budget-Gate</span>
-          <b>{budgetDisabled ? 'Budget-Automation deaktiviert' : 'Budget-Gate aktiv'}</b>
+          <b>{budgetDisabled ? 'Budget-Gate geschlossen' : 'Budget-Gate offen'}</b>
           <small>{budgetDisabled ? 'can_change_budget=false' : 'separate Freigabe aktiv'}</small>
         </div>
         <div>
@@ -249,7 +279,8 @@ export const CeoPitchMode: React.FC<Props> = ({
           <b>{virusCount || '—'}/4</b>
           <small>{snapshot.virusLabel || snapshot.virusTyp}</small>
         </div>
-      </div>
+        </div>
+      </details>
 
       <MediaPlanUploadModal
         open={mediaPlanModalOpen}

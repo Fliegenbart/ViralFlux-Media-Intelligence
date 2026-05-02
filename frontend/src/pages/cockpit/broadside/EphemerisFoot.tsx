@@ -22,7 +22,7 @@ const EphemerisFoot: React.FC<Props> = ({
   <div className="ephemeris">
     <div className="ephemeris-hero">
       <div>
-        <div className="hero-kicker">Lead-Time · ED führt SURVSTAT</div>
+        <div className="hero-kicker">Lead-Time: ED führt SurvStat</div>
         <div className="hero-value">
           {leadLabel !== null ? (
             <>
@@ -38,7 +38,7 @@ const EphemerisFoot: React.FC<Props> = ({
     </div>
     <div className="ephemeris-cols">
       <div className="ephemeris-col">
-        <div className="col-kicker">Observed · bis HEUTE</div>
+        <div className="col-kicker">Beobachtet bis</div>
         {observed.map((row, index) => (
           <div className="ephem-row" key={`o-${index}`}>
             <span className="label">{row.label}</span>
@@ -47,7 +47,7 @@ const EphemerisFoot: React.FC<Props> = ({
         ))}
       </div>
       <div className="ephemeris-col">
-        <div className="col-kicker">Forecast · Modell</div>
+        <div className="col-kicker">Forecast ab</div>
         {forecast.map((row, index) => (
           <div className="ephem-row" key={`f-${index}`}>
             <span className="label">{row.label}</span>

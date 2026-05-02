@@ -313,6 +313,105 @@ Required invariant:
 budget_can_change=false
 ```
 
+## Tri-Layer Research GPU Jobs
+
+Tri-Layer Evidence Fusion backtests are research-only. They do not change live
+readiness, allocation, recommendations, or media budget permission.
+
+Primary research route:
+
+```text
+/cockpit/tri-layer
+```
+
+Important operator copy:
+
+```text
+Early Warning is not Budget Approval.
+Sales Relevance is not inferred from epidemiology alone.
+Budget Permission remains blocked/shadow-only unless Sales Calibration and Budget Isolation pass.
+This module does not alter live allocation or campaign recommendation outputs.
+```
+
+Snapshot check:
+
+```bash
+curl -i \
+  "https://your-backend.example.com/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Influenza%20A&horizon_days=7"
+```
+
+Latest completed backtest metadata:
+
+```bash
+curl -i \
+  "https://your-backend.example.com/api/v1/media/cockpit/tri-layer/backtest/latest?virus_typ=Influenza%20A&horizon_days=7"
+```
+
+This `latest` endpoint is read-only. It must not trigger backtest computation.
+
+Start a research backtest only from a worker-backed environment:
+
+```bash
+curl -i -X POST \
+  "https://your-backend.example.com/api/v1/media/cockpit/tri-layer/backtest" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "virus_typ": "Influenza A",
+    "brand": "gelo",
+    "horizon_days": 7,
+    "start_date": "2024-10-01",
+    "end_date": "2026-04-30",
+    "mode": "historical_cutoff",
+    "include_sales": false
+  }'
+```
+
+Operational rules:
+
+- keep `include_sales=false` unless a real brand-level sell-out source exists and is approved for research use
+- if Sales is not connected, expect Sales Calibration to be `not_available`
+- generated Tri-Layer reports under processed data/artifact directories must not be committed
+- failed or missing artifacts should produce blocked/shadow-only research states, not live readiness changes
+
+CPU is the default and should remain the conservative production setting:
+
+```bash
+REGIONAL_XGBOOST_DEVICE=cpu
+```
+
+Experimental GPU workers can opt in with the same runtime switch used by the
+regional XGBoost stack:
+
+```bash
+REGIONAL_XGBOOST_DEVICE=cuda docker compose up worker
+```
+
+or in `.env`:
+
+```bash
+REGIONAL_XGBOOST_DEVICE=cuda
+```
+
+Multi-GPU hosts may pin a worker to one CUDA device:
+
+```bash
+REGIONAL_XGBOOST_DEVICE=cuda:0
+```
+
+The Tri-Layer research code reuses `resolve_xgboost_runtime_config`, so CUDA
+adds `device="cuda"` or `device="cuda:<index>"` and keeps
+`tree_method="hist"`. CI and local development do not require NVIDIA runtime;
+leave the variable unset or set to `cpu`.
+
+Production-conservative operating rule:
+
+```text
+Do not enable GPU on request-serving web containers for Tri-Layer experiments.
+Run heavy Tri-Layer backtests only as Celery research jobs, and keep
+budget_can_change=false unless a future explicit sales+isolation validation
+gate is approved.
+```
+
 ## Operational Notes
 
 - container healthchecks intentionally use `/health/live`, not `/health/ready`

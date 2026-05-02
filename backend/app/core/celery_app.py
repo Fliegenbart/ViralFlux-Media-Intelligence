@@ -41,6 +41,7 @@ celery_app = Celery(
         "app.services.data_ingest.tasks",
         "app.services.media.tasks",
         "app.services.ml.tasks",
+        "app.services.research.tri_layer.tasks",
     ],  # Hintergrund-Jobs
 )
 

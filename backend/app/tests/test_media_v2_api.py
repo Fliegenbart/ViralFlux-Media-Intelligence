@@ -541,6 +541,214 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(response.json()["schema_version"], "media_spending_truth_v1")
         build_mock.assert_called_once()
 
+    def test_tri_layer_snapshot_requires_cockpit_auth(self) -> None:
+        response = self.client.get("/api/v1/media/cockpit/tri-layer/snapshot")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_tri_layer_snapshot_returns_research_contract_with_m2m_auth(self) -> None:
+        response = self.client.get(
+            "/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Influenza%20A&horizon_days=7&brand=gelo&client=GELO&mode=research",
+            headers={"X-API-Key": "test-m2m-secret"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["module"], "tri_layer_evidence_fusion")
+        self.assertEqual(body["version"], "tlef_bicg_v0")
+        self.assertEqual(body["mode"], "research")
+        self.assertEqual(body["virus_typ"], "Influenza A")
+        self.assertEqual(body["horizon_days"], 7)
+        self.assertEqual(body["brand"], "gelo")
+        self.assertFalse(body["summary"]["budget_can_change"])
+        self.assertEqual(body["summary"]["budget_permission_state"], "blocked")
+        self.assertEqual(body["source_status"]["sales"]["status"], "not_connected")
+        self.assertIsNone(body["source_status"]["sales"]["coverage"])
+        self.assertIsNone(body["source_status"]["sales"]["freshness_days"])
+        self.assertIn("Sales layer is not connected.", body["model_notes"])
+
+    def test_tri_layer_snapshot_returns_valid_shape_with_missing_regional_artifacts(self) -> None:
+        class MissingArtifactForecastService:
+            def __init__(self, db):
+                self.db = db
+
+            def predict_all_regions(self, *, virus_typ: str, brand: str, horizon_days: int):
+                return {
+                    "virus_typ": virus_typ,
+                    "horizon_days": horizon_days,
+                    "status": "no_model",
+                    "message": "Kein regionales Panel-Modell verfügbar.",
+                    "artifact_diagnostic": {
+                        "operator_message": "Bitte horizon-spezifisches Training starten.",
+                        "bootstrap_required": True,
+                        "artifact_scope": "regional_panel/influenza_a/horizon_7",
+                    },
+                    "predictions": [],
+                    "generated_at": utc_now().isoformat(),
+                }
+
+        with patch("app.services.ml.regional_forecast.RegionalForecastService", MissingArtifactForecastService):
+            response = self.client.get(
+                "/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["regions"], [])
+        self.assertFalse(body["summary"]["budget_can_change"])
+        self.assertEqual(body["summary"]["budget_permission_state"], "blocked")
+        self.assertIn("Regional forecast artifact diagnostic: Bitte horizon-spezifisches Training starten.", body["model_notes"])
+
+    def test_tri_layer_snapshot_uses_stubbed_regional_forecast_service(self) -> None:
+        class StubRegionalForecastService:
+            def __init__(self, db):
+                self.db = db
+
+            def predict_all_regions(self, *, virus_typ: str, brand: str, horizon_days: int):
+                return {
+                    "virus_typ": virus_typ,
+                    "horizon_days": horizon_days,
+                    "status": "ok",
+                    "as_of_date": "2026-04-30",
+                    "predictions": [
+                        {
+                            "bundesland": "HH",
+                            "bundesland_name": "Hamburg",
+                            "event_probability": 0.82,
+                            "change_pct": 24.0,
+                            "expected_next_week_incidence": 71.0,
+                            "current_known_incidence": 48.0,
+                            "prediction_interval": {"lower": 55.0, "upper": 93.0},
+                            "regional_data_fresh": True,
+                            "regional_as_of_lag_days": 1,
+                            "coverage_blockers": [],
+                            "decision": {
+                                "forecast_confidence": 0.74,
+                                "source_freshness_score": 0.8,
+                                "source_freshness_days": 1.0,
+                                "source_coverage_score": 0.7,
+                                "source_revision_risk": 0.1,
+                            },
+                        }
+                    ],
+                    "generated_at": utc_now().isoformat(),
+                }
+
+        with patch("app.services.ml.regional_forecast.RegionalForecastService", StubRegionalForecastService):
+            response = self.client.get(
+                "/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(len(body["regions"]), 1)
+        region = body["regions"][0]
+        self.assertEqual(region["region_code"], "HH")
+        self.assertGreater(region["early_warning_score"], 50)
+        self.assertEqual(region["posterior"]["intensity_p10"], 55.0)
+        self.assertEqual(region["posterior"]["intensity_p90"], 93.0)
+        self.assertEqual(region["gates"]["sales_calibration"], "not_available")
+        self.assertFalse(body["summary"]["budget_can_change"])
+
+    def test_tri_layer_snapshot_rejects_unsupported_virus_and_horizon(self) -> None:
+        bad_virus = self.client.get(
+            "/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Unknown",
+            headers=self.admin_headers,
+        )
+        bad_horizon = self.client.get(
+            "/api/v1/media/cockpit/tri-layer/snapshot?horizon_days=5",
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(bad_virus.status_code, 400)
+        self.assertEqual(bad_horizon.status_code, 400)
+
+    def test_tri_layer_snapshot_missing_sales_keeps_budget_change_disabled(self) -> None:
+        response = self.client.get(
+            "/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Influenza%20A&horizon_days=7",
+            headers=self.admin_headers,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["source_status"]["sales"]["status"], "not_connected")
+        self.assertFalse(body["summary"]["budget_can_change"])
+        self.assertTrue(all(not region.get("budget_can_change", False) for region in body["regions"]))
+
+    def test_existing_cockpit_snapshot_endpoint_remains_unaffected_by_tri_layer_wiring(self) -> None:
+        expected = {"ok": True, "source": "existing-cockpit-snapshot"}
+        with patch(
+            "app.api.media_routes_cockpit_snapshot.build_cockpit_snapshot",
+            return_value=expected,
+        ) as snapshot_mock:
+            response = self.client.get(
+                "/api/v1/media/cockpit/snapshot?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), expected)
+        snapshot_mock.assert_called_once()
+
+    def test_tri_layer_backtest_start_returns_run_status_url(self) -> None:
+        class _Task:
+            id = "tlef-test-run"
+
+        with patch("app.api.media_routes_cockpit_tri_layer.run_tri_layer_backtest_task.delay", return_value=_Task()):
+            response = self.client.post(
+                "/api/v1/media/cockpit/tri-layer/backtest",
+                headers=self.admin_headers,
+                json={
+                    "virus_typ": "Influenza A",
+                    "brand": "gelo",
+                    "horizon_days": 7,
+                    "start_date": "2024-10-01",
+                    "end_date": "2026-04-30",
+                    "mode": "historical_cutoff",
+                    "include_sales": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 202)
+        body = response.json()
+        self.assertEqual(body["status"], "started")
+        self.assertEqual(body["run_id"], "tlef-test-run")
+        self.assertEqual(body["status_url"], "/api/v1/media/cockpit/tri-layer/backtest/tlef-test-run")
+
+    def test_tri_layer_backtest_status_returns_celery_result(self) -> None:
+        class _AsyncResult:
+            status = "SUCCESS"
+            result = {
+                "status": "complete",
+                "run_id": "tlef-test-run",
+                "metrics": {"number_of_cutoffs": 2},
+            }
+            info = None
+
+        with patch("app.api.media_routes_cockpit_tri_layer.celery_app.AsyncResult", return_value=_AsyncResult()):
+            response = self.client.get(
+                "/api/v1/media/cockpit/tri-layer/backtest/tlef-test-run",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["run_id"], "tlef-test-run")
+        self.assertEqual(body["status"], "SUCCESS")
+        self.assertEqual(body["report"]["metrics"]["number_of_cutoffs"], 2)
+
+    def test_tri_layer_backtest_latest_returns_null_when_no_report_exists(self) -> None:
+        with patch("app.api.media_routes_cockpit_tri_layer.read_latest_tri_layer_backtest_report", return_value=None):
+            response = self.client.get(
+                "/api/v1/media/cockpit/tri-layer/backtest/latest?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["report"])
+
     def test_cockpit_endpoint_maps_mlforecast_schema_mismatch_to_503(self) -> None:
         with patch(
             "app.services.media.cockpit_service.MediaCockpitService.get_cockpit_payload",

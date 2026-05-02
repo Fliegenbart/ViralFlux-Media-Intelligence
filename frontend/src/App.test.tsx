@@ -12,6 +12,11 @@ jest.mock('./pages/cockpit/data/DataOfficePage', () => ({
   default: () => <div>Data Office Mock</div>,
 }));
 
+jest.mock('./pages/cockpit/triLayer/TriLayerPage', () => ({
+  __esModule: true,
+  default: () => <div>Tri-Layer Mock</div>,
+}));
+
 import App from './App';
 
 describe('App routing', () => {
@@ -45,6 +50,15 @@ describe('App routing', () => {
 
     expect(await screen.findByText('Data Office Mock')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/cockpit/data');
+  });
+
+  it('keeps the Tri-Layer research route reachable under /cockpit/tri-layer', async () => {
+    window.history.pushState({}, '', '/cockpit/tri-layer');
+
+    render(<App />);
+
+    expect(await screen.findByText('Tri-Layer Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cockpit/tri-layer');
   });
 
   it('redirects cockpit design variants to the current cockpit', async () => {

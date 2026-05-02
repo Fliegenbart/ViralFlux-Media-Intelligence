@@ -51,6 +51,11 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
           {' · '}
           <a href="#sec-backtest" className="page-foot-link">Methodik ↗</a>
         </div>
+        <div>
+          <Link to="/cockpit/tri-layer" className="page-foot-link">
+            Tri-Layer Research ↗
+          </Link>
+        </div>
       </div>
       <div className="col-right">
         <div>

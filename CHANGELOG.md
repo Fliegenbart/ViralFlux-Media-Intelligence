@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Experimental Tri-Layer Evidence Fusion
+
+- Added documentation for the research-only `/cockpit/tri-layer` sub-route and its dedicated backend endpoints.
+- Documented that Early Warning is not Budget Approval, Sales Relevance is not inferred from epidemiology alone, and Budget Permission remains blocked/shadow-only unless Sales Calibration and Budget Isolation pass.
+- Clarified that this module does not alter live allocation or campaign recommendation outputs and makes no validation, ROI or production-readiness claim.
+
 ## 2026-04-30 — v1.2a Operational Readiness accepted
 
 ### Layered operational readiness

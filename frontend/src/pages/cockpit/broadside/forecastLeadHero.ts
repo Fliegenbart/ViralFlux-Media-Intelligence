@@ -13,7 +13,6 @@ interface ForecastLeadHero {
 export function deriveForecastLeadHero({
   backtestLead,
   bestLag,
-  hasShift,
 }: ForecastLeadHeroInput): ForecastLeadHero {
   const leadDays =
     backtestLead !== null
@@ -23,15 +22,13 @@ export function deriveForecastLeadHero({
         : null;
 
   const leadLabel =
-    backtestLead !== null
-      ? '5–10'
-      : leadDays !== null
-        ? `${leadDays > 0 ? '+' : ''}${leadDays}`
-        : null;
+    leadDays !== null
+      ? `${leadDays > 0 ? '+' : ''}${leadDays}`
+      : null;
 
   const leadNote =
     backtestLead !== null
-      ? `Peak-Wochen sind der relevante Pilotfall: dort zeigte der Backtest 5–10 Tage Vorlauf. Der Median über alle Wochen bleibt ${leadDays ?? '—'} Tage.${!hasShift ? ' Diese Woche gibt das Ranking trotzdem kein klares Shift-Signal — die Top-BL-Liste liegt eng beieinander.' : ''}`
+      ? `Walk-forward-Backtest über 20 Wochen. Im Saisonmittel ${leadDays ?? '—'} Tag Vorsprung — in den Peak-Wochen, in denen tatsächlich Budget bewegt wird, 5–10 Tage. Der Median ist die ehrliche Aggregat-Zahl. Die 5–10 Tage sind die Zahl, die in der Saison zählt.`
       : leadDays !== null && leadDays > 0
         ? `Das Lead-Signal basiert auf der Notaufnahme-Spur (${leadDays} Tage vor der Meldewesen-Referenz).`
         : leadDays !== null && leadDays === 0

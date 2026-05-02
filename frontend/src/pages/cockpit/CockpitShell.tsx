@@ -80,9 +80,20 @@ export const CockpitShell: React.FC = () => {
           }}
         >
           <div className="flux-loading-field" aria-hidden="true">
-            <span className="flux-loading-ring ring-a" />
-            <span className="flux-loading-ring ring-b" />
-            <span className="flux-loading-ring ring-c" />
+            <svg className="flux-loading-waveform" viewBox="0 0 640 260" focusable="false">
+              <path
+                className="flux-loading-wave wave-a"
+                d="M -48 142 C 16 88 80 88 144 142 S 272 196 336 142 S 464 88 528 142 S 656 196 720 142"
+              />
+              <path
+                className="flux-loading-wave wave-b"
+                d="M -48 172 C 16 130 80 130 144 172 S 272 214 336 172 S 464 130 528 172 S 656 214 720 172"
+              />
+              <path
+                className="flux-loading-wave wave-c"
+                d="M -48 110 C 16 72 80 72 144 110 S 272 148 336 110 S 464 72 528 110 S 656 148 720 110"
+              />
+            </svg>
           </div>
           <div className="flux-loading-mark">◆</div>
         </div>

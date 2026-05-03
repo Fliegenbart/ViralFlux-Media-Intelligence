@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+from typing import Any
+
 from app.services.research.tri_layer.evidence_weights import evidence_quality, normalize_evidence_weights
 from app.services.research.tri_layer.fusion import (
     commercial_relevance_score,
@@ -13,9 +16,15 @@ from app.services.research.tri_layer.lead_lag import estimate_lead_lag
 from app.services.research.tri_layer.schema import (
     EvidenceWeights,
     GateStates,
+    GateState,
     TriLayerRegionEvidence,
     TriLayerRegionSnapshot,
 )
+
+
+MIN_SALES_HISTORICAL_WEEKS = 8
+MIN_SALES_REGIONS = 3
+MIN_OOS_LIFT_PREDICTIVENESS = 0.01
 
 
 def _mean_present(values: list[float | None]) -> float | None:
@@ -63,14 +72,92 @@ def _drift_gate(evidence: TriLayerRegionEvidence) -> str:
 
 
 def _sales_calibration_gate(evidence: TriLayerRegionEvidence) -> str:
-    if evidence.sales.status == "not_connected":
+    sales = evidence.sales
+    if sales.status == "not_connected":
         return "not_available"
-    if not (evidence.sales.budget_isolated or evidence.sales.causal_adjusted):
+    if not sales.real_sell_out:
+        return "not_available"
+    if (sales.historical_weeks or 0) < MIN_SALES_HISTORICAL_WEEKS:
         return "fail"
-    return score_gate(evidence.sales.signal, pass_at=0.65, watch_at=0.35)
+    if (sales.region_count or 0) < MIN_SALES_REGIONS:
+        return "fail"
+    if not (sales.holdout_validated or sales.causal_adjusted):
+        return "fail"
+    if not (sales.budget_isolated or sales.causal_adjusted):
+        return "fail"
+    if sales.oos_lift_predictiveness is None or sales.oos_lift_predictiveness < MIN_OOS_LIFT_PREDICTIVENESS:
+        return "fail"
+    return score_gate(sales.signal, pass_at=0.65, watch_at=0.35)
 
 
-def build_region_snapshot(evidence: TriLayerRegionEvidence) -> TriLayerRegionSnapshot:
+def _budget_isolation_gate(evidence: TriLayerRegionEvidence) -> GateState:
+    sales = evidence.sales
+    if sales.status == "not_connected" or not sales.real_sell_out:
+        return "not_available"
+    if evidence.budget_isolation.status == "fail":
+        return "fail"
+    if not (sales.budget_isolated or sales.causal_adjusted):
+        return "fail"
+    return evidence.budget_isolation.status
+
+
+def _clinical_wastewater_consistency(evidence: TriLayerRegionEvidence) -> float | None:
+    if evidence.clinical.status == "not_connected" or evidence.wastewater.status == "not_connected":
+        return None
+
+    comparisons: list[float] = []
+    for attr in ("signal", "intensity", "growth"):
+        clinical_value = getattr(evidence.clinical, attr, None)
+        wastewater_value = getattr(evidence.wastewater, attr, None)
+        if clinical_value is None or wastewater_value is None:
+            continue
+        comparisons.append(max(0.0, min(1.0, 1.0 - abs(float(clinical_value) - float(wastewater_value)))))
+
+    if not comparisons:
+        return None
+    return sum(comparisons) / len(comparisons)
+
+
+def _clinical_confirmation_gate(evidence: TriLayerRegionEvidence) -> str:
+    clinical = evidence.clinical
+    if clinical.status == "not_connected":
+        return "not_available"
+
+    signal = clinical.signal
+    growth = clinical.growth
+    if signal is not None and signal >= 0.65 and growth is not None and growth > 0.03:
+        return "pass"
+
+    wastewater_signal = evidence.wastewater.signal if evidence.wastewater.status != "not_connected" else None
+    wastewater_consistency = _clinical_wastewater_consistency(evidence)
+    if (
+        wastewater_signal is not None
+        and wastewater_signal >= 0.65
+        and signal is not None
+        and signal >= 0.50
+        and clinical.consistency is not None
+        and clinical.consistency >= 0.75
+        and wastewater_consistency is not None
+        and wastewater_consistency >= 0.75
+    ):
+        return "pass"
+
+    watch_parts = [
+        signal is not None and signal >= 0.40,
+        growth is not None and growth > 0.03,
+        clinical.consistency is not None and clinical.consistency >= 0.60,
+        wastewater_consistency is not None and wastewater_consistency >= 0.60,
+    ]
+    return "watch" if any(watch_parts) else "fail"
+
+
+def build_region_snapshot(
+    evidence: TriLayerRegionEvidence,
+    *,
+    observation_panel: Any | None = None,
+    virus_typ: str | None = None,
+    cutoff: date | datetime | None = None,
+) -> TriLayerRegionSnapshot:
     """Build a JSON-safe research snapshot for one region.
 
     Missing source data is expected and never raises. It simply produces null
@@ -82,11 +169,19 @@ def build_region_snapshot(evidence: TriLayerRegionEvidence) -> TriLayerRegionSna
         "sales": evidence.sales,
     }
     weights = normalize_evidence_weights(sources)
-    latent = fuse_latent_wave_state(sources, weights)
     lead_lag = estimate_lead_lag(
         wastewater=evidence.wastewater,
         clinical=evidence.clinical,
         sales=evidence.sales,
+        panel=observation_panel,
+        virus_typ=virus_typ,
+        region_code=evidence.region_code,
+        cutoff=cutoff,
+    )
+    latent = fuse_latent_wave_state(
+        sources,
+        weights,
+        lead_lag_uncertainty=lead_lag.lag_uncertainty,
     )
 
     wastewater_quality = evidence_quality(evidence.wastewater)
@@ -95,14 +190,19 @@ def build_region_snapshot(evidence: TriLayerRegionEvidence) -> TriLayerRegionSna
     epi_quality = _max_present([wastewater_quality, clinical_quality])
     epi_signal = _max_present([evidence.wastewater.signal, evidence.clinical.signal])
     ews = early_warning_score(
-        event_probability=epi_signal,
+        event_probability=None,
         growth_mean=latent.growth_mean,
         intensity_mean=latent.intensity_mean,
         epi_quality=epi_quality,
     )
-    crs = commercial_relevance_score(
-        sales_signal=evidence.sales.signal if evidence.sales.status != "not_connected" else None,
-        sales_quality=sales_quality,
+    sales_calibration_gate = _sales_calibration_gate(evidence)
+    crs = (
+        commercial_relevance_score(
+            sales_signal=evidence.sales.signal,
+            sales_quality=sales_quality,
+        )
+        if sales_calibration_gate == "pass"
+        else None
     )
 
     gates = GateStates(
@@ -121,11 +221,11 @@ def build_region_snapshot(evidence: TriLayerRegionEvidence) -> TriLayerRegionSna
             pass_at=0.65,
             watch_at=0.40,
         ),
-        clinical_confirmation=score_gate(evidence.clinical.signal, pass_at=0.65, watch_at=0.30),
-        sales_calibration=_sales_calibration_gate(evidence),
+        clinical_confirmation=_clinical_confirmation_gate(evidence),
+        sales_calibration=sales_calibration_gate,
         coverage=_coverage_gate(evidence),  # type: ignore[arg-type]
         drift=_drift_gate(evidence),  # type: ignore[arg-type]
-        budget_isolation=evidence.budget_isolation.status,
+        budget_isolation=_budget_isolation_gate(evidence),
     )
     permission = evaluate_budget_permission(
         epidemiological_signal=gates.epidemiological_signal,

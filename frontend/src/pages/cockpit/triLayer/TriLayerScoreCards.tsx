@@ -16,7 +16,7 @@ export const TriLayerScoreCards: React.FC<{ summary: TriLayerSummary }> = ({ sum
     <article className="tri-layer-score-card">
       <div className="tri-layer-kicker">Early Warning Score</div>
       <strong className="tri-layer-score-value">{formatScore(summary.early_warning_score)}</strong>
-      <p>Early warning is not budget approval.</p>
+      <p>Early Warning is not Budget Approval.</p>
     </article>
     <article className="tri-layer-score-card">
       <div className="tri-layer-kicker">Commercial Relevance Score</div>

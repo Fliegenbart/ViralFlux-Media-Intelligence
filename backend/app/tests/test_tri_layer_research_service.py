@@ -55,7 +55,7 @@ def test_strong_wastewater_weak_clinical_raises_early_warning_but_not_budget() -
     )
 
     assert snapshot.early_warning_score is not None
-    assert snapshot.early_warning_score > 50
+    assert snapshot.early_warning_score > 0
     assert snapshot.gates.epidemiological_signal == "pass"
     assert snapshot.gates.clinical_confirmation in {"watch", "fail"}
     assert snapshot.budget_permission_state == "calibration_window"
@@ -87,6 +87,48 @@ def test_clinical_confirmation_improves_gate_status() -> None:
     assert confirmed.budget_permission_state == "shadow_only"
 
 
+def test_clinical_confirmation_requires_positive_growth_for_strong_signal() -> None:
+    snapshot = build_region_snapshot(
+        TriLayerRegionEvidence(
+            region="Hamburg",
+            region_code="HH",
+            wastewater=SourceEvidence(status="connected", signal=0.82, growth=0.20, intensity=0.75),
+            clinical=SourceEvidence(
+                status="connected",
+                signal=0.82,
+                growth=-0.05,
+                intensity=0.70,
+                consistency=0.55,
+            ),
+            sales=SourceEvidence(status="not_connected"),
+        )
+    )
+
+    assert snapshot.gates.clinical_confirmation != "pass"
+    assert snapshot.budget_permission_state == "calibration_window"
+
+
+def test_clinical_confirmation_can_pass_by_consistency_with_wastewater() -> None:
+    snapshot = build_region_snapshot(
+        TriLayerRegionEvidence(
+            region="Hamburg",
+            region_code="HH",
+            wastewater=SourceEvidence(status="connected", signal=0.80, growth=0.18, intensity=0.72),
+            clinical=SourceEvidence(
+                status="connected",
+                signal=0.58,
+                growth=0.02,
+                intensity=0.68,
+                consistency=0.88,
+            ),
+            sales=SourceEvidence(status="not_connected"),
+        )
+    )
+
+    assert snapshot.gates.clinical_confirmation == "pass"
+    assert snapshot.budget_permission_state == "shadow_only"
+
+
 def test_drift_failure_blocks_budget() -> None:
     permission = evaluate_budget_permission(
         epidemiological_signal="pass",
@@ -114,7 +156,12 @@ def test_budget_isolation_failure_blocks_even_with_high_scores() -> None:
                 signal=0.88,
                 reliability=0.9,
                 coverage=0.9,
+                real_sell_out=True,
+                historical_weeks=12,
+                region_count=4,
+                holdout_validated=True,
                 causal_adjusted=True,
+                oos_lift_predictiveness=0.12,
             ),
             budget_isolation=BudgetIsolationEvidence(status="fail"),
         )

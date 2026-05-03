@@ -39,6 +39,7 @@ class TriLayerBacktestRequest(BaseModel):
     end_date: str
     mode: Literal["historical_cutoff"] = "historical_cutoff"
     include_sales: bool = False
+    run_challenger_models: bool = False
 
     @model_validator(mode="after")
     def validate_backtest_request(self) -> "TriLayerBacktestRequest":
@@ -114,6 +115,7 @@ async def start_cockpit_tri_layer_backtest(body: TriLayerBacktestRequest) -> dic
             end_date=body.end_date,
             mode=body.mode,
             include_sales=bool(body.include_sales),
+            run_challenger_models=bool(body.run_challenger_models),
         )
     except Exception as exc:
         logger.exception("Could not enqueue Tri-Layer research backtest")

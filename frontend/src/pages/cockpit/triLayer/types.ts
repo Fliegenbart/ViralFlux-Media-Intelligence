@@ -101,6 +101,12 @@ export interface TriLayerBacktestMetrics {
   peak_lead_time: number | null;
   false_early_warning_rate: number | null;
   phase_accuracy: number | null;
+  phase_macro_f1?: number | null;
+  precision_at_top3?: number | null;
+  recall_at_top3?: number | null;
+  pr_auc?: number | null;
+  brier_score?: number | null;
+  ece?: number | null;
   sales_lift_predictiveness: number | null;
   budget_regret_reduction: number | null;
   calibration_error: number | null;
@@ -109,9 +115,44 @@ export interface TriLayerBacktestMetrics {
   gate_transition_counts: Record<string, Record<string, number>>;
 }
 
+export interface TriLayerBacktestModelMetrics {
+  n?: number | null;
+  positives?: number | null;
+  onset_detection_rate?: number | null;
+  onset_detection_gain?: number | null;
+  peak_lead_time?: number | null;
+  false_early_warning_rate?: number | null;
+  phase_accuracy?: number | null;
+  phase_macro_f1?: number | null;
+  precision_at_top3?: number | null;
+  recall_at_top3?: number | null;
+  pr_auc?: number | null;
+  brier_score?: number | null;
+  ece?: number | null;
+  calibration_error?: number | null;
+  lead_lag_accuracy?: number | null;
+}
+
+export interface TriLayerBacktestSourceAvailability {
+  status?: TriLayerSourceConnectionState | string;
+  rows?: number | null;
+  [key: string]: unknown;
+}
+
 export interface TriLayerBacktestReport {
   status: string;
   run_id: string;
+  virus_typ?: string;
+  horizon_days?: number;
+  date_range?: { start_date?: string; end_date?: string };
+  cutoffs?: number;
+  regions?: number;
+  source_availability?: Record<string, TriLayerBacktestSourceAvailability>;
+  models?: Record<string, TriLayerBacktestModelMetrics>;
+  incremental_value?: Record<string, Record<string, unknown>>;
+  claim_readiness?: Record<string, 'pass' | 'watch' | 'fail' | string>;
+  allowed_claims?: string[];
+  forbidden_claims?: string[];
   metrics: TriLayerBacktestMetrics;
   baselines: Record<string, Record<string, unknown>>;
 }

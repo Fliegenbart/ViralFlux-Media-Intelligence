@@ -31,6 +31,11 @@ class SourceEvidence(BaseModel):
     signal: float | None = None
     intensity: float | None = None
     growth: float | None = None
+    real_sell_out: bool = False
+    historical_weeks: int | None = None
+    region_count: int | None = None
+    holdout_validated: bool = False
+    oos_lift_predictiveness: float | None = None
     budget_isolated: bool = False
     causal_adjusted: bool = False
 
@@ -51,6 +56,8 @@ class TriLayerRegionEvidence(BaseModel):
 
 class LatentWaveState(BaseModel):
     intensity_mean: float | None = None
+    intensity_p10: float | None = None
+    intensity_p90: float | None = None
     growth_mean: float | None = None
     uncertainty: float | None = None
     wave_phase: WavePhase = "unknown"

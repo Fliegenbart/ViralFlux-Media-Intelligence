@@ -38,6 +38,8 @@ def evaluate_budget_permission(
         reasons.append("drift_failed")
     if budget_isolation == "fail":
         reasons.append("budget_isolation_failed")
+    if budget_isolation == "not_available" and sales_calibration == "pass":
+        reasons.append("budget_isolation_missing")
     if epidemiological_signal in {"fail", "not_available"}:
         reasons.append("epidemiological_signal_missing")
 
@@ -65,4 +67,8 @@ def evaluate_budget_permission(
             reasons=["budget_isolation_requires_manual_review"],
         )
 
-    return BudgetPermission(state="approved", budget_can_change=True, reasons=[])
+    return BudgetPermission(
+        state="limited",
+        budget_can_change=False,
+        reasons=["research_limited_requires_manual_approval"],
+    )

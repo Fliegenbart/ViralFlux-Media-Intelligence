@@ -11,18 +11,26 @@ from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
-from app.models.database import MediaOutcomeRecord
 from app.services.media.cockpit.constants import BUNDESLAND_NAMES
 from app.services.media.cockpit.freshness import build_data_freshness, build_source_status
+from app.services.research.tri_layer.clinical_evidence import build_clinical_evidence_by_region
+from app.services.research.tri_layer.observation_panel import build_tri_layer_observation_panel
+from app.services.research.tri_layer.sales_adapter import load_sales_panel
 from app.services.research.tri_layer.schema import SourceEvidence, TriLayerRegionEvidence
 from app.services.research.tri_layer.service import build_region_snapshot as build_tri_layer_region_snapshot
+from app.services.research.tri_layer.source_evidence_builder import build_source_evidence_from_panel
 
 
 TriLayerMode = Literal["research", "shadow"]
+EvidenceMode = Literal[
+    "raw_tri_layer",
+    "raw_plus_forecast_proxy",
+    "forecast_proxy_only",
+    "insufficient_data",
+]
 BudgetPermissionState = Literal[
     "blocked",
     "calibration_window",
@@ -33,6 +41,11 @@ BudgetPermissionState = Literal[
 WavePhase = Literal["baseline", "early_growth", "acceleration", "peak", "decline", "unknown"]
 GateState = Literal["pass", "watch", "fail", "not_available"]
 SourceConnectionState = Literal["connected", "partial", "not_connected"]
+RAW_SOURCE_KEYS = ("wastewater", "survstat", "notaufnahme", "are", "grippeweb")
+ALL_SOURCE_COUNT_KEYS = (*RAW_SOURCE_KEYS, "forecast_proxy")
+FORECAST_PROXY_NOTE = (
+    "Clinical evidence uses existing FluxEngine regional forecast proxy because raw clinical regional evidence is incomplete."
+)
 
 
 class TriLayerSummary(BaseModel):
@@ -75,6 +88,7 @@ class TriLayerGates(BaseModel):
 class TriLayerRegion(BaseModel):
     region: str
     region_code: str
+    evidence_mode: EvidenceMode = "insufficient_data"
     early_warning_score: float | None = None
     commercial_relevance_score: float | None = None
     budget_permission_state: BudgetPermissionState = "blocked"
@@ -83,6 +97,8 @@ class TriLayerRegion(BaseModel):
     evidence_weights: TriLayerEvidenceWeights = Field(default_factory=TriLayerEvidenceWeights)
     lead_lag: TriLayerLeadLag = Field(default_factory=TriLayerLeadLag)
     gates: TriLayerGates = Field(default_factory=TriLayerGates)
+    source_counts: dict[str, int] = Field(default_factory=dict)
+    point_in_time_notes: list[str] = Field(default_factory=list)
     explanation: str
 
 
@@ -106,9 +122,12 @@ class TriLayerSnapshotResponse(BaseModel):
     virus_typ: str
     horizon_days: int
     brand: str
+    evidence_mode: EvidenceMode = "insufficient_data"
     summary: TriLayerSummary
     regions: list[TriLayerRegion]
     source_status: TriLayerSourceStatus
+    source_counts: dict[str, int] = Field(default_factory=dict)
+    point_in_time_notes: list[str] = Field(default_factory=list)
     model_notes: list[str]
 
 
@@ -162,39 +181,153 @@ def _clamp01(value: float | None) -> float | None:
     return max(0.0, min(1.0, value))
 
 
-def _status_for_research(
-    source_status: TriLayerSourceStatusItem,
+def _prediction_region_code(prediction: dict[str, Any]) -> str:
+    return str(prediction.get("bundesland") or prediction.get("region_code") or "").upper()
+
+
+def _source_counts(panel: Any | None, *, forecast_proxy_count: int = 0) -> dict[str, int]:
+    counts = {key: 0 for key in ALL_SOURCE_COUNT_KEYS}
+    if panel is not None and not getattr(panel, "empty", True):
+        for source, count in panel["source"].value_counts().to_dict().items():
+            key = str(source)
+            if key in counts:
+                counts[key] = int(count)
+    counts["forecast_proxy"] = int(forecast_proxy_count)
+    return counts
+
+
+def _region_source_counts(panel: Any | None, *, region_code: str, forecast_proxy_used: bool) -> dict[str, int]:
+    counts = {key: 0 for key in ALL_SOURCE_COUNT_KEYS}
+    if panel is not None and not getattr(panel, "empty", True):
+        region = str(region_code or "").upper()
+        eligible = panel.loc[
+            panel["region_code"].astype(str).str.upper().isin({region, "DE"})
+        ]
+        for source, count in eligible["source"].value_counts().to_dict().items():
+            key = str(source)
+            if key in counts:
+                counts[key] = int(count)
+    counts["forecast_proxy"] = 1 if forecast_proxy_used else 0
+    return counts
+
+
+def _point_in_time_notes(panel: Any | None) -> list[str]:
+    if panel is None or getattr(panel, "empty", True) or "point_in_time_note" not in panel.columns:
+        return []
+    notes: list[str] = []
+    for value in panel["point_in_time_note"].dropna().tolist():
+        note = str(value).strip()
+        if note and note not in notes:
+            notes.append(note)
+    return notes
+
+
+def _region_point_in_time_notes(panel: Any | None, *, region_code: str, forecast_proxy_used: bool) -> list[str]:
+    notes: list[str] = []
+    if panel is not None and not getattr(panel, "empty", True) and "point_in_time_note" in panel.columns:
+        region = str(region_code or "").upper()
+        eligible = panel.loc[
+            panel["region_code"].astype(str).str.upper().isin({region, "DE"})
+        ]
+        for value in eligible["point_in_time_note"].dropna().tolist():
+            note = str(value).strip()
+            if note and note not in notes:
+                notes.append(note)
+    if forecast_proxy_used and FORECAST_PROXY_NOTE not in notes:
+        notes.append(FORECAST_PROXY_NOTE)
+    return notes
+
+
+def _raw_region_codes_from_panel(panel: Any | None) -> list[str]:
+    if panel is None or getattr(panel, "empty", True):
+        return []
+    regional = panel.loc[
+        panel["source"].isin({"survstat", "are", "grippeweb", "notaufnahme"})
+        & (panel["region_code"].astype(str).str.upper() != "DE")
+    ]
+    return sorted(str(value).upper() for value in regional["region_code"].dropna().unique())
+
+
+def _forecast_predictions_by_region(regional_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    predictions: dict[str, dict[str, Any]] = {}
+    for prediction in list(regional_payload.get("predictions") or []):
+        if not isinstance(prediction, dict):
+            continue
+        code = _prediction_region_code(prediction)
+        if code:
+            predictions[code] = prediction
+    return predictions
+
+
+def _region_evidence_mode(
     *,
-    allow_forecast_proxy: bool = False,
-) -> SourceConnectionState:
-    if source_status.status != "not_connected":
-        return source_status.status
-    return "partial" if allow_forecast_proxy else "not_connected"
+    wastewater: SourceEvidence,
+    raw_clinical: SourceEvidence | None,
+    forecast_proxy_used: bool,
+) -> EvidenceMode:
+    has_raw_wastewater = wastewater.status != "not_connected" and any(
+        value is not None for value in (wastewater.signal, wastewater.intensity, wastewater.growth)
+    )
+    has_raw_clinical = raw_clinical is not None and raw_clinical.status != "not_connected" and any(
+        value is not None for value in (raw_clinical.signal, raw_clinical.intensity, raw_clinical.growth)
+    )
+    if has_raw_wastewater and has_raw_clinical:
+        return "raw_tri_layer"
+    if forecast_proxy_used and (has_raw_wastewater or has_raw_clinical):
+        return "raw_plus_forecast_proxy"
+    if forecast_proxy_used:
+        return "forecast_proxy_only"
+    return "insufficient_data"
+
+
+def _aggregate_evidence_mode(regions: list[TriLayerRegion]) -> EvidenceMode:
+    if not regions:
+        return "insufficient_data"
+    modes = {region.evidence_mode for region in regions}
+    if "raw_plus_forecast_proxy" in modes or ("raw_tri_layer" in modes and "forecast_proxy_only" in modes):
+        return "raw_plus_forecast_proxy"
+    if modes == {"raw_tri_layer"} or "raw_tri_layer" in modes:
+        return "raw_tri_layer"
+    if modes == {"forecast_proxy_only"}:
+        return "forecast_proxy_only"
+    return "insufficient_data"
+
+
+def _cap_budget_without_sales(
+    state: BudgetPermissionState,
+    *,
+    sales_status: SourceConnectionState,
+) -> BudgetPermissionState:
+    if sales_status != "not_connected":
+        return state
+    order = {
+        "blocked": 0,
+        "calibration_window": 1,
+        "shadow_only": 2,
+        "limited": 3,
+        "approved": 4,
+    }
+    return "shadow_only" if order.get(state, 0) > order["shadow_only"] else state
 
 
 def _sales_source_status(db: Session, *, brand: str) -> TriLayerSourceStatusItem:
-    row = (
-        db.query(
-            func.count(MediaOutcomeRecord.id).label("rows"),
-            func.count(func.distinct(MediaOutcomeRecord.region_code)).label("regions"),
-            func.max(MediaOutcomeRecord.updated_at).label("latest"),
+    try:
+        panel = load_sales_panel(
+            db,
+            brand=brand,
+            virus_typ="",
+            cutoff=utc_now().date(),
         )
-        .filter(func.lower(MediaOutcomeRecord.brand) == str(brand or "").strip().lower())
-        .one()
-    )
-    rows = int(row.rows or 0)
-    if rows <= 0:
+    except Exception:
         return TriLayerSourceStatusItem(status="not_connected", coverage=None, freshness_days=None)
 
-    region_count = int(row.regions or 0)
-    latest = row.latest
-    freshness_days = None
-    if latest is not None:
-        freshness_days = round(max(0.0, (utc_now().replace(tzinfo=None) - latest.replace(tzinfo=None)).total_seconds() / 86400.0), 2)
+    if panel.status.status != "connected":
+        return TriLayerSourceStatusItem(status="not_connected", coverage=None, freshness_days=None)
+
     return TriLayerSourceStatusItem(
-        status="connected" if region_count >= len(BUNDESLAND_NAMES) else "partial",
-        coverage=round(region_count / len(BUNDESLAND_NAMES), 4),
-        freshness_days=freshness_days,
+        status="connected" if panel.region_count >= len(BUNDESLAND_NAMES) else "partial",
+        coverage=panel.status.coverage,
+        freshness_days=panel.status.freshness_days,
     )
 
 
@@ -202,13 +335,22 @@ def _regions_from_forecast(
     regional_payload: dict[str, Any],
     *,
     source_status: TriLayerSourceStatus,
+    observation_panel: Any | None = None,
+    clinical_evidence_by_region: dict[str, SourceEvidence] | None = None,
+    region_codes: list[str] | None = None,
+    cutoff: datetime | None = None,
+    virus_typ: str | None = None,
 ) -> list[TriLayerRegion]:
-    predictions = list(regional_payload.get("predictions") or [])
+    predictions_by_region = _forecast_predictions_by_region(regional_payload)
+    codes = list(region_codes or predictions_by_region.keys())
+    cutoff_at = cutoff or utc_now().replace(tzinfo=None)
+    panel_virus_typ = str(regional_payload.get("virus_typ") or virus_typ or "").strip()
     regions: list[TriLayerRegion] = []
-    for prediction in predictions:
-        code = str(prediction.get("bundesland") or prediction.get("region_code") or "").upper()
+    for code in codes:
+        code = str(code or "").upper()
         if not code:
             continue
+        prediction = predictions_by_region.get(code, {})
         name = str(prediction.get("bundesland_name") or BUNDESLAND_NAMES.get(code, code))
         event_probability = _clamp01(_optional_float(prediction.get("event_probability")))
         change_pct = _optional_float(prediction.get("change_pct"))
@@ -225,13 +367,8 @@ def _regions_from_forecast(
         interval = prediction.get("prediction_interval") if isinstance(prediction.get("prediction_interval"), dict) else {}
 
         forecast_proxy_available = event_probability is not None
-        clinical_status = _status_for_research(
-            source_status.clinical,
-            allow_forecast_proxy=forecast_proxy_available,
-        )
-        wastewater_status = _status_for_research(source_status.wastewater)
-        clinical = SourceEvidence(
-            status=clinical_status,
+        forecast_proxy_clinical = SourceEvidence(
+            status="partial" if forecast_proxy_available else "not_connected",
             freshness=freshness_score,
             reliability=confidence,
             baseline_stability=confidence,
@@ -243,22 +380,27 @@ def _regions_from_forecast(
             intensity=event_probability,
             growth=growth,
         )
-        wastewater = SourceEvidence(
-            status=wastewater_status,
-            freshness=(
-                _clamp01(1.0 - (source_status.wastewater.freshness_days / 14.0))
-                if source_status.wastewater.freshness_days is not None
-                else None
-            ),
-            reliability=None,
-            baseline_stability=None,
-            snr=None,
-            consistency=None,
-            drift=None,
-            coverage=source_status.wastewater.coverage,
-            signal=None,
-            intensity=None,
-            growth=None,
+        raw_clinical = (clinical_evidence_by_region or {}).get(code)
+        clinical_uses_proxy = (
+            (raw_clinical is None or raw_clinical.status == "not_connected")
+            and forecast_proxy_available
+        )
+        clinical = forecast_proxy_clinical if clinical_uses_proxy else (raw_clinical or SourceEvidence())
+        if observation_panel is not None and panel_virus_typ:
+            wastewater = build_source_evidence_from_panel(
+                observation_panel,
+                source="wastewater",
+                region_code=code,
+                virus_typ=panel_virus_typ,
+                cutoff=cutoff_at,
+                allow_national_fallback=True,
+            )
+        else:
+            wastewater = SourceEvidence()
+        evidence_mode = _region_evidence_mode(
+            wastewater=wastewater,
+            raw_clinical=raw_clinical,
+            forecast_proxy_used=clinical_uses_proxy,
         )
         sales = SourceEvidence(status=source_status.sales.status)
         research_region = build_tri_layer_region_snapshot(
@@ -268,32 +410,74 @@ def _regions_from_forecast(
                 wastewater=wastewater,
                 clinical=clinical,
                 sales=sales,
-            )
+            ),
+            observation_panel=observation_panel,
+            virus_typ=panel_virus_typ or virus_typ,
+            cutoff=cutoff_at,
         )
+        regional_budget_state = _cap_budget_without_sales(
+            research_region.budget_permission_state,
+            sales_status=source_status.sales.status,
+        )
+        regional_budget_can_change = (
+            research_region.budget_can_change
+            if source_status.sales.status != "not_connected"
+            else False
+        )
+        if clinical_uses_proxy:
+            explanation = (
+                f"{FORECAST_PROXY_NOTE} Sales calibration is not connected, so this row cannot grant budget permission."
+            )
+        elif evidence_mode == "raw_tri_layer":
+            explanation = (
+                "Research-only regional diagnostic built from raw point-in-time wastewater and clinical observations. "
+                "Sales calibration is not connected, so this row cannot grant budget permission."
+            )
+        else:
+            explanation = (
+                "Research-only regional diagnostic has insufficient raw Tri-Layer evidence for this region. "
+                "Sales calibration is not connected, so this row cannot grant budget permission."
+            )
 
         regions.append(
             TriLayerRegion(
                 region=name,
                 region_code=code,
+                evidence_mode=evidence_mode,
                 early_warning_score=research_region.early_warning_score,
                 commercial_relevance_score=research_region.commercial_relevance_score,
-                budget_permission_state=research_region.budget_permission_state,
+                budget_permission_state=regional_budget_state,
+                budget_can_change=regional_budget_can_change,
                 wave_phase=research_region.wave_phase,
                 posterior=TriLayerPosterior(
                     intensity_mean=research_region.posterior.intensity_mean,
-                    intensity_p10=_optional_float(interval.get("lower")),
-                    intensity_p90=_optional_float(interval.get("upper")),
+                    intensity_p10=(
+                        research_region.posterior.intensity_p10
+                        if research_region.posterior.intensity_p10 is not None
+                        else _optional_float(interval.get("lower"))
+                    ),
+                    intensity_p90=(
+                        research_region.posterior.intensity_p90
+                        if research_region.posterior.intensity_p90 is not None
+                        else _optional_float(interval.get("upper"))
+                    ),
                     growth_mean=research_region.posterior.growth_mean,
                     uncertainty=research_region.posterior.uncertainty,
                 ),
                 evidence_weights=TriLayerEvidenceWeights(**research_region.evidence_weights.model_dump()),
                 lead_lag=TriLayerLeadLag(**research_region.lead_lag.model_dump()),
                 gates=TriLayerGates(**research_region.gates.model_dump()),
-                explanation=(
-                    "Research-only regional diagnostic built from existing FluxEngine regional "
-                    "forecast outputs. Sales calibration is not connected, so this row cannot "
-                    "grant budget permission."
+                source_counts=_region_source_counts(
+                    observation_panel,
+                    region_code=code,
+                    forecast_proxy_used=clinical_uses_proxy,
                 ),
+                point_in_time_notes=_region_point_in_time_notes(
+                    observation_panel,
+                    region_code=code,
+                    forecast_proxy_used=clinical_uses_proxy,
+                ),
+                explanation=explanation,
             )
         )
     return regions
@@ -310,6 +494,7 @@ def build_tri_layer_snapshot(
 ) -> TriLayerSnapshotResponse:
     """Build the experimental Tri-Layer Evidence Fusion payload."""
 
+    cutoff = utc_now().replace(tzinfo=None)
     data_freshness = build_data_freshness(db, normalize_freshness_timestamp=_normalise_freshness_timestamp)
     freshness_items = list((build_source_status(data_freshness).get("items") or []))
     sales_status = _sales_source_status(db, brand=brand)
@@ -323,9 +508,21 @@ def build_tri_layer_snapshot(
     regions: list[TriLayerRegion] = []
     notes = [
         "Research-only. Does not change media budget.",
+        "Clinical layer uses raw point-in-time observations where available; RegionalForecastService is forecast_proxy fallback only.",
     ]
     if sales_status.status == "not_connected":
         notes.append("Sales layer is not connected.")
+
+    observation_panel = None
+    try:
+        observation_panel = build_tri_layer_observation_panel(
+            db,
+            virus_typ=virus_typ,
+            cutoff=cutoff,
+            region_codes=None,
+        )
+    except Exception:
+        notes.append("Point-in-time observation panel unavailable for this research snapshot.")
 
     try:
         from app.services.ml.regional_forecast import RegionalForecastService
@@ -344,13 +541,35 @@ def build_tri_layer_snapshot(
         message = str(regional_payload.get("message") or "").strip()
         if status in {"no_model", "unsupported", "no_data"} and message:
             notes.append(f"Regional forecast status {status}: {message}")
-        regions = _regions_from_forecast(
-            regional_payload,
-            source_status=source_status,
-        )
     except Exception:
         regional_payload = {}
         notes.append("Regional forecast layer unavailable for this research snapshot.")
+
+    prediction_region_codes = list(_forecast_predictions_by_region(regional_payload).keys())
+    raw_region_codes = _raw_region_codes_from_panel(observation_panel)
+    region_codes = sorted({*raw_region_codes, *prediction_region_codes})
+
+    clinical_evidence_by_region: dict[str, SourceEvidence] = {}
+    if region_codes:
+        try:
+            clinical_evidence_by_region = build_clinical_evidence_by_region(
+                db,
+                virus_typ=virus_typ,
+                cutoff=cutoff,
+                region_codes=region_codes,
+            )
+        except Exception:
+            notes.append("Raw clinical observation layer unavailable; using forecast_proxy fallback where present.")
+
+        regions = _regions_from_forecast(
+            regional_payload,
+            source_status=source_status,
+            observation_panel=observation_panel,
+            clinical_evidence_by_region=clinical_evidence_by_region,
+            region_codes=region_codes,
+            cutoff=cutoff,
+            virus_typ=virus_typ,
+        )
 
     early_scores = [
         float(region.early_warning_score)
@@ -364,6 +583,13 @@ def build_tri_layer_snapshot(
         if sales_status.status == "not_connected"
         else "Research-only diagnostic snapshot. Budget changes are isolated in this module."
     )
+    used_forecast_proxy_count = sum(
+        int(region.source_counts.get("forecast_proxy", 0) > 0)
+        for region in regions
+    )
+    point_in_time_notes = _point_in_time_notes(observation_panel)
+    if used_forecast_proxy_count and FORECAST_PROXY_NOTE not in point_in_time_notes:
+        point_in_time_notes.append(FORECAST_PROXY_NOTE)
 
     return TriLayerSnapshotResponse(
         mode=mode,
@@ -371,6 +597,7 @@ def build_tri_layer_snapshot(
         virus_typ=virus_typ,
         horizon_days=int(horizon_days),
         brand=str(brand or "").strip().lower() or "gelo",
+        evidence_mode=_aggregate_evidence_mode(regions),
         summary=TriLayerSummary(
             early_warning_score=early_warning_score,
             commercial_relevance_score=None,
@@ -380,5 +607,10 @@ def build_tri_layer_snapshot(
         ),
         regions=regions,
         source_status=source_status,
+        source_counts=_source_counts(
+            observation_panel,
+            forecast_proxy_count=used_forecast_proxy_count,
+        ),
+        point_in_time_notes=point_in_time_notes,
         model_notes=notes,
     )

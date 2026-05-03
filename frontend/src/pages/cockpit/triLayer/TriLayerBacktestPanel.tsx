@@ -5,9 +5,10 @@ import type { TriLayerBacktestReport, TriLayerBacktestStatus } from './types';
 const BASELINES = [
   'persistence',
   'clinical_only',
+  'wastewater_only',
   'wastewater_plus_clinical',
-  'tri_layer_without_budget_isolation',
-  'tri_layer_with_budget_isolation',
+  'forecast_proxy_only',
+  'tri_layer_epi_no_sales',
 ];
 const POLL_INTERVAL_MS = 250;
 
@@ -17,15 +18,35 @@ const METRICS: Array<[keyof TriLayerBacktestReport['metrics'], string]> = [
   ['peak_lead_time', 'peak_lead_time'],
   ['false_early_warning_rate', 'false_early_warning_rate'],
   ['phase_accuracy', 'phase_accuracy'],
+  ['precision_at_top3', 'precision_at_top3'],
+  ['recall_at_top3', 'recall_at_top3'],
+  ['pr_auc', 'pr_auc'],
+  ['brier_score', 'brier_score'],
+  ['ece', 'ece'],
   ['sales_lift_predictiveness', 'sales_lift_predictiveness'],
   ['budget_regret_reduction', 'budget_regret_reduction'],
   ['calibration_error', 'calibration_error'],
 ];
 
 function formatMetric(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  if (value === null || value === undefined || Number.isNaN(value)) return 'not evaluated';
   return Number.isInteger(value) ? String(value) : value.toFixed(3);
 }
+
+function formatText(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'not evaluated';
+  if (typeof value === 'number') return formatMetric(value);
+  return String(value);
+}
+
+const MODEL_METRICS: Array<[string, string]> = [
+  ['onset_detection_rate', 'onset detection'],
+  ['false_early_warning_rate', 'false warnings'],
+  ['precision_at_top3', 'precision top3'],
+  ['recall_at_top3', 'recall top3'],
+  ['brier_score', 'brier'],
+  ['pr_auc', 'PR AUC'],
+];
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
@@ -190,6 +211,75 @@ export const TriLayerBacktestPanel: React.FC = () => {
             </table>
           </div>
 
+          <section className="tri-layer-validation" aria-label="Scientific Validation">
+            <div className="tri-layer-section-head">
+              <div>
+                <div className="tri-layer-kicker">Scientific Validation</div>
+                <h2>Scientific Validation</h2>
+              </div>
+              <p>Source ablations show whether a source adds value. Null metrics are shown as not evaluated.</p>
+            </div>
+
+            <div className="tri-layer-validation-grid">
+              {Object.entries(report.source_availability || {}).map(([source, item]) => (
+                <div key={source} className="tri-layer-validation-source">
+                  <strong>{source}</strong>
+                  <span>{formatText(item.status)}</span>
+                  <span>rows {formatMetric(item.rows as number | null | undefined)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="tri-layer-table-wrap">
+              <table className="tri-layer-table tri-layer-table--compact">
+                <thead>
+                  <tr>
+                    <th scope="col">Model</th>
+                    {MODEL_METRICS.map(([, label]) => (
+                      <th key={label} scope="col">{label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {BASELINES.map((modelName) => {
+                    const item = report.models?.[modelName] ?? {};
+                    return (
+                      <tr key={modelName}>
+                        <td>{modelName}</td>
+                        {MODEL_METRICS.map(([key]) => (
+                          <td key={key}>{formatMetric(item[key as keyof typeof item] as number | null | undefined)}</td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="tri-layer-claims">
+              <div>
+                <h3>Allowed Claims</h3>
+                {report.allowed_claims?.length ? (
+                  <ul>
+                    {report.allowed_claims.map((claim) => <li key={claim}>{claim}</li>)}
+                  </ul>
+                ) : (
+                  <p>not evaluated</p>
+                )}
+              </div>
+              <div>
+                <h3>Forbidden Claims</h3>
+                {report.forbidden_claims?.length ? (
+                  <ul>
+                    {report.forbidden_claims.map((claim) => <li key={claim}>{claim}</li>)}
+                  </ul>
+                ) : (
+                  <p>not evaluated</p>
+                )}
+              </div>
+            </div>
+          </section>
+
           <div className="tri-layer-gate-counts">
             {Object.entries(report.metrics.gate_transition_counts || {}).map(([gate, counts]) => (
               <div key={gate} className="tri-layer-gate-count">
@@ -212,7 +302,13 @@ export const TriLayerBacktestPanel: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {BASELINES.map((baseline) => {
+                {[
+                  'persistence',
+                  'clinical_only',
+                  'wastewater_plus_clinical',
+                  'tri_layer_without_budget_isolation',
+                  'tri_layer_with_budget_isolation',
+                ].map((baseline) => {
                   const item = report.baselines?.[baseline] ?? {};
                   return (
                     <tr key={baseline}>

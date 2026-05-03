@@ -58,25 +58,57 @@ def test_connected_candidate_table_with_required_columns_returns_normalized_pane
         db.execute(text(
             """
             CREATE TABLE otc_sell_out (
-                date TEXT,
+                window_start TEXT,
+                window_end TEXT,
                 region_code TEXT,
-                units FLOAT,
+                metric_name TEXT,
+                metric_value FLOAT,
                 brand TEXT,
                 product TEXT,
+                source_label TEXT,
                 channel TEXT,
+                holdout_group TEXT,
                 budget_isolated BOOLEAN,
                 causal_adjusted BOOLEAN,
                 stockout FLOAT
             )
             """
         ))
-        db.execute(text(
-            """
-            INSERT INTO otc_sell_out
-            (date, region_code, units, brand, product, channel, budget_isolated, causal_adjusted, stockout)
-            VALUES ('2026-04-20', 'HH', 120.0, 'gelo', 'GeloMyrtol', 'pharmacy', 1, 0, 0.0)
-            """
-        ))
+        for offset, region, holdout in (
+            (0, "HH", "test"),
+            (7, "BE", "control"),
+            (14, "BY", "test"),
+            (21, "NW", "control"),
+            (28, "HH", "test"),
+            (35, "BE", "control"),
+            (42, "BY", "test"),
+            (49, "NW", "control"),
+        ):
+            db.execute(text(
+                """
+                INSERT INTO otc_sell_out
+                (
+                    window_start, window_end, region_code, metric_name, metric_value,
+                    brand, product, source_label, channel, holdout_group,
+                    budget_isolated, causal_adjusted, stockout
+                )
+                VALUES (
+                    date('2026-02-02', :offset || ' days'),
+                    date('2026-02-08', :offset || ' days'),
+                    :region,
+                    'sell_out_units',
+                    120.0,
+                    'gelo',
+                    'GeloMyrtol',
+                    'gelo_pos_panel',
+                    'pharmacy',
+                    :holdout,
+                    1,
+                    0,
+                    0.0
+                )
+                """
+            ), {"offset": offset, "region": region, "holdout": holdout})
         db.commit()
 
         panel = load_sales_panel(db, brand="gelo", virus_typ="Influenza A", cutoff=date(2026, 4, 30))
@@ -85,15 +117,18 @@ def test_connected_candidate_table_with_required_columns_returns_normalized_pane
         engine.dispose()
 
     assert panel.status.status == "connected"
-    assert panel.status.coverage == 1.0
+    assert panel.status.coverage == 0.25
     assert int(panel.rows.iloc[0]["units"]) == 120
-    assert panel.rows.iloc[0]["region_code"] == "HH"
+    assert set(panel.rows["region_code"]) == {"HH", "BE", "BY", "NW"}
     assert panel.budget_isolated is True
     assert panel.causal_adjusted is False
+    assert panel.holdout_validated is True
+    assert panel.historical_weeks >= 8
+    assert panel.region_count == 4
     assert "stockout" in panel.known_confounders
 
 
-def test_budget_isolated_false_blocks_sales_calibration_gate() -> None:
+def test_connected_sales_without_real_sell_out_metadata_is_not_available() -> None:
     snapshot = build_region_snapshot(
         TriLayerRegionEvidence(
             region="Hamburg",
@@ -105,8 +140,10 @@ def test_budget_isolated_false_blocks_sales_calibration_gate() -> None:
         )
     )
 
-    assert snapshot.gates.sales_calibration == "fail"
-    assert snapshot.budget_permission_state == "shadow_only"
+    assert snapshot.commercial_relevance_score is None
+    assert snapshot.gates.sales_calibration == "not_available"
+    assert snapshot.gates.budget_isolation == "not_available"
+    assert snapshot.budget_permission_state in {"shadow_only", "calibration_window"}
     assert snapshot.budget_can_change is False
 
 
@@ -117,9 +154,21 @@ def test_causal_adjusted_true_can_allow_sales_calibration_gate() -> None:
             region_code="HH",
             wastewater=SourceEvidence(status="connected", signal=0.9, intensity=0.8, growth=0.2),
             clinical=SourceEvidence(status="connected", signal=0.88, intensity=0.75, growth=0.15),
-            sales=SourceEvidence(status="connected", signal=0.9, budget_isolated=False, causal_adjusted=True),
+            sales=SourceEvidence(
+                status="connected",
+                signal=0.9,
+                budget_isolated=False,
+                causal_adjusted=True,
+                real_sell_out=True,
+                holdout_validated=True,
+                historical_weeks=12,
+                region_count=4,
+                oos_lift_predictiveness=0.12,
+            ),
             budget_isolation=BudgetIsolationEvidence(status="pass"),
         )
     )
 
     assert snapshot.gates.sales_calibration == "pass"
+    assert snapshot.budget_permission_state == "limited"
+    assert snapshot.budget_can_change is False

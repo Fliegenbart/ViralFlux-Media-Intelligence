@@ -122,7 +122,7 @@ describe('TriLayerPage', () => {
 
     expect(screen.getByRole('heading', { name: /Tri-Layer Evidence Fusion — Research Layer/i })).toBeInTheDocument();
     expect(screen.getByText('Research-only. This page does not activate or change media budget.')).toBeInTheDocument();
-    expect(screen.getByText('Early warning is not budget approval.')).toBeInTheDocument();
+    expect(screen.getByText('Early Warning is not Budget Approval.')).toBeInTheDocument();
     expect(screen.getByText('Budget can change: false')).toBeInTheDocument();
   });
 
@@ -177,7 +177,7 @@ describe('TriLayerPage', () => {
 
     renderPage();
 
-    expect(screen.getByText(/Passwort eingeben/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Passwort/i)).toBeInTheDocument();
   });
 
   it('renders the backtest no-report state and safety warning', async () => {
@@ -220,6 +220,17 @@ describe('TriLayerPage', () => {
         report: {
           status: 'complete',
           run_id: 'tlef-run',
+          virus_typ: 'Influenza A',
+          horizon_days: 7,
+          date_range: { start_date: '2024-10-01', end_date: '2024-10-10' },
+          cutoffs: 4,
+          regions: 2,
+          source_availability: {
+            wastewater: { status: 'connected', rows: 4 },
+            survstat: { status: 'connected', rows: 4 },
+            notaufnahme: { status: 'not_connected', rows: 0 },
+            sales: { status: 'not_connected' },
+          },
           metrics: {
             number_of_cutoffs: 4,
             onset_detection_gain: 0.25,
@@ -229,10 +240,32 @@ describe('TriLayerPage', () => {
             sales_lift_predictiveness: null,
             budget_regret_reduction: null,
             calibration_error: 0.2,
+            pr_auc: null,
             gate_transition_counts: {
               sales_calibration: { pass: 0, watch: 0, fail: 0, not_available: 4 },
             },
           },
+          models: {
+            persistence: { brier_score: 0.4, onset_detection_gain: 0 },
+            clinical_only: { brier_score: 0.3, onset_detection_gain: 0.1 },
+            wastewater_only: { brier_score: null, onset_detection_gain: null },
+            wastewater_plus_clinical: { brier_score: 0.2, onset_detection_gain: 0.25 },
+            forecast_proxy_only: { brier_score: null, onset_detection_gain: null },
+            tri_layer_epi_no_sales: { brier_score: 0.2, onset_detection_gain: 0.25 },
+          },
+          incremental_value: {
+            wastewater_vs_clinical_only: { onset_detection_gain_delta: 0.15 },
+            tri_layer_vs_persistence: { brier_score_delta: -0.2 },
+            forecast_proxy_vs_raw_tri_layer: { status: 'not_evaluated' },
+          },
+          claim_readiness: {
+            earlier_than_clinical: 'pass',
+            better_than_persistence: 'watch',
+            commercially_validated: 'fail',
+            budget_ready: 'fail',
+          },
+          allowed_claims: ['Earlier epidemiological warning in this backtest window.'],
+          forbidden_claims: ['Commercial lift validated.', 'Budget optimization validated.', 'ROI improvement proven.'],
           baselines: {
             persistence: { description: 'Persistence' },
             clinical_only: { description: 'Clinical' },
@@ -253,8 +286,12 @@ describe('TriLayerPage', () => {
     await waitFor(() => expect(screen.getByText('Status: STARTED')).toBeInTheDocument());
     expect(await screen.findByText('number_of_cutoffs')).toBeInTheDocument();
     expect(screen.getByText('0.250')).toBeInTheDocument();
-    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('not evaluated').length).toBeGreaterThan(0);
     expect(screen.getByText('tri_layer_with_budget_isolation')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Scientific Validation/i })).toBeInTheDocument();
+    expect(screen.getAllByText('wastewater_plus_clinical').length).toBeGreaterThan(0);
+    expect(screen.getByText('Earlier epidemiological warning in this backtest window.')).toBeInTheDocument();
+    expect(screen.getByText('Commercial lift validated.')).toBeInTheDocument();
   });
 
   it('renders polling failure without implying production impact', async () => {

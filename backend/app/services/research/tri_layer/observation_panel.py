@@ -12,7 +12,7 @@ from datetime import date, datetime
 from typing import Any, Literal
 
 import pandas as pd
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.database import (
@@ -342,7 +342,10 @@ def _load_survstat_rows(
             func.lower(SurvstatWeeklyData.disease).in_(diseases),
             SurvstatWeeklyData.week_start >= start.to_pydatetime(),
             SurvstatWeeklyData.week_start <= end.to_pydatetime(),
-            SurvstatWeeklyData.age_group.in_(["00+", "Gesamt", None]),
+            or_(
+                SurvstatWeeklyData.age_group.in_(["00+", "Gesamt"]),
+                SurvstatWeeklyData.age_group.is_(None),
+            ),
         )
         .group_by(SurvstatWeeklyData.week_start, SurvstatWeeklyData.bundesland)
         .order_by(SurvstatWeeklyData.week_start.asc())

@@ -117,6 +117,41 @@ def test_survstat_rows_use_conservative_available_at_when_missing() -> None:
         engine.dispose()
 
 
+def test_survstat_rows_with_null_age_group_are_loaded() -> None:
+    db, engine = _session()
+    try:
+        db.add(
+            SurvstatWeeklyData(
+                week_label="2024_01",
+                week_start=datetime(2024, 1, 1),
+                available_time=datetime(2024, 1, 8),
+                year=2024,
+                week=1,
+                bundesland="Hamburg",
+                disease="influenza, saisonal",
+                disease_cluster="RESPIRATORY",
+                age_group=None,
+                incidence=14.0,
+            )
+        )
+        db.commit()
+
+        panel = build_tri_layer_observation_panel(
+            db,
+            virus_typ="Influenza A",
+            cutoff=datetime(2024, 1, 20),
+        )
+
+        survstat = panel.loc[panel["source"] == "survstat"]
+        assert len(survstat) == 1
+        assert survstat.iloc[0]["region_code"] == "HH"
+        assert survstat.iloc[0]["value_raw"] == 14.0
+    finally:
+        db.close()
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+
+
 def test_rows_after_cutoff_are_excluded() -> None:
     db, engine = _session()
     try:

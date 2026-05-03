@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.models.database import Base, SurvstatWeeklyData, WastewaterAggregated
 from app.services.research.tri_layer.backtest import (
+    _resolve_default_backtest_dir,
     TriLayerBacktestConfig,
     run_tri_layer_backtest_from_db,
     run_tri_layer_backtest_panel,
@@ -87,6 +88,13 @@ def _session():
 
 def test_tri_layer_backtest_task_can_be_imported() -> None:
     assert run_tri_layer_backtest_task.name == "run_tri_layer_backtest_task"
+
+
+def test_default_backtest_dir_uses_process_workdir_not_filesystem_root(tmp_path: Path) -> None:
+    resolved = _resolve_default_backtest_dir(base_dir=tmp_path)
+
+    assert resolved == tmp_path / "data" / "processed" / "tri_layer_backtests"
+    assert str(resolved).startswith(str(tmp_path))
 
 
 def test_backtest_runner_works_on_tiny_synthetic_panel(tmp_path: Path) -> None:

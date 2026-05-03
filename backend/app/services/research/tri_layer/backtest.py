@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import json
 import math
+import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 from uuid import uuid4
@@ -30,12 +31,14 @@ from app.services.research.tri_layer.service import build_region_snapshot
 from app.services.research.tri_layer.source_evidence_builder import build_source_evidence_from_panel
 
 
-DEFAULT_BACKTEST_DIR = (
-    Path(__file__).resolve().parents[5]
-    / "data"
-    / "processed"
-    / "tri_layer_backtests"
-)
+def _resolve_default_backtest_dir(*, base_dir: Path | None = None) -> Path:
+    configured = os.getenv("TRI_LAYER_BACKTEST_DIR")
+    if configured:
+        return Path(configured).expanduser()
+    return (base_dir or Path.cwd()) / "data" / "processed" / "tri_layer_backtests"
+
+
+DEFAULT_BACKTEST_DIR = _resolve_default_backtest_dir()
 
 BUDGET_STATE_RANK = {
     "blocked": 0,

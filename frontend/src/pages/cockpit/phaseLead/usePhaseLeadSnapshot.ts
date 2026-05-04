@@ -41,8 +41,8 @@ export function usePhaseLeadSnapshot(
   const {
     virusTyp = 'Influenza A',
     windowDays = 70,
-    nSamples = 160,
-    maxIter = 60,
+    nSamples = 80,
+    maxIter = 0,
     regions,
   } = options;
 

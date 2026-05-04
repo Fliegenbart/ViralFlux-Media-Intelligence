@@ -22,6 +22,7 @@ const payload = {
   horizons: [3, 5, 7],
   summary: {
     data_source: 'live_database',
+    fit_mode: 'fast_initialization',
     observation_count: 120,
     window_start: '2026-02-17',
     window_end: '2026-04-27',

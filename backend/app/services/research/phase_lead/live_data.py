@@ -583,8 +583,8 @@ def build_live_phase_lead_inputs(
     window_days: int = 70,
     region_codes: list[str] | None = None,
     horizons: list[int] | None = None,
-    n_samples: int = 160,
-    max_iter: int = 60,
+    n_samples: int = 80,
+    max_iter: int = 0,
     seed: int = 123,
 ) -> LivePhaseLeadInput:
     issue = _coerce_date(issue_date)
@@ -714,8 +714,8 @@ def build_live_phase_lead_snapshot(
     window_days: int = 70,
     region_codes: list[str] | None = None,
     horizons: list[int] | None = None,
-    n_samples: int = 160,
-    max_iter: int = 60,
+    n_samples: int = 80,
+    max_iter: int = 0,
     seed: int = 123,
 ) -> dict[str, Any]:
     live_input = build_live_phase_lead_inputs(
@@ -791,6 +791,9 @@ def build_live_phase_lead_snapshot(
         "horizons": forecast.horizons,
         "summary": {
             "data_source": "live_database",
+            "fit_mode": "fast_initialization"
+            if live_input.config.optimization.max_iter <= 0
+            else "map_optimization",
             "observation_count": len(live_input.observations),
             "window_start": fit.window_start.isoformat(),
             "window_end": fit.window_end.isoformat(),

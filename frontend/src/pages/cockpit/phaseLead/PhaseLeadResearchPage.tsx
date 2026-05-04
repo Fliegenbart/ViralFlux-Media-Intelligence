@@ -199,7 +199,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
             </div>
             <div className="phase-lead-live-metric">
               <span>Fit</span>
-              <strong>{snapshot.summary.converged ? 'Converged' : 'Diagnostic'}</strong>
+              <strong>{snapshot.summary.fit_mode === 'fast_initialization' ? 'Fast' : 'MAP'}</strong>
               <small>{snapshot.summary.warning_count} warnings</small>
             </div>
           </div>

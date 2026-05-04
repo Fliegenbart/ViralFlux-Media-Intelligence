@@ -131,7 +131,7 @@ class PhaseLeadGraphRenewalFilter:
             raise ValueError("No configured observations fall inside the fitting window")
 
         x0 = self._initial_x(window_rows, mappings, regions, pathogens, dates, initial_state)
-        initial_objective, _ = self._objective_components(
+        initial_objective, initial_components = self._objective_components(
             x0,
             rows=window_rows,
             mappings=mappings,
@@ -159,44 +159,48 @@ class PhaseLeadGraphRenewalFilter:
             )
             return value
 
-        result = minimize(
-            objective_flat,
-            x0.ravel(),
-            method=self.config.optimization.method,
-            bounds=bounds,
-            options={
-                "maxiter": self.config.optimization.max_iter,
-                "ftol": self.config.optimization.tolerance,
-            },
-        )
-        candidate_x = result.x.reshape(shape)
-        final_objective, final_components = self._objective_components(
-            candidate_x,
-            rows=window_rows,
-            mappings=mappings,
-            graph=graph,
-            population=population_array,
-            date_to_index=date_to_index,
-            pathogen_to_index=pathogen_to_index,
-        )
-        if final_objective > initial_objective:
-            candidate_x = x0
-            final_objective, final_components = initial_objective, self._objective_components(
-                x0,
+        candidate_x = x0
+        final_objective = initial_objective
+        final_components = initial_components
+        optimizer_success = True
+        optimizer_message = "optimization skipped; using deterministic live initialization"
+        optimizer_iterations = 0
+
+        if self.config.optimization.max_iter > 0:
+            result = minimize(
+                objective_flat,
+                x0.ravel(),
+                method=self.config.optimization.method,
+                bounds=bounds,
+                options={
+                    "maxiter": self.config.optimization.max_iter,
+                    "ftol": self.config.optimization.tolerance,
+                },
+            )
+            candidate_x = result.x.reshape(shape)
+            final_objective, final_components = self._objective_components(
+                candidate_x,
                 rows=window_rows,
                 mappings=mappings,
                 graph=graph,
                 population=population_array,
                 date_to_index=date_to_index,
                 pathogen_to_index=pathogen_to_index,
-            )[1]
+            )
+            if final_objective > initial_objective:
+                candidate_x = x0
+                final_objective = initial_objective
+                final_components = initial_components
+            optimizer_success = bool(result.success)
+            optimizer_message = str(result.message)
+            optimizer_iterations = int(getattr(result, "nit", 0))
 
         q_map, c_map = derive_q_c(candidate_x)
         n_map = incidence_from_x(candidate_x, self.config.epsilon_incidence)
         diagnostics = self._phase_diagnostics(window_rows, mappings, regions, pathogens, window_end)
         warnings = [warning for diagnostic in diagnostics for warning in diagnostic.warnings]
-        if not result.success:
-            warnings.append(f"optimizer warning: {result.message}")
+        if not optimizer_success:
+            warnings.append(f"optimizer warning: {optimizer_message}")
 
         return FitResult(
             issue_date=issue_date,
@@ -215,11 +219,11 @@ class PhaseLeadGraphRenewalFilter:
             },
             objective_value=float(final_objective),
             objective_components=final_components,
-            converged=bool(result.success),
+            converged=optimizer_success,
             optimizer_info={
                 "initial_objective": float(initial_objective),
-                "message": str(result.message),
-                "iterations": int(getattr(result, "nit", 0)),
+                "message": optimizer_message,
+                "iterations": optimizer_iterations,
             },
             phase_diagnostics=diagnostics,
             warnings=warnings,

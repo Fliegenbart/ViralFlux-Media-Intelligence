@@ -1,5 +1,6 @@
 export interface PhaseLeadSummary {
   data_source: 'live_database';
+  fit_mode: 'fast_initialization' | 'map_optimization';
   observation_count: number;
   window_start: string;
   window_end: string;

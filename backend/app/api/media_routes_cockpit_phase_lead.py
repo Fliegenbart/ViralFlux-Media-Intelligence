@@ -35,8 +35,8 @@ async def get_cockpit_phase_lead_snapshot(
     issue_date: date | None = Query(None, description="Optional point-in-time issue date."),
     window_days: int = Query(70, ge=14, le=140, description="Fitting window length."),
     regions: str | None = Query(None, description="Optional comma-separated Bundesland codes."),
-    n_samples: int = Query(160, ge=4, le=600, description="Posterior predictive samples."),
-    max_iter: int = Query(60, ge=1, le=250, description="Optimizer iterations."),
+    n_samples: int = Query(80, ge=4, le=600, description="Posterior predictive samples."),
+    max_iter: int = Query(0, ge=0, le=250, description="Optimizer iterations. 0 uses the fast live mode."),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     if virus_typ not in _SUPPORTED_VIRUSES:

@@ -113,12 +113,13 @@ def test_live_phase_lead_snapshot_runs_forecast_from_real_tables() -> None:
             region_codes=["HH"],
             horizons=[3, 7],
             n_samples=12,
-            max_iter=8,
+            max_iter=0,
             seed=44,
         )
 
         assert snapshot["module"] == "phase_lead_graph_renewal_filter"
         assert snapshot["summary"]["data_source"] == "live_database"
+        assert snapshot["summary"]["fit_mode"] == "fast_initialization"
         assert snapshot["summary"]["observation_count"] >= 28
         assert snapshot["sources"]["wastewater"]["rows"] >= 20
         assert snapshot["regions"][0]["region_code"] == "HH"

@@ -136,11 +136,16 @@ export const CeoPitchMode: React.FC<Props> = ({
         ? 'insufficient_data'
         : 'stable';
   const headline =
-    signalStatus === 'signal_present'
-      ? `Atemwegsdruck steigt in ${toName}. Prüfen, ob ein Media-Shift sich lohnt.`
-      : signalStatus === 'stable'
-        ? 'Signallage stabil. Beobachten genügt diese Woche.'
-        : 'Datenlage zu eng für eine Empfehlung. System sammelt weiter.';
+    signalStatus === 'signal_present' ? (
+      <>
+        Atemwegsdruck steigt in <span>{toName}.</span>{' '}
+        <small>Prüfen, ob ein Media-Shift sich lohnt.</small>
+      </>
+    ) : signalStatus === 'stable' ? (
+      <>Signallage stabil. Beobachten genügt diese Woche.</>
+    ) : (
+      <>Datenlage zu eng für eine Empfehlung. System sammelt weiter.</>
+    );
   const primaryCta =
     signalStatus === 'signal_present'
       ? 'Signal-Evidenz öffnen'

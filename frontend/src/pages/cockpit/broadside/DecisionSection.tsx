@@ -357,6 +357,7 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
 
   const budgetCanChange = canChangeBudget(snapshot);
   const diagnosticOnly = isDiagnosticOnly(snapshot);
+  const calibrationLocked = !budgetCanChange;
   const releaseMode =
     snapshot.mediaSpendingTruth?.release_mode ??
     snapshot.mediaSpendingTruth?.releaseMode ??
@@ -645,7 +646,11 @@ export const DecisionSection: React.FC<Props> = ({ snapshot }) => {
       </div>
 
       <EvidenceScorePanel evidence={snapshot.evidenceScore} />
-      <MediaSpendingTruthPanel truth={snapshot.mediaSpendingTruth} />
+      <MediaSpendingTruthPanel
+        truth={snapshot.mediaSpendingTruth}
+        budgetCanChangeOverride={budgetCanChange}
+        calibrationLocked={calibrationLocked}
+      />
 
       {!mediaPlanConnected ? (
         <div className="decision-evidence-row">

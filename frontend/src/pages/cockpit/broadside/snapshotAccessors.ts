@@ -35,10 +35,12 @@ export function canChangeBudget(
   snapshotOrStatus: CockpitSnapshot | CockpitSystemStatus | null | undefined,
   mediaTruth?: MediaSpendingTruthPayload | null | undefined,
 ): boolean {
+  let snapshot: CockpitSnapshot | null = null;
   let systemStatus: CockpitSystemStatus | null | undefined;
   let truth: MediaSpendingTruthPayload | null | undefined;
 
   if (isSnapshot(snapshotOrStatus)) {
+    snapshot = snapshotOrStatus;
     systemStatus = snapshotOrStatus.systemStatus;
     truth = snapshotOrStatus.mediaSpendingTruth;
   } else {
@@ -46,7 +48,7 @@ export function canChangeBudget(
     truth = mediaTruth;
   }
 
-  return firstBool(
+  const explicitCanChange = firstBool(
     systemStatus?.can_change_budget,
     systemStatus?.canChangeBudget,
     systemStatus?.budget_can_change,
@@ -56,6 +58,17 @@ export function canChangeBudget(
     truth?.budget_can_change,
     truth?.budgetCanChange,
   ) === true;
+
+  if (!explicitCanChange) return false;
+  if (!snapshot) return true;
+
+  const businessValidation = snapshot.evidenceScore?.businessValidation ?? null;
+  const budgetValidated =
+    businessValidation?.validated_for_budget_activation === true &&
+    sellOutWeeks(snapshot) >= 12 &&
+    snapshot.mediaPlan?.connected === true;
+
+  return budgetValidated;
 }
 
 export function isDiagnosticOnly(snapshot: CockpitSnapshot): boolean {

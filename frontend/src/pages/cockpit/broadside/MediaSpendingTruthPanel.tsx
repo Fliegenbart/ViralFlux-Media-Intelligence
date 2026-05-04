@@ -113,16 +113,29 @@ const sortRegions = (regions: MediaSpendingTruthRegion[]): MediaSpendingTruthReg
 
 interface Props {
   truth?: MediaSpendingTruthPayload | null;
+  budgetCanChangeOverride?: boolean;
+  calibrationLocked?: boolean;
 }
 
-const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
+const MediaSpendingTruthPanel: React.FC<Props> = ({
+  truth,
+  budgetCanChangeOverride,
+  calibrationLocked = false,
+}) => {
   if (!truth) return null;
 
   const releaseMode = releaseModeFromPayload(truth);
+  const displayReleaseMode =
+    calibrationLocked && ['approved', 'limited'].includes(releaseMode)
+      ? 'shadow_only'
+      : releaseMode;
   const permission = truth.budget_permission || 'blocked';
-  const budgetCanChange = budgetCanChangeFromPayload(truth, releaseMode);
+  const budgetCanChange =
+    typeof budgetCanChangeOverride === 'boolean'
+      ? budgetCanChangeOverride
+      : budgetCanChangeFromPayload(truth, releaseMode);
   const diagnosticOnly =
-    truth.diagnostic_only ?? truth.diagnosticOnly ?? !budgetCanChange;
+    calibrationLocked || (truth.diagnostic_only ?? truth.diagnosticOnly ?? !budgetCanChange);
   const regions = sortRegions(truth.regions ?? []);
   const blockedReasons = (truth.blocked_because ?? truth.blockedBecause ?? []).slice(0, 4);
   const gateTrace = truth.gateTrace ?? truth.gate_evaluations ?? truth.gateEvaluations ?? [];
@@ -132,26 +145,32 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
   const hasActions = regions.some(
     (region) =>
       region.media_spending_truth !== 'watch_only' ||
-      Math.abs(approvedDelta(region)) > 0 ||
+      (!calibrationLocked && Math.abs(approvedDelta(region)) > 0) ||
       Math.abs(shadowDelta(region)) > 0,
   );
 
   return (
-    <section className={`media-truth-panel media-truth-${releaseMode}`} data-testid="media-spending-truth-panel">
+    <section className={`media-truth-panel media-truth-${displayReleaseMode}`} data-testid="media-spending-truth-panel">
       <div className="media-truth-head">
         <div>
           <div className="media-truth-kicker">Media-Entscheidungsstatus</div>
-          <h3>{STATUS_LABELS[releaseMode] ?? releaseMode.replace(/_/g, ' ')}</h3>
+          <h3>{STATUS_LABELS[displayReleaseMode] ?? displayReleaseMode.replace(/_/g, ' ')}</h3>
         </div>
         <div className="media-truth-permission">
-          <span>{PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' ')}</span>
+          <span>
+            {calibrationLocked
+              ? 'Keine Budgetfreigabe'
+              : (PERMISSION_LABELS[permission] ?? permission.replace(/_/g, ' '))}
+          </span>
           <b>{budgetCanChange ? 'budget_can_change=true' : 'budget_can_change=false'}</b>
           {diagnosticOnly ? <b>Kalibrierungsfenster</b> : null}
         </div>
       </div>
 
       <div className="media-truth-release-copy">
-        {RELEASE_HELP[releaseMode] ?? 'Empfehlungen werden anhand der aktuellen Gates begrenzt.'}
+        {calibrationLocked
+          ? 'Empfehlungen laufen als Shadow-Lauf mit. Ohne GELO-Sell-Out bleibt Echtgeld pausiert.'
+          : RELEASE_HELP[releaseMode] ?? 'Empfehlungen werden anhand der aktuellen Gates begrenzt.'}
       </div>
 
       {releaseMode === 'blocked' ? (
@@ -186,11 +205,15 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
       <dl className="media-truth-meta">
         <div>
           <dt>Freigabemodus</dt>
-          <dd>{releaseMode.replace(/_/g, ' ')}</dd>
+          <dd>{displayReleaseMode.replace(/_/g, ' ')}</dd>
         </div>
         <div>
           <dt>Max. Delta</dt>
-          <dd>{formatPct(truth.max_approved_delta_pct ?? truth.maxApprovedDeltaPct)}</dd>
+          <dd>
+            {formatPct(
+              calibrationLocked ? 0 : (truth.max_approved_delta_pct ?? truth.maxApprovedDeltaPct),
+            )}
+          </dd>
         </div>
         <div>
           <dt>Gültig bis</dt>
@@ -222,7 +245,9 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
                     <strong>{region.region_name}</strong>
                   </div>
                   <div className="media-truth-delta-stack">
-                    <b className="media-truth-delta">{formatPct(approvedDelta(region))}</b>
+                    <b className="media-truth-delta">
+                      {formatPct(calibrationLocked ? 0 : approvedDelta(region))}
+                    </b>
                     <span>freigegeben</span>
                   </div>
                 </div>
@@ -232,7 +257,7 @@ const MediaSpendingTruthPanel: React.FC<Props> = ({ truth }) => {
                 </div>
                 <div className="media-truth-delta-pair">
                   <span>Shadow {formatPct(shadowDelta(region))}</span>
-                  <span>Freigegeben {formatPct(approvedDelta(region))}</span>
+                  <span>Freigegeben {formatPct(calibrationLocked ? 0 : approvedDelta(region))}</span>
                 </div>
                 <div className="media-truth-region-metrics">
                   <span>Sicherheit {formatConfidence(region.confidence)}</span>

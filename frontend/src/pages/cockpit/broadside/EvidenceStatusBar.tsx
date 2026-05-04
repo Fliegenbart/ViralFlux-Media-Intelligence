@@ -74,6 +74,18 @@ function deriveCanChangeBudget(
   return releaseMode === 'approved' && permission === 'approved_with_cap';
 }
 
+function deriveDisplayCanChangeBudget(snapshot: CockpitSnapshot): boolean {
+  const rawCanChange = deriveCanChangeBudget(snapshot.systemStatus, snapshot.mediaSpendingTruth);
+  if (!rawCanChange) return false;
+
+  const businessValidation = snapshot.evidenceScore?.businessValidation ?? null;
+  return (
+    businessValidation?.validated_for_budget_activation === true &&
+    sellOutWeeks(snapshot) >= 12 &&
+    snapshot.mediaPlan?.connected === true
+  );
+}
+
 function derivePitchStatus(snapshot: CockpitSnapshot): string {
   const businessValidation = snapshot.evidenceScore?.businessValidation ?? null;
   const missingRequirements = businessValidation?.missing_requirements ?? [];
@@ -93,7 +105,7 @@ export const EvidenceStatusBar: React.FC<Props> = ({ snapshot }) => {
   const waveTruth = snapshot.virusWaveTruth ?? mediaTruth?.virusWaveTruth ?? null;
   const siteWarning = snapshot.siteEarlyWarning ?? snapshot.site_early_warning ?? null;
 
-  const canChangeBudget = deriveCanChangeBudget(systemStatus, mediaTruth);
+  const canChangeBudget = deriveDisplayCanChangeBudget(snapshot);
   const pitchStatus = derivePitchStatus(snapshot);
   const operationalStatus = firstText(
     systemStatus?.operational_status,

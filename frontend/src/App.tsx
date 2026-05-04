@@ -33,6 +33,7 @@ import './index.css';
 const CockpitShell = lazy(() => import('./pages/cockpit/CockpitShell'));
 const DataOfficePage = lazy(() => import('./pages/cockpit/data/DataOfficePage'));
 const TriLayerPage = lazy(() => import('./pages/cockpit/triLayer/TriLayerPage'));
+const PhaseLeadResearchPage = lazy(() => import('./pages/cockpit/phaseLead/PhaseLeadResearchPage'));
 
 const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -102,6 +103,7 @@ const App: React.FC = () => {
                 <Route path="/cockpit" element={<CockpitShell />} />
                 <Route path="/cockpit/data" element={<DataOfficePage />} />
                 <Route path="/cockpit/tri-layer" element={<TriLayerPage />} />
+                <Route path="/cockpit/phase-lead" element={<PhaseLeadResearchPage />} />
                 {RETIRED_ROUTES.map((path) => (
                   <Route
                     key={path}

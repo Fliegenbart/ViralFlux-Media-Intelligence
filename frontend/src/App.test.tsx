@@ -17,6 +17,11 @@ jest.mock('./pages/cockpit/triLayer/TriLayerPage', () => ({
   default: () => <div>Tri-Layer Mock</div>,
 }));
 
+jest.mock('./pages/cockpit/phaseLead/PhaseLeadResearchPage', () => ({
+  __esModule: true,
+  default: () => <div>Phase-Lead Mock</div>,
+}));
+
 import App from './App';
 
 describe('App routing', () => {
@@ -59,6 +64,15 @@ describe('App routing', () => {
 
     expect(await screen.findByText('Tri-Layer Mock')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/cockpit/tri-layer');
+  });
+
+  it('keeps the Phase-Lead research route reachable under /cockpit/phase-lead', async () => {
+    window.history.pushState({}, '', '/cockpit/phase-lead');
+
+    render(<App />);
+
+    expect(await screen.findByText('Phase-Lead Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/cockpit/phase-lead');
   });
 
   it('redirects cockpit design variants to the current cockpit', async () => {

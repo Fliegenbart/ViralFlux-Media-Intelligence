@@ -55,6 +55,10 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
           <Link to="/cockpit/tri-layer" className="page-foot-link">
             Tri-Layer Research ↗
           </Link>
+          {' · '}
+          <Link to="/cockpit/phase-lead" className="page-foot-link">
+            Phase-Lead Method ↗
+          </Link>
         </div>
       </div>
       <div className="col-right">

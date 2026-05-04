@@ -64,6 +64,8 @@ export const TriLayerPage: React.FC = () => {
 
   if (!snapshot) return null;
 
+  const topRegionName = snapshot.regions[0]?.region ?? 'Eine Region';
+
   return (
     <div className="peix tri-layer-page">
       <main className="tri-layer-shell">
@@ -73,9 +75,9 @@ export const TriLayerPage: React.FC = () => {
             <div className="tri-layer-kicker">Experimental cockpit subpage</div>
             <h1>Tri-Layer Evidence Fusion — Research Layer</h1>
             <p>
-              Diagnostic fusion of epidemiological signal, clinical confirmation
-              and commercial calibration. Research-only. This page does not
-              activate or change media budget.
+              Diese Research-Seite bewertet konservativ, ob Cockpit-Signal,
+              klinische Bestätigung und Sales-Kalibrierung gemeinsam tragen.
+              Research-only. This page does not activate or change media budget.
             </p>
           </div>
           <aside className="tri-layer-hero-meta" aria-label="Tri-Layer metadata">
@@ -87,6 +89,36 @@ export const TriLayerPage: React.FC = () => {
         </header>
 
         <TriLayerScoreCards summary={snapshot.summary} />
+        <section className="tri-layer-panel tri-layer-reconcile" aria-labelledby="tri-layer-reconcile-title">
+          <div className="tri-layer-section-head">
+            <div>
+              <div className="tri-layer-kicker">Lesart</div>
+              <h2 id="tri-layer-reconcile-title">Cockpit-Signal ≠ Tri-Layer-Freigabe</h2>
+            </div>
+            <p>
+              Das Cockpit zeigt den heutigen regionalen Signal-Kandidaten.
+              Der Tri-Layer prüft, ob Abwasser, Klinik und Sales gemeinsam
+              stark genug sind.
+            </p>
+          </div>
+          <div className="tri-layer-reconcile-grid">
+            <div>
+              <span>Cockpit</span>
+              <b>aktueller regionaler Riser</b>
+              <small>{topRegionName} kann sichtbar steigen, während der Tri-Layer niedrig bleibt.</small>
+            </div>
+            <div>
+              <span>Tri-Layer</span>
+              <b>konservative Tragfähigkeit</b>
+              <small>Sales fehlt, Horizon {snapshot.horizon_days} days, Budget bleibt blockiert.</small>
+            </div>
+            <div>
+              <span>Budget</span>
+              <b>{String(snapshot.summary.budget_can_change)}</b>
+              <small>Ein niedriger Cross-Layer-Score ändert keine Cockpit-Daten und gibt kein Budget frei.</small>
+            </div>
+          </div>
+        </section>
         <TriLayerSourceStatus sourceStatus={snapshot.source_status} />
         <TriLayerGateMatrix regions={snapshot.regions} />
         <TriLayerRegionTable regions={snapshot.regions} />

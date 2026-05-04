@@ -139,7 +139,7 @@ export const CeoPitchMode: React.FC<Props> = ({
     signalStatus === 'signal_present' ? (
       <>
         Atemwegsdruck steigt in <span>{toName}.</span>{' '}
-        <small>Prüfen, ob ein Media-Shift sich lohnt.</small>
+        <small>Freigabe wartet auf Sales-Kalibrierung.</small>
       </>
     ) : signalStatus === 'stable' ? (
       <>Signallage stabil. Beobachten genügt diese Woche.</>
@@ -178,9 +178,9 @@ export const CeoPitchMode: React.FC<Props> = ({
             {headline}
           </h1>
           <p className="ceo-lede">
-            Frühsignal aus Abwasser und Notaufnahmen. Eine Budget-Empfehlung
-            gibt es erst, wenn euer Sell-Out drei Monate angeschlossen ist
-            und das Modell auf eure Sortimente kalibriert ist.
+            Das Cockpit zeigt das aktuelle regionale Signal. Der Tri-Layer
+            bewertet konservativer, ob Abwasser, Klinik und Sales gemeinsam
+            genug tragen; ohne Sell-Out bleibt Budget blockiert.
           </p>
 
           <div className="ceo-action-row" aria-label="Pitch-Aktionen">

@@ -121,9 +121,33 @@ describe('TriLayerPage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: /Tri-Layer Evidence Fusion — Research Layer/i })).toBeInTheDocument();
-    expect(screen.getByText('Research-only. This page does not activate or change media budget.')).toBeInTheDocument();
-    expect(screen.getByText('Early Warning is not Budget Approval.')).toBeInTheDocument();
+    expect(screen.getAllByText(/Research-only\. This page does not activate or change media budget\./).length).toBeGreaterThan(0);
+    expect(screen.getByText('Tri-Layer Frühwarn-Score')).toBeInTheDocument();
+    expect(screen.getByText(/nicht identisch mit dem Cockpit-Riser/i)).toBeInTheDocument();
     expect(screen.getByText('Budget can change: false')).toBeInTheDocument();
+  });
+
+  it('explains why cockpit signal and tri-layer score can differ', () => {
+    mockedUseTriLayerSnapshot.mockReturnValue({
+      snapshot: {
+        ...baseSnapshot,
+        summary: {
+          ...baseSnapshot.summary,
+          early_warning_score: 27.3,
+        },
+      },
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: /Cockpit-Signal ≠ Tri-Layer-Freigabe/i })).toBeInTheDocument();
+    expect(screen.getByText(/Das Cockpit zeigt den heutigen regionalen Signal-Kandidaten/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hamburg kann sichtbar steigen, während der Tri-Layer niedrig bleibt/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Horizon 7 days/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Budget bleibt blockiert/i).length).toBeGreaterThan(0);
   });
 
   it('shows missing Sales honestly and renders region rows', () => {

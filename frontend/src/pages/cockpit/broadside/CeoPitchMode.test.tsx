@@ -82,10 +82,11 @@ describe('CeoPitchMode consistency copy', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: /Atemwegsdruck steigt in Hamburg\. Prüfen, ob ein Media-Shift sich lohnt\./i,
+        name: /Atemwegsdruck steigt in Hamburg\. Freigabe wartet auf Sales-Kalibrierung\./i,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Frühsignal aus Abwasser und Notaufnahmen/)).toBeInTheDocument();
+    expect(screen.getByText(/Das Cockpit zeigt das aktuelle regionale Signal/)).toBeInTheDocument();
+    expect(screen.getByText(/Der Tri-Layer bewertet konservativer/)).toBeInTheDocument();
     expect(screen.getAllByText('Budget-Gate geschlossen').length).toBeGreaterThan(0);
     expect(screen.getByText(/Funktioniert\. Wartet auf eure Daten/)).toBeInTheDocument();
     expect(screen.getByText('Signal-Evidenz öffnen')).toBeInTheDocument();

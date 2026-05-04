@@ -14,14 +14,14 @@ function formatState(value: string): string {
 export const TriLayerScoreCards: React.FC<{ summary: TriLayerSummary }> = ({ summary }) => (
   <section className="tri-layer-score-grid" aria-label="Tri-Layer score summary">
     <article className="tri-layer-score-card">
-      <div className="tri-layer-kicker">Early Warning Score</div>
+      <div className="tri-layer-kicker">Tri-Layer Frühwarn-Score</div>
       <strong className="tri-layer-score-value">{formatScore(summary.early_warning_score)}</strong>
-      <p>Early Warning is not Budget Approval.</p>
+      <p>Konservativer Cross-Layer-Wert. Er ist nicht identisch mit dem Cockpit-Riser und keine Budgetfreigabe.</p>
     </article>
     <article className="tri-layer-score-card">
       <div className="tri-layer-kicker">Commercial Relevance Score</div>
       <strong className="tri-layer-score-value">{formatScore(summary.commercial_relevance_score)}</strong>
-      <p>{summary.commercial_relevance_score === null ? 'Sales layer not connected' : 'Sales-calibrated commercial signal.'}</p>
+      <p>{summary.commercial_relevance_score === null ? 'Sales layer not connected; kommerzielle Tragfähigkeit noch offen.' : 'Sales-calibrated commercial signal.'}</p>
     </article>
     <article className="tri-layer-score-card tri-layer-score-card--safety">
       <div className="tri-layer-kicker">Budget Permission State</div>

@@ -161,6 +161,45 @@
   padding: 18px;
 }
 
+.tri-layer-reconcile {
+  border-color: var(--peix-line-strong);
+}
+
+.tri-layer-reconcile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tri-layer-reconcile-grid div {
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid var(--peix-line);
+  border-radius: 6px;
+  background: var(--peix-card-dim);
+}
+
+.tri-layer-reconcile-grid span {
+  color: var(--peix-ink-mute);
+  font-family: var(--peix-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.tri-layer-reconcile-grid b {
+  color: var(--peix-ink);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.tri-layer-reconcile-grid small {
+  color: var(--peix-ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .tri-layer-section-head {
   display: flex;
   justify-content: space-between;
@@ -475,6 +514,7 @@
   .tri-layer-score-grid,
   .tri-layer-source-strip,
   .tri-layer-gate-grid,
+  .tri-layer-reconcile-grid,
   .tri-layer-backtest-controls,
   .tri-layer-gate-counts,
   .tri-layer-validation-grid,

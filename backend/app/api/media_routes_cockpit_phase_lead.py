@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.media_routes_cockpit_snapshot import require_cockpit_auth
 from app.db.session import get_db
+from app.services.research.phase_lead.artifacts import load_cached_phase_lead_map_snapshot
 from app.services.research.phase_lead.live_data import build_live_phase_lead_snapshot
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,15 @@ async def get_cockpit_phase_lead_snapshot(
             detail=f"virus_typ must be one of {sorted(_SUPPORTED_VIRUSES)}",
         )
     try:
+        cached = load_cached_phase_lead_map_snapshot(
+            virus_typ=virus_typ,
+            issue_date=issue_date,
+            window_days=int(window_days),
+            region_codes=_parse_region_codes(regions),
+            n_samples=int(n_samples),
+        )
+        if cached is not None:
+            return cached
         return build_live_phase_lead_snapshot(
             db,
             virus_typ=virus_typ,

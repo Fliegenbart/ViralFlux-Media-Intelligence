@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Regional Media Watch · Designvarianten</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap");
+
+      :root {
+        --ink: #07111f;
+        --muted: #536273;
+        --soft: #8b99a8;
+        --line: rgba(65, 112, 154, 0.2);
+        --coral: #ff604d;
+        --cyan: #4db8ff;
+        --green: #16a673;
+        --paper: #f7fbff;
+        font-family: "Instrument Sans", system-ui, sans-serif;
+        color: var(--ink);
+        background: #ffffff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 80% 0%, rgba(77, 184, 255, 0.18), transparent 32%),
+          linear-gradient(180deg, #ffffff, #f4faff 42%, #ffffff);
+      }
+
+      .page {
+        max-width: 1520px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      .intro {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: end;
+        margin: 0 0 24px;
+        padding: 0 4px 18px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .intro h1 {
+        max-width: 760px;
+        margin: 0;
+        font-size: clamp(32px, 5vw, 72px);
+        line-height: 0.95;
+        letter-spacing: 0;
+      }
+
+      .intro p,
+      .variant-note {
+        max-width: 520px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      .kicker,
+      .meta,
+      .metric span,
+      .metric small,
+      .chip,
+      .table th {
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .kicker {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--soft);
+        margin-bottom: 16px;
+      }
+
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--coral);
+        box-shadow: 0 0 0 6px rgba(255, 96, 77, 0.12);
+      }
+
+      .variant {
+        position: relative;
+        min-height: 820px;
+        overflow: hidden;
+        margin: 26px 0 42px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 24px 80px rgba(18, 69, 113, 0.12);
+      }
+
+      .variant-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        align-items: center;
+        padding: 18px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .variant-head b {
+        font-size: 18px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.62);
+        color: var(--muted);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(420px, 0.86fr);
+        gap: 48px;
+        align-items: center;
+        min-height: 520px;
+        padding: 44px 44px 30px;
+      }
+
+      .hero h2 {
+        max-width: 720px;
+        margin: 0 0 18px;
+        font-size: clamp(54px, 7vw, 112px);
+        line-height: 0.91;
+        letter-spacing: 0;
+      }
+
+      .hero p {
+        max-width: 620px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.6;
+      }
+
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 14px;
+        min-height: 58px;
+        margin-top: 28px;
+        padding: 0 24px;
+        border: 0;
+        color: #fff;
+        background: linear-gradient(135deg, #ff735f, #ff4b41);
+        clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+        font-weight: 800;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 0 44px 42px;
+      }
+
+      .metric {
+        min-height: 128px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(16px);
+      }
+
+      .metric strong {
+        display: block;
+        margin: 12px 0 8px;
+        color: var(--ink);
+        font-size: 38px;
+        line-height: 1;
+      }
+
+      .metric:first-child strong,
+      .metric:nth-child(2) strong {
+        color: var(--coral);
+      }
+
+      .radar {
+        position: relative;
+        min-height: 430px;
+      }
+
+      .ring {
+        position: absolute;
+        inset: 6%;
+        border: 1px solid rgba(64, 136, 192, 0.22);
+        border-radius: 50%;
+      }
+
+      .ring:nth-child(2) {
+        inset: 20%;
+      }
+
+      .ring:nth-child(3) {
+        inset: 35%;
+        border-style: dashed;
+      }
+
+      .shape {
+        position: absolute;
+        inset: 24% 18%;
+        clip-path: polygon(42% 0, 62% 6%, 70% 20%, 86% 24%, 96% 42%, 88% 62%, 72% 67%, 68% 88%, 48% 95%, 34% 80%, 16% 85%, 6% 68%, 15% 52%, 3% 36%, 17% 20%);
+        background:
+          radial-gradient(circle at 50% 50%, rgba(255, 96, 77, 0.42), transparent 20%),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(210, 237, 252, 0.48));
+        border: 1px solid rgba(46, 94, 132, 0.24);
+        filter: drop-shadow(0 26px 34px rgba(26, 83, 126, 0.13));
+      }
+
+      .core {
+        position: absolute;
+        top: 43%;
+        left: 44%;
+        display: grid;
+        width: 86px;
+        height: 86px;
+        place-items: center;
+        border-radius: 50%;
+        background: radial-gradient(circle, #ff7968, rgba(255, 96, 77, 0.42));
+        color: #fff;
+        font-family: "Space Mono", monospace;
+        font-size: 22px;
+        font-weight: 700;
+        box-shadow: 0 0 0 14px rgba(255, 96, 77, 0.1), 0 0 42px rgba(255, 96, 77, 0.5);
+      }
+
+      .floating {
+        position: absolute;
+        right: 0;
+        width: 170px;
+        padding: 16px;
+        border: 1px solid rgba(48, 95, 137, 0.32);
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(18px);
+        clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+      }
+
+      .floating.one {
+        top: 30px;
+      }
+
+      .floating.two {
+        top: 180px;
+      }
+
+      .floating.three {
+        bottom: 30px;
+      }
+
+      .floating strong {
+        display: block;
+        margin: 7px 0;
+        color: var(--coral);
+        font-size: 36px;
+        line-height: 1;
+      }
+
+      .variant-a {
+        background:
+          radial-gradient(circle at 76% 24%, rgba(77, 184, 255, 0.24), transparent 34%),
+          radial-gradient(circle at 8% 30%, rgba(255, 96, 77, 0.1), transparent 28%),
+          linear-gradient(135deg, #ffffff, #eff9ff);
+      }
+
+      .variant-a::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(67, 130, 180, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(67, 130, 180, 0.08) 1px, transparent 1px);
+        background-size: 42px 42px;
+      }
+
+      .variant-b {
+        background:
+          linear-gradient(90deg, rgba(7, 17, 31, 0.025) 1px, transparent 1px),
+          linear-gradient(rgba(7, 17, 31, 0.025) 1px, transparent 1px),
+          #fbfdff;
+        background-size: 26px 26px;
+      }
+
+      .variant-b .hero {
+        grid-template-columns: 0.72fr 1fr;
+        align-items: stretch;
+      }
+
+      .variant-b h2 {
+        font-size: clamp(48px, 5vw, 86px);
+      }
+
+      .instrument {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-content: center;
+      }
+
+      .instrument-card {
+        min-height: 158px;
+        padding: 16px;
+        border: 1px solid rgba(7, 17, 31, 0.16);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .instrument-card.wide {
+        grid-column: 1 / -1;
+        min-height: 190px;
+      }
+
+      .bars {
+        display: flex;
+        align-items: end;
+        gap: 8px;
+        height: 92px;
+        margin-top: 18px;
+      }
+
+      .bars span {
+        flex: 1;
+        background: linear-gradient(180deg, var(--coral), rgba(255, 96, 77, 0.14));
+      }
+
+      .bars span:nth-child(1) { height: 24%; }
+      .bars span:nth-child(2) { height: 42%; }
+      .bars span:nth-child(3) { height: 36%; }
+      .bars span:nth-child(4) { height: 62%; }
+      .bars span:nth-child(5) { height: 78%; }
+      .bars span:nth-child(6) { height: 94%; }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 18px;
+      }
+
+      .table th,
+      .table td {
+        padding: 11px 8px;
+        border-bottom: 1px solid rgba(7, 17, 31, 0.12);
+        text-align: left;
+      }
+
+      .table td {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .table td:first-child {
+        color: var(--ink);
+        font-weight: 800;
+      }
+
+      .variant-c {
+        background:
+          radial-gradient(circle at 58% 42%, rgba(255, 96, 77, 0.2), transparent 24%),
+          linear-gradient(135deg, #fff, #fff8f5 45%, #edf9ff);
+      }
+
+      .variant-c .hero {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 560px;
+      }
+
+      .poster {
+        display: grid;
+        grid-template-columns: minmax(0, 0.72fr) minmax(320px, 0.28fr);
+        gap: 36px;
+        align-items: end;
+      }
+
+      .poster h2 {
+        max-width: 980px;
+        font-size: clamp(62px, 10vw, 142px);
+      }
+
+      .poster-panel {
+        padding: 18px;
+        border: 1px solid rgba(255, 96, 77, 0.28);
+        background: rgba(255, 255, 255, 0.7);
+        box-shadow: 0 20px 60px rgba(255, 96, 77, 0.12);
+      }
+
+      .poster-panel strong {
+        display: block;
+        color: var(--coral);
+        font-size: 58px;
+        line-height: 1;
+      }
+
+      .poster-strip {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr 1fr;
+        gap: 1px;
+        padding: 0 44px 44px;
+        background: rgba(65, 112, 154, 0.13);
+      }
+
+      .poster-strip div {
+        min-height: 132px;
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      @media (max-width: 900px) {
+        .page {
+          padding: 16px;
+        }
+
+        .intro,
+        .variant-head,
+        .hero,
+        .poster {
+          display: block;
+        }
+
+        .hero {
+          padding: 28px 18px;
+        }
+
+        .hero h2,
+        .poster h2 {
+          font-size: 48px;
+        }
+
+        .radar {
+          min-height: 360px;
+          margin-top: 28px;
+        }
+
+        .floating {
+          position: relative;
+          width: auto;
+          margin-top: 8px;
+        }
+
+        .metrics,
+        .poster-strip,
+        .instrument {
+          grid-template-columns: 1fr;
+          padding: 0 18px 28px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="intro">
+        <div>
+          <div class="kicker"><span class="dot"></span>Lokale Designvorschläge</div>
+          <h1>Regional Media Watch Varianten</h1>
+        </div>
+        <p>
+          Drei helle, futuristische Richtungen für dieselbe Produktlogik. Alle Texte
+          sind bewusst mit echten Umlauten gesetzt.
+        </p>
+      </section>
+
+      <section class="variant variant-a">
+        <div class="variant-head">
+          <b>Variante A · Orbital Glass</b>
+          <span class="chip">Luftig · futuristisch · nah am aktuellen Entwurf</span>
+        </div>
+        <div class="hero">
+          <div>
+            <div class="kicker"><span class="dot"></span>Live-Produktsignal</div>
+            <h2>Regional Media Watch</h2>
+            <p>
+              Frühwarnung für regionale Media-Vorbereitung. Hessen wird als
+              nächster operativer Fokus sichtbar, ohne Budget automatisch freizugeben.
+            </p>
+            <div class="cta">→ Hessen vorbereiten</div>
+          </div>
+          <div class="radar" aria-hidden="true">
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="ring"></div>
+            <div class="shape"></div>
+            <div class="core">HE</div>
+            <div class="floating one"><span class="meta">p(up)</span><strong>82%</strong><small class="meta">Trend +0.18</small></div>
+            <div class="floating two"><span class="meta">Surge</span><strong>48%</strong><small class="meta">Hessen</small></div>
+            <div class="floating three"><span class="meta">MAP</span><strong style="font-size:18px">Konvergiert</strong><small class="meta">Vertrauen hoch</small></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span>p(up) 7 Tage</span><strong>82%</strong><small>Hessen</small></div>
+          <div class="metric"><span>Surge-Risiko</span><strong>48%</strong><small>Schwelle für Vorbereitung</small></div>
+          <div class="metric"><span>Datenstand</span><strong>4</strong><small>Quellen verbunden</small></div>
+          <div class="metric"><span>Budget-Gate</span><strong>zu</strong><small>GELO-Sales fehlen</small></div>
+        </div>
+      </section>
+
+      <section class="variant variant-b">
+        <div class="variant-head">
+          <b>Variante B · Clinical Command</b>
+          <span class="chip">Dichter · operativer · wie ein medizinisches Kontrollzentrum</span>
+        </div>
+        <div class="hero">
+          <div>
+            <div class="kicker"><span class="dot"></span>Regionale Priorisierung</div>
+            <h2>Hessen zuerst vorbereiten</h2>
+            <p>
+              Diese Richtung ist weniger heroisch und mehr Arbeitsoberfläche:
+              schnelle Lesbarkeit, klare Kennzahlen, direkte Entscheidung.
+            </p>
+            <div class="cta">→ Aktivierungspaket prüfen</div>
+          </div>
+          <div class="instrument">
+            <div class="instrument-card">
+              <span class="meta">p(up)</span>
+              <div class="bars"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            </div>
+            <div class="instrument-card">
+              <span class="meta">MAP-Status</span>
+              <h3>Konvergiert</h3>
+              <p class="variant-note">833 Beobachtungen · 0 Warnungen</p>
+            </div>
+            <div class="instrument-card wide">
+              <span class="meta">Regionen</span>
+              <table class="table">
+                <thead><tr><th>Region</th><th>Empfehlung</th><th>Surge</th><th>GEGB</th></tr></thead>
+                <tbody>
+                  <tr><td>HE · Hessen</td><td>Vorbereiten</td><td>48%</td><td>44.2</td></tr>
+                  <tr><td>NI · Niedersachsen</td><td>Beobachten</td><td>18%</td><td>31.1</td></tr>
+                  <tr><td>BY · Bayern</td><td>Halten</td><td>8%</td><td>19.4</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="variant variant-c">
+        <div class="variant-head">
+          <b>Variante C · Signal Poster</b>
+          <span class="chip">Mutig · editorial · bewusst anders als FluxEngine</span>
+        </div>
+        <div class="hero poster">
+          <div>
+            <div class="kicker"><span class="dot"></span>Media-Fokus der Woche</div>
+            <h2>Hessen steigt zuerst.</h2>
+            <p>
+              Starke, plakative Produktlogik: zuerst Entscheidung, dann Erklärung.
+              Gut, wenn das Tool wie ein Executive-Signal wirken soll.
+            </p>
+            <div class="cta">→ Hessen vorbereiten</div>
+          </div>
+          <div class="poster-panel">
+            <span class="meta">7 Tage</span>
+            <strong>82%</strong>
+            <p class="variant-note">Wahrscheinlichkeit für steigende regionale Aktivität.</p>
+          </div>
+        </div>
+        <div class="poster-strip">
+          <div><span class="meta">Budget</span><h3>Shadow-only</h3><p class="variant-note">Keine automatische Umschichtung ohne GELO-Sales.</p></div>
+          <div><span class="meta">Modell</span><h3>MAP konvergiert</h3><p class="variant-note">Gespeicherter Nachtlauf.</p></div>
+          <div><span class="meta">Quellen</span><h3>AMELAG · SurvStat · ARE</h3><p class="variant-note">Reale Datenbasis, kein Demo-Modus.</p></div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

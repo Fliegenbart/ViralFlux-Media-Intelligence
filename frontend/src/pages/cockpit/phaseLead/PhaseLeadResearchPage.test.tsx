@@ -198,6 +198,22 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getByLabelText(/Signalverlauf und Prognose/i)).toBeInTheDocument();
   });
 
+  it('adds dated anchors to the historical and forecast curve', () => {
+    mockedUsePhaseLeadSnapshot.mockReturnValue({
+      snapshot: productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText(/28\.4\.2026/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/5\.5\.2026/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/19\.5\.2026/i)).toBeInTheDocument();
+    expect(screen.getByText(/Datenstand 27\.4\.2026/i)).toBeInTheDocument();
+  });
+
   it('shows source freshness as reporting lag instead of a plain latest date', () => {
     mockedUsePhaseLeadSnapshot.mockReturnValue({
       snapshot: productSnapshot,

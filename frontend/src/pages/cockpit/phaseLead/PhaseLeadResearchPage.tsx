@@ -31,6 +31,26 @@ function formatDate(value: string | null | undefined): string {
   return date.toLocaleDateString('de-DE');
 }
 
+function parseDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatDateObject(date: Date | null): string {
+  return date ? date.toLocaleDateString('de-DE') : '-';
+}
+
 function formatPercent(value: number | null | undefined): string {
   if (value === null || value === undefined || Number.isNaN(value)) return '-';
   return `${Math.round(value * 100)}%`;
@@ -210,6 +230,23 @@ function buildSignalCurve(region: PhaseLeadRegion | undefined): {
   };
 }
 
+function buildCurveTimeline(snapshot: PhaseLeadSnapshot): {
+  historyStartLabel: string;
+  todayLabel: string;
+  forecastEndLabel: string;
+  dataCutoffLabel: string;
+} {
+  const asOfDate = parseDateOnly(snapshot.as_of);
+  const horizonDays = snapshot.horizons.length > 0 ? Math.max(...snapshot.horizons) : 14;
+
+  return {
+    historyStartLabel: formatDateObject(asOfDate ? addDays(asOfDate, -7) : null),
+    todayLabel: formatDateObject(asOfDate),
+    forecastEndLabel: formatDateObject(asOfDate ? addDays(asOfDate, horizonDays) : null),
+    dataCutoffLabel: formatDate(latestSourceDate(snapshot)),
+  };
+}
+
 export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ audience = 'product' }) => {
   const [selectedVirus, setSelectedVirus] = useState<(typeof availableViruses)[number]>('Gesamt');
   const { snapshot, loading, error, reload } = usePhaseLeadSnapshot({
@@ -272,6 +309,7 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
   const topDriverLabel = topRegion ? aggregateDrivers(snapshot, topRegion.region_code) : '-';
   const heroScoreLabel = isAggregate ? 'Gesamt-Score' : 'GEGB';
   const signalCurve = buildSignalCurve(topRegion);
+  const signalTimeline = buildCurveTimeline(snapshot);
 
   return (
     <div className="peix phase-lead-page">
@@ -560,6 +598,20 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
               <div className="phase-lead-curve-label phase-lead-curve-label--history">Bisher</div>
               <div className="phase-lead-curve-label phase-lead-curve-label--today">Heute</div>
               <div className="phase-lead-curve-label phase-lead-curve-label--forecast">Prognose</div>
+              <div className="phase-lead-curve-date-row" aria-label="Datumsachse Signalverlauf">
+                <div>
+                  <span>Verlauf ab</span>
+                  <strong>{signalTimeline.historyStartLabel}</strong>
+                </div>
+                <div>
+                  <span>Berechnet</span>
+                  <strong>{signalTimeline.todayLabel}</strong>
+                </div>
+                <div>
+                  <span>Prognose bis</span>
+                  <strong>{signalTimeline.forecastEndLabel}</strong>
+                </div>
+              </div>
             </div>
             <div className="phase-lead-curve-copy">
               <div>
@@ -573,6 +625,10 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
               <div>
                 <span>Prognose-Ende</span>
                 <strong>{signalCurve.forecastLabel}</strong>
+              </div>
+              <div>
+                <span>Wahrheit</span>
+                <strong>Datenstand {signalTimeline.dataCutoffLabel}</strong>
               </div>
             </div>
           </div>

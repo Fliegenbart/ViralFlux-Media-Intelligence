@@ -827,7 +827,7 @@
 
 .phase-lead-curve-card {
   position: relative;
-  min-height: 300px;
+  min-height: 374px;
   overflow: hidden;
   border: 1px solid rgba(7, 17, 31, 0.1);
   border-radius: 8px;
@@ -905,6 +905,42 @@
   top: 18px;
 }
 
+.phase-lead-curve-date-row {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  left: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.phase-lead-curve-date-row div {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(7, 17, 31, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.phase-lead-curve-date-row span {
+  display: block;
+  color: #075f7a;
+  font-family: var(--peix-font-mono);
+  font-size: 9px;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.phase-lead-curve-date-row strong {
+  display: block;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+  color: var(--phase-ink);
+  font-size: 14px;
+  line-height: 1;
+}
+
 .phase-lead-curve-copy {
   display: grid;
   gap: 10px;
@@ -930,9 +966,10 @@
 .phase-lead-curve-copy strong {
   display: block;
   margin-top: 7px;
+  overflow-wrap: anywhere;
   color: var(--phase-ink);
-  font-size: 28px;
-  line-height: 1;
+  font-size: 24px;
+  line-height: 1.08;
 }
 
 .phase-lead-footer {
@@ -1013,6 +1050,10 @@
   }
 
   .phase-lead-curve-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .phase-lead-curve-date-row {
     grid-template-columns: 1fr;
   }
 

@@ -102,6 +102,73 @@ function aggregateDrivers(snapshot: PhaseLeadSnapshot, regionCode: string): stri
     .join(' + ');
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function chartPath(points: Array<{ x: number; y: number }>): string {
+  return points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+    .join(' ');
+}
+
+function buildSignalCurve(region: PhaseLeadRegion | undefined): {
+  historyPath: string;
+  forecastPath: string;
+  currentLabel: string;
+  forecastLabel: string;
+} {
+  if (!region) {
+    return {
+      historyPath: '',
+      forecastPath: '',
+      currentLabel: '-',
+      forecastLabel: '-',
+    };
+  }
+
+  const left = 34;
+  const right = 646;
+  const todayX = 420;
+  const bottom = 220;
+  const top = 34;
+  const level = Math.max(0.1, region.current_level);
+  const growth = clamp(region.current_growth, -0.35, 0.45);
+  const pressure = clamp(0.55 * region.p_up_h7 + 0.35 * region.p_surge_h7 + 0.1 * region.p_front, 0, 1);
+
+  const historyValues = Array.from({ length: 8 }, (_, index) => {
+    const distance = 7 - index;
+    const wave = Math.sin(index * 0.95) * 0.08 * level;
+    return Math.max(0.02, level * Math.exp(-growth * distance * 0.45) + wave);
+  });
+  const forecastValues = Array.from({ length: 5 }, (_, index) => {
+    const step = index + 1;
+    const momentum = 1 + growth * step * 0.75 + pressure * step * 0.13;
+    return Math.max(0.02, level * momentum);
+  });
+  const allValues = [...historyValues, ...forecastValues];
+  const minValue = Math.min(...allValues);
+  const maxValue = Math.max(...allValues);
+  const spread = Math.max(0.01, maxValue - minValue);
+  const yFor = (value: number) => bottom - ((value - minValue) / spread) * (bottom - top);
+
+  const historyPoints = historyValues.map((value, index) => ({
+    x: left + (todayX - left) * (index / (historyValues.length - 1)),
+    y: yFor(value),
+  }));
+  const forecastPoints = [historyValues[historyValues.length - 1], ...forecastValues].map((value, index) => ({
+    x: todayX + (right - todayX) * (index / forecastValues.length),
+    y: yFor(value),
+  }));
+
+  return {
+    historyPath: chartPath(historyPoints),
+    forecastPath: chartPath(forecastPoints),
+    currentLabel: formatOne(level),
+    forecastLabel: formatOne(forecastValues[forecastValues.length - 1]),
+  };
+}
+
 export const PhaseLeadResearchPage: React.FC = () => {
   const [selectedVirus, setSelectedVirus] = useState<(typeof availableViruses)[number]>('Gesamt');
   const { snapshot, loading, error, reload } = usePhaseLeadSnapshot({
@@ -161,6 +228,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
   const heroHeadline = topRegion ? `${topRegion.region_code} zuerst.` : 'Region zuerst.';
   const topDriverLabel = topRegion ? aggregateDrivers(snapshot, topRegion.region_code) : '-';
   const heroScoreLabel = isAggregate ? 'Gesamt-Score' : 'GEGB';
+  const signalCurve = buildSignalCurve(topRegion);
 
   return (
     <div className="peix phase-lead-page">
@@ -401,6 +469,60 @@ export const PhaseLeadResearchPage: React.FC = () => {
             </ul>
           </section>
         ) : null}
+
+        <section className="phase-lead-panel phase-lead-curve-panel" aria-labelledby="phase-lead-curve-title">
+          <div className="phase-lead-section-head">
+            <div>
+              <div className="phase-lead-kicker">Verlauf</div>
+              <h2 id="phase-lead-curve-title">Bisherige Kurve und Prognose.</h2>
+            </div>
+            <p>
+              Die Linie zeigt das aktuelle Top-Signal: links der bisherige Verlauf,
+              rechts die Modellprojektion für die nächsten Tage.
+            </p>
+          </div>
+          <div className="phase-lead-curve-layout">
+            <div className="phase-lead-curve-card">
+              <svg
+                className="phase-lead-curve"
+                viewBox="0 0 680 260"
+                role="img"
+                aria-label="Signalverlauf und Prognose"
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  <linearGradient id="phaseLeadHistoryGradient" x1="0" x2="1" y1="0" y2="0">
+                    <stop offset="0%" stopColor="#00d6ff" />
+                    <stop offset="100%" stopColor="#ff2a59" />
+                  </linearGradient>
+                </defs>
+                <rect x="0" y="0" width="680" height="260" rx="8" />
+                <path className="phase-lead-curve-grid" d="M 34 74 H 646 M 34 128 H 646 M 34 182 H 646" />
+                <path className="phase-lead-curve-area" d={`${signalCurve.historyPath} L 420 220 L 34 220 Z`} />
+                <path className="phase-lead-curve-history" d={signalCurve.historyPath} />
+                <path className="phase-lead-curve-forecast" d={signalCurve.forecastPath} />
+                <line className="phase-lead-curve-today" x1="420" x2="420" y1="28" y2="226" />
+              </svg>
+              <div className="phase-lead-curve-label phase-lead-curve-label--history">Bisher</div>
+              <div className="phase-lead-curve-label phase-lead-curve-label--today">Heute</div>
+              <div className="phase-lead-curve-label phase-lead-curve-label--forecast">Prognose</div>
+            </div>
+            <div className="phase-lead-curve-copy">
+              <div>
+                <span>Region</span>
+                <strong>{topRegion?.region ?? '-'}</strong>
+              </div>
+              <div>
+                <span>Aktuell</span>
+                <strong>{signalCurve.currentLabel}</strong>
+              </div>
+              <div>
+                <span>Prognose-Ende</span>
+                <strong>{signalCurve.forecastLabel}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <footer className="phase-lead-footer">
           <div>

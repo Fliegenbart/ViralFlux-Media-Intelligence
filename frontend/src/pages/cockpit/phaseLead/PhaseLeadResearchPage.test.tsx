@@ -180,4 +180,21 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getByRole('columnheader', { name: /Haupttreiber/i })).toBeInTheDocument();
     expect(screen.getAllByText(/SARS-CoV-2 \+ Influenza B/i).length).toBeGreaterThan(0);
   });
+
+  it('shows a bottom chart for historical signal and forecast', () => {
+    mockedUsePhaseLeadSnapshot.mockReturnValue({
+      snapshot: productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByRole('heading', { name: /Bisherige Kurve und Prognose/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Bisher/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Prognose/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Heute/i).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText(/Signalverlauf und Prognose/i)).toBeInTheDocument();
+  });
 });

@@ -811,6 +811,130 @@
   font-size: 12px;
 }
 
+.phase-lead-curve-panel {
+  border-color: rgba(0, 184, 255, 0.22);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(237, 251, 255, 0.74)),
+    radial-gradient(circle at 84% 12%, rgba(0, 214, 255, 0.18), transparent 34%);
+}
+
+.phase-lead-curve-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.phase-lead-curve-card {
+  position: relative;
+  min-height: 300px;
+  overflow: hidden;
+  border: 1px solid rgba(7, 17, 31, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.phase-lead-curve {
+  display: block;
+  width: 100%;
+  height: 300px;
+}
+
+.phase-lead-curve rect {
+  fill: transparent;
+}
+
+.phase-lead-curve-grid {
+  fill: none;
+  stroke: rgba(7, 17, 31, 0.08);
+  stroke-width: 1;
+}
+
+.phase-lead-curve-area {
+  fill: rgba(255, 42, 89, 0.08);
+}
+
+.phase-lead-curve-history,
+.phase-lead-curve-forecast {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 7;
+}
+
+.phase-lead-curve-history {
+  stroke: url("#phaseLeadHistoryGradient");
+}
+
+.phase-lead-curve-forecast {
+  stroke: #ff7a00;
+  stroke-dasharray: 13 13;
+}
+
+.phase-lead-curve-today {
+  stroke: rgba(7, 17, 31, 0.32);
+  stroke-dasharray: 5 7;
+  stroke-width: 1.5;
+}
+
+.phase-lead-curve-label {
+  position: absolute;
+  padding: 6px 9px;
+  border: 1px solid rgba(7, 17, 31, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--phase-ink);
+  font-family: var(--peix-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.phase-lead-curve-label--history {
+  left: 18px;
+  top: 18px;
+}
+
+.phase-lead-curve-label--today {
+  left: 60%;
+  top: 18px;
+  transform: translateX(-50%);
+}
+
+.phase-lead-curve-label--forecast {
+  right: 18px;
+  top: 18px;
+}
+
+.phase-lead-curve-copy {
+  display: grid;
+  gap: 10px;
+}
+
+.phase-lead-curve-copy div {
+  display: grid;
+  align-content: center;
+  min-height: 86px;
+  padding: 16px;
+  border: 1px solid rgba(7, 17, 31, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.phase-lead-curve-copy span {
+  color: #075f7a;
+  font-family: var(--peix-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.phase-lead-curve-copy strong {
+  display: block;
+  margin-top: 7px;
+  color: var(--phase-ink);
+  font-size: 28px;
+  line-height: 1;
+}
+
 .phase-lead-footer {
   display: flex;
   justify-content: space-between;
@@ -886,6 +1010,10 @@
   .phase-lead-section-head,
   .phase-lead-footer {
     display: block;
+  }
+
+  .phase-lead-curve-layout {
+    grid-template-columns: 1fr;
   }
 
   .phase-lead-section-head p,

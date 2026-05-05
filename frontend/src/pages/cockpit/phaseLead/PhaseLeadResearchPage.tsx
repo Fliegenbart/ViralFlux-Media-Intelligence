@@ -79,13 +79,29 @@ function confidenceLabel(snapshot: PhaseLeadSnapshot): string {
   return 'vorläufig';
 }
 
-function sourceFreshness(snapshot: PhaseLeadSnapshot): string {
+function latestSourceDate(snapshot: PhaseLeadSnapshot): string | null {
   const latestDates = Object.values(snapshot.sources)
     .map((source) => source.latest_event_date)
     .filter(Boolean)
     .sort();
-  const latest = latestDates[latestDates.length - 1];
-  return latest ? formatDate(latest) : '-';
+  return latestDates[latestDates.length - 1] ?? null;
+}
+
+function reportingLagDays(snapshot: PhaseLeadSnapshot): number | null {
+  const latest = latestSourceDate(snapshot);
+  if (!latest || !snapshot.as_of) return null;
+  const latestDate = new Date(latest);
+  const asOfDate = new Date(snapshot.as_of);
+  if (Number.isNaN(latestDate.getTime()) || Number.isNaN(asOfDate.getTime())) return null;
+  return Math.max(0, Math.round((asOfDate.getTime() - latestDate.getTime()) / 86_400_000));
+}
+
+function sourceFreshnessLabel(snapshot: PhaseLeadSnapshot): string {
+  const latest = latestSourceDate(snapshot);
+  const lagDays = reportingLagDays(snapshot);
+  if (!latest) return 'Neueste Meldung: -';
+  const lagLabel = lagDays === null ? '' : ` · ${lagDays} Tage Meldeverzug`;
+  return `Neueste Meldung: ${formatDate(latest)}${lagLabel}`;
 }
 
 function topRegionHeadline(topRegion: PhaseLeadRegion | undefined): string {
@@ -222,6 +238,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
   const topRegion = snapshot.regions[0];
   const primaryAction = actionForRegion(topRegion);
   const connectedSources = Object.keys(snapshot.sources).length;
+  const sourceFreshness = sourceFreshnessLabel(snapshot);
   const modelConfidence = confidenceLabel(snapshot);
   const isMapOptimized = snapshot.summary.fit_mode === 'map_optimization';
   const isAggregate = snapshot.virus_typ === 'Gesamt' || Boolean(snapshot.aggregate);
@@ -338,8 +355,8 @@ export const PhaseLeadResearchPage: React.FC = () => {
           </div>
           <div className="phase-lead-live-metric">
             <span>Datenstand</span>
-            <strong>{connectedSources}</strong>
-            <small>Quellen bis {sourceFreshness(snapshot)}</small>
+            <strong>{connectedSources} Quellen</strong>
+            <small>{sourceFreshness}</small>
           </div>
         </section>
 

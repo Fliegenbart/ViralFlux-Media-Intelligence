@@ -197,4 +197,19 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getAllByText(/Heute/i).length).toBeGreaterThan(0);
     expect(screen.getByLabelText(/Signalverlauf und Prognose/i)).toBeInTheDocument();
   });
+
+  it('shows source freshness as reporting lag instead of a plain latest date', () => {
+    mockedUsePhaseLeadSnapshot.mockReturnValue({
+      snapshot: productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    });
+
+    renderPage();
+
+    expect(screen.getByText(/4 Quellen/i)).toBeInTheDocument();
+    expect(screen.getByText(/Neueste Meldung: 27\.4\.2026 · 8 Tage Meldeverzug/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Quellen bis 27\.4\.2026/i)).not.toBeInTheDocument();
+  });
 });

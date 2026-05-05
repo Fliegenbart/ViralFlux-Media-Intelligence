@@ -4,6 +4,7 @@ import useSWR from 'swr';
 import type { PhaseLeadSnapshot } from './types';
 
 const PHASE_LEAD_SNAPSHOT_URL = '/api/v1/media/cockpit/phase-lead/snapshot';
+const PHASE_LEAD_AGGREGATE_URL = '/api/v1/media/cockpit/phase-lead/aggregate';
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000;
 
 export interface UsePhaseLeadSnapshotOptions {
@@ -48,6 +49,12 @@ export function usePhaseLeadSnapshot(
 
   const queryUrl = useMemo(() => {
     const params = new URLSearchParams();
+    if (virusTyp === 'Gesamt') {
+      params.set('window_days', String(windowDays));
+      params.set('n_samples', String(nSamples));
+      if (regions?.length) params.set('regions', regions.join(','));
+      return `${PHASE_LEAD_AGGREGATE_URL}?${params.toString()}`;
+    }
     params.set('virus_typ', virusTyp);
     params.set('window_days', String(windowDays));
     params.set('n_samples', String(nSamples));

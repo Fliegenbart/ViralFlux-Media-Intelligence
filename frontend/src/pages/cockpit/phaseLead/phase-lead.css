@@ -100,7 +100,7 @@
 .phase-lead-virus-switcher {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--phase-line);
@@ -639,6 +639,17 @@
   color: var(--phase-muted);
 }
 
+.phase-lead-driver {
+  display: inline-flex;
+  max-width: 220px;
+  color: var(--phase-ink);
+  font-family: var(--peix-font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  text-transform: uppercase;
+  white-space: normal;
+}
+
 .phase-lead-source-list,
 .phase-lead-model-meta {
   display: grid;
@@ -655,7 +666,7 @@
 
 .phase-lead-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 860px;
   border-collapse: collapse;
   font-size: 13px;
 }

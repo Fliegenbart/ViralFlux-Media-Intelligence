@@ -69,6 +69,43 @@ const productSnapshot: PhaseLeadSnapshot = {
   warnings: [],
 };
 
+const aggregateSnapshot = {
+  ...productSnapshot,
+  version: 'plgrf_aggregate_v0',
+  virus_typ: 'Gesamt',
+  summary: {
+    ...productSnapshot.summary,
+    top_region: 'NI',
+  },
+  regions: [
+    {
+      ...productSnapshot.regions[1],
+      gegb: 78.4,
+    },
+    {
+      ...productSnapshot.regions[0],
+      gegb: 62.1,
+    },
+  ],
+  rankings: { Gesamt: [{ region_id: 'NI', gegb: 78.4 }] },
+  aggregate: {
+    kind: 'respiratory_pressure',
+    weighting: 'data_quality',
+    available_viruses: ['SARS-CoV-2', 'Influenza B'],
+    fallback_viruses: [],
+    virus_weights: [
+      { virus_typ: 'SARS-CoV-2', weight: 0.33, quality: 0.91 },
+      { virus_typ: 'Influenza B', weight: 0.27, quality: 0.74 },
+    ],
+    drivers_by_region: {
+      NI: [
+        { virus_typ: 'SARS-CoV-2', contribution: 30.2, signal: 91.5, weight: 0.33 },
+        { virus_typ: 'Influenza B', contribution: 24.4, signal: 90.4, weight: 0.27 },
+      ],
+    },
+  },
+} as PhaseLeadSnapshot;
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -93,7 +130,8 @@ describe('PhaseLeadResearchPage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: /Regional Media Watch/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Influenza A' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Gesamt' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Influenza A' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Influenza B' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'RSV A' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'SARS-CoV-2' })).toBeInTheDocument();
@@ -115,11 +153,30 @@ describe('PhaseLeadResearchPage', () => {
 
     renderPage();
 
-    expect(mockedUsePhaseLeadSnapshot).toHaveBeenLastCalledWith({ virusTyp: 'Influenza A' });
+    expect(mockedUsePhaseLeadSnapshot).toHaveBeenLastCalledWith({ virusTyp: 'Gesamt' });
 
     fireEvent.click(screen.getByRole('button', { name: 'RSV A' }));
 
     expect(screen.getByRole('button', { name: 'RSV A' })).toHaveAttribute('aria-pressed', 'true');
     expect(mockedUsePhaseLeadSnapshot).toHaveBeenLastCalledWith({ virusTyp: 'RSV A' });
+  });
+
+  it('shows aggregate score and regional drivers for the Gesamt tab', () => {
+    mockedUsePhaseLeadSnapshot.mockImplementation((options) => ({
+      snapshot: options?.virusTyp === 'Gesamt' ? aggregateSnapshot : productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    }));
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Gesamt' }));
+
+    expect(screen.getByRole('button', { name: 'Gesamt' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: /Niedersachsen zuerst vorbereiten/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Gesamt-Score/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Haupttreiber/i })).toBeInTheDocument();
+    expect(screen.getByText(/SARS-CoV-2 \+ Influenza B/i)).toBeInTheDocument();
   });
 });

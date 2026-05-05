@@ -36,9 +36,36 @@ export interface PhaseLeadRankingItem {
   gegb: number;
 }
 
+export interface PhaseLeadAggregateWeight {
+  virus_typ: string;
+  weight: number;
+  quality: number;
+  observation_score?: number;
+  coverage_score?: number;
+  freshness_score?: number;
+  model_score?: number;
+  warning_factor?: number;
+}
+
+export interface PhaseLeadAggregateDriver {
+  virus_typ: string;
+  weight: number;
+  signal: number;
+  contribution: number;
+}
+
+export interface PhaseLeadAggregateMeta {
+  kind: 'respiratory_pressure';
+  weighting: 'data_quality';
+  available_viruses: string[];
+  fallback_viruses: string[];
+  virus_weights: PhaseLeadAggregateWeight[];
+  drivers_by_region: Record<string, PhaseLeadAggregateDriver[]>;
+}
+
 export interface PhaseLeadSnapshot {
   module: 'phase_lead_graph_renewal_filter';
-  version: 'plgrf_live_v0';
+  version: 'plgrf_live_v0' | 'plgrf_aggregate_v0';
   mode: 'research';
   as_of: string;
   virus_typ: string;
@@ -48,4 +75,5 @@ export interface PhaseLeadSnapshot {
   regions: PhaseLeadRegion[];
   rankings: Record<string, PhaseLeadRankingItem[]>;
   warnings: string[];
+  aggregate?: PhaseLeadAggregateMeta;
 }

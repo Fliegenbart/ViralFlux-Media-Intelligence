@@ -16,7 +16,7 @@ const sourceLabels: Record<string, string> = {
   notaufnahme: 'Notaufnahme',
 };
 
-const availableViruses = ['Influenza A', 'Influenza B', 'RSV A', 'SARS-CoV-2'] as const;
+const availableViruses = ['Gesamt', 'Influenza A', 'Influenza B', 'RSV A', 'SARS-CoV-2'] as const;
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-';
@@ -93,8 +93,17 @@ function topRegionHeadline(topRegion: PhaseLeadRegion | undefined): string {
   return `${topRegion.region} zuerst vorbereiten`;
 }
 
+function aggregateDrivers(snapshot: PhaseLeadSnapshot, regionCode: string): string {
+  const drivers = snapshot.aggregate?.drivers_by_region[regionCode] ?? [];
+  if (!drivers.length) return '-';
+  return drivers
+    .slice(0, 2)
+    .map((driver) => driver.virus_typ)
+    .join(' + ');
+}
+
 export const PhaseLeadResearchPage: React.FC = () => {
-  const [selectedVirus, setSelectedVirus] = useState<(typeof availableViruses)[number]>('Influenza A');
+  const [selectedVirus, setSelectedVirus] = useState<(typeof availableViruses)[number]>('Gesamt');
   const { snapshot, loading, error, reload } = usePhaseLeadSnapshot({
     virusTyp: selectedVirus,
   });
@@ -148,6 +157,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
   const connectedSources = Object.keys(snapshot.sources).length;
   const modelConfidence = confidenceLabel(snapshot);
   const isMapOptimized = snapshot.summary.fit_mode === 'map_optimization';
+  const isAggregate = snapshot.virus_typ === 'Gesamt' || Boolean(snapshot.aggregate);
 
   return (
     <div className="peix phase-lead-page">
@@ -314,10 +324,11 @@ export const PhaseLeadResearchPage: React.FC = () => {
                 <tr>
                   <th>Region</th>
                   <th>Empfehlung</th>
+                  {isAggregate ? <th>Haupttreiber</th> : null}
                   <th>p(up) h7</th>
                   <th>Surge h7</th>
                   <th>Wachstum</th>
-                  <th>GEGB</th>
+                  <th>{isAggregate ? 'Gesamt-Score' : 'GEGB'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -331,6 +342,13 @@ export const PhaseLeadResearchPage: React.FC = () => {
                           {action.label}
                         </span>
                       </td>
+                      {isAggregate ? (
+                        <td>
+                          <span className="phase-lead-driver">
+                            {aggregateDrivers(snapshot, region.region_code)}
+                          </span>
+                        </td>
+                      ) : null}
                       <td>{formatPercent(region.p_up_h7)}</td>
                       <td>{formatPercent(region.p_surge_h7)}</td>
                       <td>{formatSigned(region.current_growth)}</td>

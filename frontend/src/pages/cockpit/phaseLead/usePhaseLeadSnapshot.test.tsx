@@ -71,10 +71,33 @@ function Harness() {
   );
 }
 
+function AggregateHarness() {
+  const { snapshot, error } = usePhaseLeadSnapshot({
+    virusTyp: 'Gesamt',
+    windowDays: 70,
+    nSamples: 80,
+  });
+
+  return (
+    <div>
+      <div data-testid="module">{snapshot?.module ?? '-'}</div>
+      <div data-testid="error">{error?.message ?? '-'}</div>
+    </div>
+  );
+}
+
 function renderHarness() {
   return render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
       <Harness />
+    </SWRConfig>,
+  );
+}
+
+function renderAggregateHarness() {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <AggregateHarness />
     </SWRConfig>,
   );
 }
@@ -118,5 +141,19 @@ describe('usePhaseLeadSnapshot', () => {
 
     await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('HTTP 401'));
     expect(screen.getByTestId('module')).toHaveTextContent('-');
+  });
+
+  it('fetches the aggregate endpoint for the Gesamt tab', async () => {
+    fetchMock.mockResolvedValueOnce(mockJsonResponse({ ...payload, virus_typ: 'Gesamt' }));
+
+    renderAggregateHarness();
+
+    await waitFor(() => expect(screen.getByTestId('module')).toHaveTextContent('phase_lead_graph_renewal_filter'));
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(
+      '/api/v1/media/cockpit/phase-lead/aggregate?window_days=70&n_samples=80',
+    );
+    expect(init?.credentials).toBe('include');
   });
 });

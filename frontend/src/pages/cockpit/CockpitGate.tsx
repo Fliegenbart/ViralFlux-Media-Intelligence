@@ -54,14 +54,9 @@ export const CockpitGate: React.FC<{ onUnlocked?: () => void }> = ({ onUnlocked 
   return (
     <div className="peix-gate">
       <div className="peix-gate__frame">
-        <div className="peix-gate__mark">◆</div>
-        <div className="peix-gate__kicker">peix · labpulse</div>
-        <h1 className="peix-gate__headline">
-          FluxEngine
-        </h1>
-        <p className="peix-gate__dek">
-          Frühwarnung für Atemwegsviren. Pilot mit GELO.
-        </p>
+        <span className="peix-gate__mark" aria-hidden="true" />
+        <h1 className="peix-gate__headline">Zugang</h1>
+        <p className="peix-gate__dek">Bitte Passwort eingeben.</p>
         <form onSubmit={handleSubmit} className="peix-gate__form" autoComplete="off">
           <label className="peix-gate__label" htmlFor="peix-gate-pw">
             Passwort
@@ -82,7 +77,7 @@ export const CockpitGate: React.FC<{ onUnlocked?: () => void }> = ({ onUnlocked 
             disabled={submitting}
           />
           <button type="submit" className="peix-gate__submit" disabled={submitting || !password.trim()}>
-            {submitting ? 'Wird geprüft…' : 'Cockpit öffnen'}
+            {submitting ? 'Prüft…' : 'Öffnen'}
           </button>
           {error && (
             <div id="peix-gate-error" className="peix-gate__error" role="alert">
@@ -90,9 +85,6 @@ export const CockpitGate: React.FC<{ onUnlocked?: () => void }> = ({ onUnlocked 
             </div>
           )}
         </form>
-        <div className="peix-gate__footer">
-          Bei Fragen: <span className="peix-gate__mono">mail@davidwegener.de</span>
-        </div>
       </div>
     </div>
   );

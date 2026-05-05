@@ -1,24 +1,46 @@
 /**
- * Cockpit-Gate — minimale Password-Seite vor der eigentlichen Oberfläche.
- *
- * Design echoes the Atlas stage: near-black warm ground, single terracotta
- * accent, serif display for the headline, mono for kicker and helper text.
- * Centred vertically and horizontally so it reads as an arrival screen, not
- * a form.
+ * Password gate, visually aligned with the bright Phase-Lead surface.
  */
 
 .peix-gate {
+  --gate-paper: #f7fbff;
+  --gate-ice: #eaf7ff;
+  --gate-ink: #07111f;
+  --gate-muted: #526173;
+  --gate-soft: #7e8d9d;
+  --gate-line: rgba(77, 121, 159, 0.2);
+  --gate-line-strong: rgba(48, 95, 137, 0.34);
+  --gate-coral: #ff2a59;
+  --gate-cyan: #00d6ff;
+  --gate-shadow: 0 24px 70px rgba(20, 70, 110, 0.14);
+  --gate-shadow-tight: 0 10px 32px rgba(18, 72, 118, 0.12);
+
   box-sizing: border-box;
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
+  overflow: hidden;
   padding: 48px 24px;
   background:
-    radial-gradient(120% 80% at 20% 0%, rgba(214, 138, 90, 0.08) 0%, transparent 55%),
-    radial-gradient(90% 70% at 100% 100%, rgba(108, 131, 148, 0.1) 0%, transparent 60%),
-    #14110d;
-  color: #efe8dc;
-  font-family: var(--peix-font-sans, 'Instrument Sans', sans-serif);
+    radial-gradient(circle at 72% 8%, rgba(0, 214, 255, 0.34), transparent 31%),
+    radial-gradient(circle at 14% 15%, rgba(255, 42, 89, 0.2), transparent 30%),
+    linear-gradient(135deg, #fffdf9 0%, #edfbff 48%, #ffffff 100%);
+  color: var(--gate-ink);
+  font-family: var(--peix-font-sans, 'Instrument Sans', Inter, system-ui, -apple-system, sans-serif);
+  letter-spacing: 0;
+}
+
+.peix-gate::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(64, 133, 184, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(64, 133, 184, 0.09) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
 }
 
 .peix-gate *,
@@ -28,113 +50,141 @@
 }
 
 .peix-gate__frame {
-  width: 100%;
-  max-width: 480px;
-  background: rgba(28, 24, 20, 0.6);
-  border: 1px solid rgba(239, 232, 220, 0.1);
-  border-radius: 14px;
-  padding: 44px 40px 34px;
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+  position: relative;
+  z-index: 1;
+  width: min(100%, 430px);
+  padding: 34px;
+  border: 1px solid var(--gate-line-strong);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 42, 89, 0.1), rgba(0, 214, 255, 0.12)),
+    rgba(255, 255, 255, 0.86);
+  box-shadow: var(--gate-shadow);
+  backdrop-filter: blur(18px);
+}
+
+.peix-gate__frame::after {
+  content: "";
+  position: absolute;
+  right: 22px;
+  top: 22px;
+  width: 86px;
+  height: 86px;
+  border: 1px solid rgba(78, 132, 176, 0.18);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 42, 89, 0.2) 0 4px, transparent 5px),
+    conic-gradient(from 35deg, transparent 0 20%, rgba(0, 214, 255, 0.18) 20% 31%, transparent 31% 58%, rgba(255, 42, 89, 0.16) 58% 64%, transparent 64% 100%);
+  pointer-events: none;
 }
 
 .peix-gate__mark {
-  color: #d68a5a;
-  font-family: var(--peix-font-display, 'Instrument Serif', Georgia, serif);
-  font-style: italic;
-  font-size: 18px;
-  margin-bottom: 6px;
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(78, 132, 176, 0.32);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--gate-coral) 0 3px, transparent 4px),
+    conic-gradient(from 30deg, transparent 0 18%, rgba(7, 17, 31, 0.5) 18% 26%, transparent 26% 44%, rgba(77, 184, 255, 0.72) 44% 55%, transparent 55% 100%);
 }
 
-.peix-gate__kicker {
-  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, monospace);
-  font-size: 10.5px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: #d68a5a;
-  margin-bottom: 18px;
+.peix-gate__mark::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid rgba(78, 132, 176, 0.24);
+  border-radius: 50%;
 }
 
 .peix-gate__headline {
-  font-family: var(--peix-font-display, 'Instrument Serif', Georgia, serif);
-  font-weight: 400;
-  font-size: 32px;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  color: #efe8dc;
-  margin: 0 0 14px;
-}
-
-.peix-gate__headline em {
-  font-style: italic;
-  color: #d68a5a;
-  font-weight: 400;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 12px;
+  color: var(--gate-ink);
+  font-family: var(--peix-font-sans, 'Instrument Sans', Inter, system-ui, -apple-system, sans-serif);
+  font-size: clamp(54px, 11vw, 84px);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: 0;
+  text-shadow: 0 18px 46px rgba(0, 184, 255, 0.13);
 }
 
 .peix-gate__dek {
-  font-family: var(--peix-font-display, 'Instrument Serif', Georgia, serif);
-  font-style: italic;
-  font-size: 14.5px;
+  position: relative;
+  z-index: 1;
+  margin: 0 0 28px;
+  color: var(--gate-muted);
+  font-size: 16px;
   line-height: 1.55;
-  color: rgba(239, 232, 220, 0.68);
-  margin: 0 0 26px;
 }
 
 .peix-gate__form {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  z-index: 1;
+  display: grid;
   gap: 10px;
 }
 
 .peix-gate__label {
-  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, monospace);
+  color: #075f7a;
+  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 10px;
-  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(239, 232, 220, 0.6);
+  letter-spacing: 0;
 }
 
 .peix-gate__input {
   width: 100%;
-  padding: 12px 14px;
-  background: rgba(20, 17, 13, 0.8);
-  border: 1px solid rgba(239, 232, 220, 0.18);
-  border-radius: 6px;
-  color: #efe8dc;
-  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, monospace);
-  font-size: 14px;
-  letter-spacing: 0.08em;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--gate-line);
+  border-radius: 8px;
   outline: none;
-  transition: border-color 160ms ease, background 160ms ease;
+  background: rgba(255, 255, 255, 0.74);
+  color: var(--gate-ink);
+  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 15px;
+  letter-spacing: 0;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
 .peix-gate__input:focus {
-  border-color: #d68a5a;
-  background: rgba(20, 17, 13, 1);
+  border-color: rgba(0, 214, 255, 0.72);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 0 0 4px rgba(0, 214, 255, 0.12);
 }
 
 .peix-gate__input:disabled {
-  opacity: 0.5;
+  opacity: 0.62;
   cursor: wait;
 }
 
 .peix-gate__submit {
-  margin-top: 6px;
-  padding: 11px 14px;
-  background: #d68a5a;
-  color: #14110d;
-  border: none;
-  border-radius: 6px;
-  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, monospace);
-  font-size: 11.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 54px;
+  margin-top: 8px;
+  padding: 0 22px;
+  border: 1px solid rgba(255, 42, 89, 0.42);
+  border-radius: 0;
+  background: linear-gradient(135deg, #ff2a59, #ff7a00 62%, #ffd000);
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  color: var(--gate-ink);
+  font-family: var(--peix-font-sans, 'Instrument Sans', Inter, system-ui, -apple-system, sans-serif);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
   cursor: pointer;
-  transition: background 160ms ease, transform 120ms ease;
+  box-shadow: 0 20px 44px rgba(255, 42, 89, 0.26);
+  transition: filter 160ms ease, transform 120ms ease;
 }
 
 .peix-gate__submit:hover:not(:disabled) {
-  background: #e3a26a;
+  filter: saturate(1.12) brightness(1.02);
 }
 
 .peix-gate__submit:active:not(:disabled) {
@@ -144,83 +194,46 @@
 .peix-gate__submit:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: var(--gate-shadow-tight);
 }
 
 .peix-gate__error {
   margin-top: 8px;
-  padding: 10px 12px;
-  background: rgba(217, 74, 44, 0.1);
-  border: 1px solid rgba(217, 74, 44, 0.35);
-  border-radius: 5px;
-  color: #e88b72;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 42, 89, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 42, 89, 0.08);
+  color: #b80f3d;
   font-size: 13px;
-  font-family: var(--peix-font-sans, 'Instrument Sans', sans-serif);
-}
-
-.peix-gate__footer {
-  margin-top: 28px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(239, 232, 220, 0.08);
-  font-size: 11.5px;
-  color: rgba(239, 232, 220, 0.55);
-  line-height: 1.5;
-}
-
-.peix-gate__mono {
-  font-family: var(--peix-font-mono, 'Space Mono', ui-monospace, monospace);
-  color: rgba(239, 232, 220, 0.85);
+  line-height: 1.45;
 }
 
 @media (max-width: 600px) {
   .peix-gate {
     min-height: 100svh;
     padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
-    place-items: center;
   }
 
   .peix-gate__frame {
-    max-width: 100%;
-    padding: 30px 20px 24px;
-    border-radius: 10px;
+    padding: 28px 22px 24px;
   }
 
-  .peix-gate__kicker {
-    font-size: 10px;
-    letter-spacing: 0.16em;
-    margin-bottom: 14px;
+  .peix-gate__frame::after {
+    width: 68px;
+    height: 68px;
+    right: 16px;
+    top: 16px;
+  }
+
+  .peix-gate__mark {
+    margin-bottom: 24px;
   }
 
   .peix-gate__headline {
-    font-size: 29px;
-    line-height: 1.06;
-  }
-
-  .peix-gate__headline em {
-    display: block;
-    margin-top: 2px;
-  }
-
-  .peix-gate__dek {
-    font-size: 14px;
-    line-height: 1.5;
-    margin-bottom: 22px;
+    font-size: 54px;
   }
 
   .peix-gate__input {
-    min-height: 48px;
     font-size: 16px;
-    letter-spacing: 0.04em;
-  }
-
-  .peix-gate__submit {
-    min-height: 48px;
-    font-size: 11px;
-    letter-spacing: 0.12em;
-  }
-
-  .peix-gate__footer {
-    margin-top: 22px;
-    font-size: 11px;
-    overflow-wrap: anywhere;
   }
 }

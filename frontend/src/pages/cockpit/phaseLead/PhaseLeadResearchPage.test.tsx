@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 import PhaseLeadResearchPage from './PhaseLeadResearchPage';
 import { usePhaseLeadSnapshot } from './usePhaseLeadSnapshot';
@@ -93,11 +93,33 @@ describe('PhaseLeadResearchPage', () => {
     renderPage();
 
     expect(screen.getByRole('heading', { name: /Regional Media Watch/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Influenza A' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Influenza B' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSV A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'SARS-CoV-2' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Hessen zuerst vorbereiten/i })).toBeInTheDocument();
     expect(screen.getByText(/Budget bleibt shadow-only bis GELO-Sales angebunden sind/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Hessen vorbereiten/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('columnheader', { name: /Empfehlung/i })).toBeInTheDocument();
     expect(screen.queryByText(/Research-only Methode/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Mathematischer Kern/i)).not.toBeInTheDocument();
+  });
+
+  it('loads the selected virus snapshot when a virus is chosen', () => {
+    mockedUsePhaseLeadSnapshot.mockReturnValue({
+      snapshot: productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    });
+
+    renderPage();
+
+    expect(mockedUsePhaseLeadSnapshot).toHaveBeenLastCalledWith({ virusTyp: 'Influenza A' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'RSV A' }));
+
+    expect(screen.getByRole('button', { name: 'RSV A' })).toHaveAttribute('aria-pressed', 'true');
+    expect(mockedUsePhaseLeadSnapshot).toHaveBeenLastCalledWith({ virusTyp: 'RSV A' });
   });
 });

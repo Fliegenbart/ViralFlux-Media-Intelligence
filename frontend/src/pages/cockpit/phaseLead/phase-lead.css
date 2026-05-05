@@ -97,6 +97,44 @@
   text-transform: uppercase;
 }
 
+.phase-lead-virus-switcher {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--phase-line);
+  border-radius: 8px;
+  background: var(--phase-line);
+  box-shadow: var(--phase-shadow-tight);
+}
+
+.phase-lead-virus-switcher__button {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--phase-muted);
+  font-family: var(--peix-font-mono);
+  font-size: 11px;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.phase-lead-virus-switcher__button:hover,
+.phase-lead-virus-switcher__button[aria-pressed="true"] {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(235, 248, 255, 0.86)),
+    radial-gradient(circle at 50% 0, rgba(255, 96, 77, 0.12), transparent 44%);
+  color: var(--phase-ink);
+}
+
+.phase-lead-virus-switcher__button[aria-pressed="true"] {
+  box-shadow: inset 0 -2px 0 var(--phase-coral);
+}
+
 .phase-lead-brandline .phase-lead-back {
   margin-right: 12px;
 }
@@ -745,6 +783,7 @@
   }
 
   .phase-lead-hero__meta,
+  .phase-lead-virus-switcher,
   .phase-lead-live-grid,
   .phase-lead-action,
   .phase-lead-decision-grid,

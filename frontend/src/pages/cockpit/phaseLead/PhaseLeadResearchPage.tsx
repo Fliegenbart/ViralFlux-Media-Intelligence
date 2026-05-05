@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import '../../../styles/peix.css';
@@ -15,6 +15,8 @@ const sourceLabels: Record<string, string> = {
   are: 'ARE',
   notaufnahme: 'Notaufnahme',
 };
+
+const availableViruses = ['Influenza A', 'Influenza B', 'RSV A', 'SARS-CoV-2'] as const;
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-';
@@ -92,7 +94,10 @@ function topRegionHeadline(topRegion: PhaseLeadRegion | undefined): string {
 }
 
 export const PhaseLeadResearchPage: React.FC = () => {
-  const { snapshot, loading, error, reload } = usePhaseLeadSnapshot();
+  const [selectedVirus, setSelectedVirus] = useState<(typeof availableViruses)[number]>('Influenza A');
+  const { snapshot, loading, error, reload } = usePhaseLeadSnapshot({
+    virusTyp: selectedVirus,
+  });
   const isAuth401 =
     error &&
     (((error as Error & { status?: number }).status === 401) ||
@@ -155,6 +160,19 @@ export const PhaseLeadResearchPage: React.FC = () => {
             <span className="phase-lead-orbit-mark" aria-hidden="true" />
             <span>Regional Media Watch</span>
           </div>
+          <nav className="phase-lead-virus-switcher" aria-label="Virus auswählen">
+            {availableViruses.map((virus) => (
+              <button
+                key={virus}
+                type="button"
+                className="phase-lead-virus-switcher__button"
+                aria-pressed={selectedVirus === virus}
+                onClick={() => setSelectedVirus(virus)}
+              >
+                {virus}
+              </button>
+            ))}
+          </nav>
           <div className="phase-lead-hero__copy">
             <div className="phase-lead-kicker">
               <span className="phase-lead-live-dot" aria-hidden="true" />

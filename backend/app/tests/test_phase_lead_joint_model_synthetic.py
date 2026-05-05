@@ -1,4 +1,6 @@
 from datetime import date, timedelta
+from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
 
@@ -127,3 +129,51 @@ def test_joint_model_synthetic_fit_forecast_and_no_phase_penalty() -> None:
     assert forecast.eeb.shape == (3, 1)
     assert forecast.gegb.shape == (3, 1)
     assert forecast.region_rankings["SARS-CoV-2"][0]["region_id"] in {"r0", "r1"}
+
+
+def test_joint_model_passes_max_fun_to_scipy_optimizer() -> None:
+    start = date(2026, 1, 1)
+    dates = 8
+    regions = ["r0", "r1", "r2"]
+    true_x = np.full((dates, 3, 1), 1.4, dtype=float)
+    observations = _synthetic_observations(true_x, start)
+    config = PhaseLeadConfig(
+        window_days=dates,
+        pathogens=["SARS-CoV-2"],
+        sources={
+            "cases": SourceConfig(
+                source_type="count",
+                likelihood="negative_binomial",
+                kernel="cases",
+                phi=50.0,
+            ),
+        },
+        optimization=OptimizationConfig(max_iter=2, max_fun=250_000),
+        graph_lambda_x=0.0,
+        graph_lambda_q=0.0,
+        graph_lambda_c=0.0,
+    )
+    mappings = {"cases": SourceMapping("cases", regions, regions, np.eye(3))}
+    graph = RegionalGraph(regions=regions, T=np.eye(3))
+    kernels = {"cases": ObservationKernel.from_values("cases", [1.0])}
+    model = PhaseLeadGraphRenewalFilter(config=config, kernels=kernels)
+
+    def fake_minimize(objective, x0, *, method, bounds, options):
+        return SimpleNamespace(
+            x=np.asarray(x0, dtype=float),
+            success=True,
+            message="ok",
+            nit=1,
+        )
+
+    with patch("app.services.research.phase_lead.joint_model.minimize", side_effect=fake_minimize) as optimizer:
+        model.fit(
+            observations=observations,
+            mappings=mappings,
+            graph=graph,
+            population={"r0": 1000.0, "r1": 1000.0, "r2": 1000.0},
+            issue_date=start + timedelta(days=dates),
+        )
+
+    assert optimizer.call_args.kwargs["options"]["maxiter"] == 2
+    assert optimizer.call_args.kwargs["options"]["maxfun"] == 250_000

@@ -167,15 +167,18 @@ class PhaseLeadGraphRenewalFilter:
         optimizer_iterations = 0
 
         if self.config.optimization.max_iter > 0:
+            optimizer_options = {
+                "maxiter": self.config.optimization.max_iter,
+                "ftol": self.config.optimization.tolerance,
+            }
+            if self.config.optimization.max_fun > 0:
+                optimizer_options["maxfun"] = self.config.optimization.max_fun
             result = minimize(
                 objective_flat,
                 x0.ravel(),
                 method=self.config.optimization.method,
                 bounds=bounds,
-                options={
-                    "maxiter": self.config.optimization.max_iter,
-                    "ftol": self.config.optimization.tolerance,
-                },
+                options=optimizer_options,
             )
             candidate_x = result.x.reshape(shape)
             final_objective, final_components = self._objective_components(
@@ -224,6 +227,8 @@ class PhaseLeadGraphRenewalFilter:
                 "initial_objective": float(initial_objective),
                 "message": optimizer_message,
                 "iterations": optimizer_iterations,
+                "function_evaluations": int(getattr(result, "nfev", 0)) if self.config.optimization.max_iter > 0 else 0,
+                "max_fun": int(self.config.optimization.max_fun),
             },
             phase_diagnostics=diagnostics,
             warnings=warnings,

@@ -38,6 +38,7 @@ async def get_cockpit_phase_lead_snapshot(
     regions: str | None = Query(None, description="Optional comma-separated Bundesland codes."),
     n_samples: int = Query(80, ge=4, le=600, description="Posterior predictive samples."),
     max_iter: int = Query(0, ge=0, le=250, description="Optimizer iterations. 0 uses the fast live mode."),
+    max_fun: int = Query(250_000, ge=1, le=1_000_000, description="Maximum objective/gradient evaluations for MAP runs."),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     if virus_typ not in _SUPPORTED_VIRUSES:
@@ -63,6 +64,7 @@ async def get_cockpit_phase_lead_snapshot(
             region_codes=_parse_region_codes(regions),
             n_samples=int(n_samples),
             max_iter=int(max_iter),
+            max_fun=int(max_fun),
         )
     except ValueError as exc:
         raise HTTPException(

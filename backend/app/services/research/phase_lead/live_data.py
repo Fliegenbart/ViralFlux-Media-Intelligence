@@ -585,6 +585,7 @@ def build_live_phase_lead_inputs(
     horizons: list[int] | None = None,
     n_samples: int = 80,
     max_iter: int = 0,
+    max_fun: int = 250_000,
     seed: int = 123,
 ) -> LivePhaseLeadInput:
     issue = _coerce_date(issue_date)
@@ -658,7 +659,7 @@ def build_live_phase_lead_inputs(
             beta_pi=0.05,
             beta_omega=0.05,
         ),
-        optimization=OptimizationConfig(max_iter=int(max_iter), tolerance=1.0e-5),
+        optimization=OptimizationConfig(max_iter=int(max_iter), max_fun=int(max_fun), tolerance=1.0e-5),
         forecast=ForecastConfig(n_samples=int(n_samples), seed=int(seed), state_noise=0.06),
         graph_lambda_x=1.0e-3,
         graph_lambda_q=1.0e-3,
@@ -716,6 +717,7 @@ def build_live_phase_lead_snapshot(
     horizons: list[int] | None = None,
     n_samples: int = 80,
     max_iter: int = 0,
+    max_fun: int = 250_000,
     seed: int = 123,
 ) -> dict[str, Any]:
     live_input = build_live_phase_lead_inputs(
@@ -727,6 +729,7 @@ def build_live_phase_lead_snapshot(
         horizons=horizons,
         n_samples=n_samples,
         max_iter=max_iter,
+        max_fun=max_fun,
         seed=seed,
     )
     model = PhaseLeadGraphRenewalFilter(

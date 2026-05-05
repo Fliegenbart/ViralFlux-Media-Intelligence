@@ -104,3 +104,4 @@ def test_phase_lead_snapshot_endpoint_uses_live_database_builder(monkeypatch) ->
     assert builder.call_args.kwargs["window_days"] == 42
     assert builder.call_args.kwargs["n_samples"] == 12
     assert builder.call_args.kwargs["max_iter"] == 7
+    assert builder.call_args.kwargs["max_fun"] == 250_000

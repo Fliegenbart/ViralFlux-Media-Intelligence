@@ -39,6 +39,7 @@ class RenewalConfig:
 class OptimizationConfig:
     method: str = "L-BFGS-B"
     max_iter: int = 500
+    max_fun: int = 250_000
     tolerance: float = 1.0e-5
     x_lower: float = -30.0
     x_upper: float = 20.0

@@ -66,7 +66,7 @@ describe('App routing', () => {
     expect(window.location.pathname).toBe('/cockpit/tri-layer');
   });
 
-  it('keeps the Phase-Lead research route reachable under /cockpit/phase-lead', async () => {
+  it('keeps the Phase-Lead product route reachable under /cockpit/phase-lead', async () => {
     window.history.pushState({}, '', '/cockpit/phase-lead');
 
     render(<App />);

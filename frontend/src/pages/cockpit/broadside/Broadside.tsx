@@ -57,7 +57,7 @@ const PageFooter: React.FC<{ snapshot: CockpitSnapshot }> = ({ snapshot }) => {
           </Link>
           {' · '}
           <Link to="/cockpit/phase-lead" className="page-foot-link">
-            Phase-Lead Method ↗
+            Regional Media Watch ↗
           </Link>
         </div>
       </div>

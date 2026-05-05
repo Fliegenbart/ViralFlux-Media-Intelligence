@@ -206,6 +206,66 @@
   border-color: var(--peix-line-strong);
 }
 
+.phase-lead-hero--product {
+  align-items: center;
+}
+
+.phase-lead-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 20px;
+  align-items: center;
+  border-color: var(--peix-line-strong);
+}
+
+.phase-lead-action h2 {
+  margin: 6px 0 8px;
+  color: var(--peix-ink);
+  font-family: var(--peix-font-display);
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.phase-lead-action p {
+  max-width: 780px;
+  margin: 0;
+  color: var(--peix-ink-soft);
+  font-size: 14px;
+  line-height: 1.48;
+}
+
+.phase-lead-action__command {
+  display: grid;
+  min-height: 104px;
+  place-items: center;
+  padding: 18px;
+  border: 1px solid var(--peix-line);
+  border-radius: 8px;
+  background: var(--peix-card-dim);
+  color: var(--peix-ink);
+  font-family: var(--peix-font-display);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.08;
+  text-align: center;
+}
+
+.phase-lead-action--prepare .phase-lead-action__command {
+  border-color: rgba(217, 74, 44, 0.42);
+  color: var(--peix-warm);
+}
+
+.phase-lead-action--watch .phase-lead-action__command {
+  border-color: rgba(38, 122, 121, 0.42);
+  color: var(--peix-cool);
+}
+
+.phase-lead-live-grid--product {
+  margin-top: 18px;
+}
+
 .phase-lead-live-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -261,6 +321,88 @@
   background: var(--peix-card-dim);
   color: var(--peix-ink-soft);
   font-size: 12px;
+}
+
+.phase-lead-sales-gate {
+  border-color: var(--peix-line-strong);
+}
+
+.phase-lead-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.phase-lead-decision-grid article,
+.phase-lead-source-pill {
+  padding: 14px;
+  border: 1px solid var(--peix-line);
+  border-radius: 6px;
+  background: var(--peix-card-dim);
+}
+
+.phase-lead-decision-grid span,
+.phase-lead-source-pill span,
+.phase-lead-source-pill small,
+.phase-lead-model-meta span {
+  display: block;
+  color: var(--peix-ink-mute);
+  font-family: var(--peix-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.phase-lead-decision-grid b,
+.phase-lead-source-pill b {
+  display: block;
+  margin: 8px 0 7px;
+  color: var(--peix-ink);
+  font-size: 17px;
+}
+
+.phase-lead-decision-grid p {
+  margin: 0;
+  color: var(--peix-ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.phase-lead-badge {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--peix-line);
+  border-radius: 999px;
+  color: var(--peix-ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.phase-lead-badge--prepare {
+  border-color: rgba(217, 74, 44, 0.35);
+  background: rgba(217, 74, 44, 0.08);
+  color: var(--peix-warm);
+}
+
+.phase-lead-badge--watch {
+  border-color: rgba(38, 122, 121, 0.35);
+  background: rgba(38, 122, 121, 0.08);
+  color: var(--peix-cool);
+}
+
+.phase-lead-badge--hold {
+  color: var(--peix-ink-soft);
+}
+
+.phase-lead-source-list,
+.phase-lead-model-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.phase-lead-model-meta {
+  margin-top: 2px;
 }
 
 .phase-lead-equation {
@@ -446,6 +588,8 @@
   .phase-lead-grid--two,
   .phase-lead-live-grid,
   .phase-lead-live-columns,
+  .phase-lead-action,
+  .phase-lead-decision-grid,
   .phase-lead-explain-grid {
     grid-template-columns: 1fr;
   }

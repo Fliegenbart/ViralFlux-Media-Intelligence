@@ -22,6 +22,7 @@ import './index.css';
  * What this router does now:
  *   - / → /cockpit
  *   - /cockpit → the editorial cockpit (its own password gate handles access)
+ *   - /limbach → Phase-Lead pitch view with the same live values
  *   - every retired route → /cockpit (soft redirect so old links don't 404)
  *
  * The underlying lazy-loaded Media pages are left in the codebase for now so
@@ -104,6 +105,7 @@ const App: React.FC = () => {
                 <Route path="/cockpit/data" element={<DataOfficePage />} />
                 <Route path="/cockpit/tri-layer" element={<TriLayerPage />} />
                 <Route path="/cockpit/phase-lead" element={<PhaseLeadResearchPage />} />
+                <Route path="/limbach" element={<PhaseLeadResearchPage audience="limbach" />} />
                 {RETIRED_ROUTES.map((path) => (
                   <Route
                     key={path}

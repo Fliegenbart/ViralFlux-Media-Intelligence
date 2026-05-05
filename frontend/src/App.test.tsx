@@ -75,6 +75,15 @@ describe('App routing', () => {
     expect(window.location.pathname).toBe('/cockpit/phase-lead');
   });
 
+  it('keeps the Limbach pitch route reachable under /limbach', async () => {
+    window.history.pushState({}, '', '/limbach');
+
+    render(<App />);
+
+    expect(await screen.findByText('Phase-Lead Mock')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/limbach');
+  });
+
   it('redirects cockpit design variants to the current cockpit', async () => {
     window.history.pushState({}, '', '/cockpit/variante-1');
 

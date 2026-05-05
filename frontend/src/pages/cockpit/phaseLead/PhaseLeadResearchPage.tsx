@@ -18,6 +18,12 @@ const sourceLabels: Record<string, string> = {
 
 const availableViruses = ['Gesamt', 'Influenza A', 'Influenza B', 'RSV A', 'SARS-CoV-2'] as const;
 
+type PhaseLeadAudience = 'product' | 'limbach';
+
+export interface PhaseLeadResearchPageProps {
+  audience?: PhaseLeadAudience;
+}
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return '-';
   const date = new Date(value);
@@ -40,7 +46,10 @@ function formatOne(value: number | null | undefined): string {
   return value.toFixed(1);
 }
 
-function actionForRegion(region: PhaseLeadRegion | undefined): {
+function actionForRegion(
+  region: PhaseLeadRegion | undefined,
+  audience: PhaseLeadAudience = 'product',
+): {
   label: string;
   tone: 'prepare' | 'watch' | 'hold';
   explanation: string;
@@ -50,6 +59,21 @@ function actionForRegion(region: PhaseLeadRegion | undefined): {
       label: 'Keine Region',
       tone: 'hold',
       explanation: 'Noch kein regionales Signal vorhanden.',
+    };
+  }
+  if (audience === 'limbach') {
+    if (region.p_surge_h7 >= 0.35 || region.p_up_h7 >= 0.55) {
+      return {
+        label: `${region.region} disponieren`,
+        tone: region.p_surge_h7 >= 0.35 || region.p_up_h7 >= 0.75 ? 'prepare' : 'watch',
+        explanation:
+          'Probenlogistik, Abholfenster, Entnahmematerial und respiratorische Diagnostik-Kapazität regional vorbereiten.',
+      };
+    }
+    return {
+      label: `${region.region} beobachten`,
+      tone: 'hold',
+      explanation: 'Region weiter monitoren; noch keine operative Labor-Disposition nötig.',
     };
   }
   if (region.p_surge_h7 >= 0.35 || region.p_up_h7 >= 0.75) {
@@ -104,8 +128,9 @@ function sourceFreshnessLabel(snapshot: PhaseLeadSnapshot): string {
   return `Neueste Meldung: ${formatDate(latest)}${lagLabel}`;
 }
 
-function topRegionHeadline(topRegion: PhaseLeadRegion | undefined): string {
+function topRegionHeadline(topRegion: PhaseLeadRegion | undefined, audience: PhaseLeadAudience = 'product'): string {
   if (!topRegion) return 'Kein regionaler Kandidat';
+  if (audience === 'limbach') return `${topRegion.region} disponieren`;
   return `${topRegion.region} zuerst vorbereiten`;
 }
 
@@ -185,7 +210,7 @@ function buildSignalCurve(region: PhaseLeadRegion | undefined): {
   };
 }
 
-export const PhaseLeadResearchPage: React.FC = () => {
+export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ audience = 'product' }) => {
   const [selectedVirus, setSelectedVirus] = useState<(typeof availableViruses)[number]>('Gesamt');
   const { snapshot, loading, error, reload } = usePhaseLeadSnapshot({
     virusTyp: selectedVirus,
@@ -236,13 +261,14 @@ export const PhaseLeadResearchPage: React.FC = () => {
 
   const topRegions = snapshot.regions.slice(0, 8);
   const topRegion = snapshot.regions[0];
-  const primaryAction = actionForRegion(topRegion);
+  const isLimbach = audience === 'limbach';
+  const primaryAction = actionForRegion(topRegion, audience);
   const connectedSources = Object.keys(snapshot.sources).length;
   const sourceFreshness = sourceFreshnessLabel(snapshot);
   const modelConfidence = confidenceLabel(snapshot);
   const isMapOptimized = snapshot.summary.fit_mode === 'map_optimization';
   const isAggregate = snapshot.virus_typ === 'Gesamt' || Boolean(snapshot.aggregate);
-  const heroHeadline = topRegion ? `${topRegion.region_code} zuerst.` : 'Region zuerst.';
+  const heroHeadline = isLimbach ? 'Labor-Demand-Radar' : topRegion ? `${topRegion.region_code} zuerst.` : 'Region zuerst.';
   const topDriverLabel = topRegion ? aggregateDrivers(snapshot, topRegion.region_code) : '-';
   const heroScoreLabel = isAggregate ? 'Gesamt-Score' : 'GEGB';
   const signalCurve = buildSignalCurve(topRegion);
@@ -256,7 +282,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
               Zurück ins Cockpit
             </Link>
             <span className="phase-lead-orbit-mark" aria-hidden="true" />
-            <span>Regional Media Watch</span>
+            <span>{isLimbach ? 'FluxEngine für Limbach' : 'Regional Media Watch'}</span>
           </div>
           <nav className="phase-lead-virus-switcher" aria-label="Virus auswählen">
             {availableViruses.map((virus) => (
@@ -274,14 +300,13 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div className="phase-lead-hero__copy">
             <div className="phase-lead-kicker">
               <span className="phase-lead-live-dot" aria-hidden="true" />
-              Media-Fokus
+              {isLimbach ? 'Limbach Pitch' : 'Media-Fokus'}
             </div>
             <h1>{heroHeadline}</h1>
             <p>
-              Regional Media Watch übersetzt Atemwegsdaten in eine klare
-              Vorbereitungsempfehlung: welches Bundesland zuerst Aufmerksamkeit
-              braucht, welcher Score dahintersteht und ob Budget noch gesperrt
-              bleibt.
+              {isLimbach
+                ? 'Früh sehen, wo Atemwegsdiagnostik regional anzieht: dieselben Phase-Lead-Werte werden hier in Laborlogistik, Materialplanung und Arztkommunikation übersetzt.'
+                : 'Regional Media Watch übersetzt Atemwegsdaten in eine klare Vorbereitungsempfehlung: welches Bundesland zuerst Aufmerksamkeit braucht, welcher Score dahintersteht und ob Budget noch gesperrt bleibt.'}
             </p>
             <div className="phase-lead-hero__cta-row">
               <div className={`phase-lead-primary-command phase-lead-primary-command--${primaryAction.tone}`}>
@@ -289,7 +314,9 @@ export const PhaseLeadResearchPage: React.FC = () => {
                 {primaryAction.label}
               </div>
               <div className="phase-lead-hero__fineprint">
-                Budget bleibt gesperrt, bis GELO-Sales angebunden sind.
+                {isLimbach
+                  ? 'Gleiche Daten, andere Entscheidung: Nachfrage früher disponieren.'
+                  : 'Budget bleibt gesperrt, bis GELO-Sales angebunden sind.'}
               </div>
             </div>
           </div>
@@ -314,8 +341,8 @@ export const PhaseLeadResearchPage: React.FC = () => {
                 <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
               </div>
               <div>
-                <span>Budget</span>
-                <strong>gesperrt</strong>
+                <span>{isLimbach ? 'Logistik' : 'Budget'}</span>
+                <strong>{isLimbach ? 'planen' : 'gesperrt'}</strong>
               </div>
             </div>
           </aside>
@@ -331,7 +358,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
         <section className={`phase-lead-panel phase-lead-action phase-lead-action--${primaryAction.tone}`}>
           <div>
             <div className="phase-lead-kicker">Nächste Aktion</div>
-            <h2>{topRegionHeadline(topRegion)}</h2>
+            <h2>{topRegionHeadline(topRegion, audience)}</h2>
             <p>{primaryAction.explanation}</p>
           </div>
           <div className="phase-lead-action__command">{primaryAction.label}</div>
@@ -363,30 +390,34 @@ export const PhaseLeadResearchPage: React.FC = () => {
         <section className="phase-lead-panel phase-lead-sales-gate" aria-labelledby="phase-lead-sales-gate-title">
           <div className="phase-lead-section-head">
             <div>
-              <div className="phase-lead-kicker">Budget-Gate</div>
-              <h2 id="phase-lead-sales-gate-title">Budget bleibt shadow-only bis GELO-Sales angebunden sind.</h2>
+              <div className="phase-lead-kicker">{isLimbach ? 'Laborbedarf' : 'Budget-Gate'}</div>
+              <h2 id="phase-lead-sales-gate-title">
+                {isLimbach
+                  ? 'Von Frühwarnsignal zu Laborplanung.'
+                  : 'Budget bleibt shadow-only bis GELO-Sales angebunden sind.'}
+              </h2>
             </div>
             <p>
-              Das Signal priorisiert Vorbereitung, nicht automatische
-              Umschichtung. Sales- und Outcome-Daten fehlen noch für echte
-              Budgetfreigabe.
+              {isLimbach
+                ? 'Die Limbach Gruppe könnte externe Atemwegs-Frühsignale nutzen, um Probenlogistik, Praxisbedarf und regionale Kommunikation früher zu planen.'
+                : 'Das Signal priorisiert Vorbereitung, nicht automatische Umschichtung. Sales- und Outcome-Daten fehlen noch für echte Budgetfreigabe.'}
             </p>
           </div>
           <div className="phase-lead-decision-grid">
             <article>
-              <span>Heute erlaubt</span>
-              <b>Vorbereiten</b>
-              <p>Regionale Creatives, Inventar, Zielgruppen und Apothekenlisten prüfen.</p>
+              <span>{isLimbach ? 'Operations' : 'Heute erlaubt'}</span>
+              <b>{isLimbach ? 'Probenlogistik vorbereiten' : 'Vorbereiten'}</b>
+              <p>{isLimbach ? 'Regionale Kurierfenster, Abholspitzen und Laborstandorte frühzeitig einplanen.' : 'Regionale Creatives, Inventar, Zielgruppen und Apothekenlisten prüfen.'}</p>
             </article>
             <article>
-              <span>Noch blockiert</span>
-              <b>Budget verschieben</b>
-              <p>Ohne GELO-Sales bleibt jede Aktivierung eine manuelle Business-Entscheidung.</p>
+              <span>{isLimbach ? 'Versorgung' : 'Noch blockiert'}</span>
+              <b>{isLimbach ? 'Reagenzien und Entnahmematerial' : 'Budget verschieben'}</b>
+              <p>{isLimbach ? 'Respiratorische Tests, Abstrichmaterial und Verbrauchsgüter entlang regionaler Wellen vorbereiten.' : 'Ohne GELO-Sales bleibt jede Aktivierung eine manuelle Business-Entscheidung.'}</p>
             </article>
             <article>
-              <span>Nächster Datenhebel</span>
-              <b>Sales anschließen</b>
-              <p>Danach kann das Signal gegen Nachfrage und Kampagnenwirkung kalibriert werden.</p>
+              <span>{isLimbach ? 'Partnernetz' : 'Nächster Datenhebel'}</span>
+              <b>{isLimbach ? 'Arztkommunikation timen' : 'Sales anschließen'}</b>
+              <p>{isLimbach ? 'Praxen, MVZ und Kliniken regional informieren, bevor die Diagnostiknachfrage sichtbar steigt.' : 'Danach kann das Signal gegen Nachfrage und Kampagnenwirkung kalibriert werden.'}</p>
             </article>
           </div>
         </section>
@@ -395,12 +426,16 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div className="phase-lead-section-head">
             <div>
               <div className="phase-lead-kicker">Regionale Priorisierung</div>
-              <h2 id="phase-lead-region-title">Welche Bundesländer jetzt Aufmerksamkeit brauchen.</h2>
+              <h2 id="phase-lead-region-title">
+                {isLimbach
+                  ? 'Welche Regionen Laborbedarf früher anzeigen.'
+                  : 'Welche Bundesländer jetzt Aufmerksamkeit brauchen.'}
+              </h2>
             </div>
             <p>
-              Sortiert nach GEGB: ein growth-weighted burden score für
-              Media-Priorisierung. Höher bedeutet: mehr erwartete Last bei
-              positivem Wachstum.
+              {isLimbach
+                ? 'Sortiert nach Gesamt-Score: hohe Werte markieren Regionen, in denen Atemwegsdiagnostik, Probenlogistik und Praxisbedarf früher geplant werden sollten.'
+                : 'Sortiert nach GEGB: ein growth-weighted burden score für Media-Priorisierung. Höher bedeutet: mehr erwartete Last bei positivem Wachstum.'}
             </p>
           </div>
           <div className="phase-lead-table-wrap">
@@ -408,7 +443,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
               <thead>
                 <tr>
                   <th>Region</th>
-                  <th>Empfehlung</th>
+                  <th>{isLimbach ? 'Laboraktion' : 'Empfehlung'}</th>
                   {isAggregate ? <th>Haupttreiber</th> : null}
                   <th>p(up) h7</th>
                   <th>Surge h7</th>
@@ -418,7 +453,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
               </thead>
               <tbody>
                 {topRegions.map((region) => {
-                  const action = actionForRegion(region);
+                  const action = actionForRegion(region, audience);
                   return (
                     <tr key={region.region_code}>
                       <td>{region.region_code} - {region.region}</td>
@@ -449,7 +484,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
         <section className="phase-lead-grid phase-lead-grid--two" aria-label="Operativer Kontext">
           <article className="phase-lead-panel phase-lead-output">
             <div className="phase-lead-kicker">Datenbasis</div>
-            <h2>Live-Quellen sind verbunden.</h2>
+            <h2>{isLimbach ? 'Öffentliche Frühsignale sind verbunden.' : 'Live-Quellen sind verbunden.'}</h2>
             <div className="phase-lead-source-list">
               {Object.entries(snapshot.sources).map(([source, status]) => (
                 <div key={source} className="phase-lead-source-pill">
@@ -464,9 +499,11 @@ export const PhaseLeadResearchPage: React.FC = () => {
             <div className="phase-lead-kicker">Modellstatus</div>
             <h2>{snapshot.summary.converged ? 'Optimierung konvergiert.' : 'Optimierung prüfen.'}</h2>
             <p>
-              {isMapOptimized
-                ? 'Das Cockpit nutzt das gespeicherte MAP-Ergebnis aus dem Nachtlauf.'
-                : 'Das Cockpit nutzt gerade den schnellen Fallback, bis ein MAP-Ergebnis vorliegt.'}
+              {isLimbach
+                ? 'Für Limbach wäre der nächste Schritt, diese Frühindikatoren mit eigenen anonymisierten Testvolumina, Standortlogistik und Materialverbrauch zu kalibrieren.'
+                : isMapOptimized
+                  ? 'Das Cockpit nutzt das gespeicherte MAP-Ergebnis aus dem Nachtlauf.'
+                  : 'Das Cockpit nutzt gerade den schnellen Fallback, bis ein MAP-Ergebnis vorliegt.'}
             </p>
             <div className="phase-lead-model-meta">
               <span>Beobachtungen: {snapshot.summary.observation_count}</span>
@@ -545,8 +582,9 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div>
             <b>Produktstatus</b>
             <p>
-              Live-Frühwarnsignal für Vorbereitung. Budgetfreigabe bleibt
-              blockiert, bis GELO-Sales und Outcome-Validierung angeschlossen sind.
+              {isLimbach
+                ? 'Pitch-Version für die Limbach Gruppe: gleiche Phase-Lead-Werte, übersetzt in Labor-Demand, Probenlogistik und Praxispartner-Kommunikation.'
+                : 'Live-Frühwarnsignal für Vorbereitung. Budgetfreigabe bleibt blockiert, bis GELO-Sales und Outcome-Validierung angeschlossen sind.'}
             </p>
           </div>
           <Link to="/cockpit" className="phase-lead-footer__link">

@@ -106,10 +106,10 @@ const aggregateSnapshot = {
   },
 } as PhaseLeadSnapshot;
 
-function renderPage() {
+function renderPage(props?: React.ComponentProps<typeof PhaseLeadResearchPage>) {
   return render(
     <MemoryRouter>
-      <PhaseLeadResearchPage />
+      <PhaseLeadResearchPage {...props} />
     </MemoryRouter>,
   );
 }
@@ -211,5 +211,23 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getByText(/4 Quellen/i)).toBeInTheDocument();
     expect(screen.getByText(/Neueste Meldung: 27\.4\.2026 · 8 Tage Meldeverzug/i)).toBeInTheDocument();
     expect(screen.queryByText(/Quellen bis 27\.4\.2026/i)).not.toBeInTheDocument();
+  });
+
+  it('can reframe the same phase-lead values as a Limbach laboratory demand radar', () => {
+    mockedUsePhaseLeadSnapshot.mockImplementation((options) => ({
+      snapshot: options?.virusTyp === 'Gesamt' ? aggregateSnapshot : productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    }));
+
+    renderPage({ audience: 'limbach' });
+
+    expect(screen.getByRole('heading', { name: /Labor-Demand-Radar/i })).toBeInTheDocument();
+    expect(screen.getByText(/Früh sehen, wo Atemwegsdiagnostik regional anzieht/i)).toBeInTheDocument();
+    expect(screen.getByText(/Probenlogistik vorbereiten/i)).toBeInTheDocument();
+    expect(screen.getByText(/Reagenzien und Entnahmematerial/i)).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Laboraktion/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Niedersachsen disponieren/i).length).toBeGreaterThan(0);
   });
 });

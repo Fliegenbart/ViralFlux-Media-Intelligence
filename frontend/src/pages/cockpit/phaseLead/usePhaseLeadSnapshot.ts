@@ -27,7 +27,7 @@ async function phaseLeadFetcher(url: string): Promise<PhaseLeadSnapshot> {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) {
-    const message = `HTTP ${response.status} — Phase-Lead-Snapshot nicht verfuegbar`;
+    const message = `HTTP ${response.status} — Phase-Lead-Snapshot nicht verfügbar`;
     const err = new Error(message);
     (err as Error & { status?: number }).status = response.status;
     throw err;

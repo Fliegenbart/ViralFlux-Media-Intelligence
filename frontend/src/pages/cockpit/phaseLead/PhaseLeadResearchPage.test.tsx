@@ -95,7 +95,7 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getByRole('heading', { name: /Regional Media Watch/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Hessen zuerst vorbereiten/i })).toBeInTheDocument();
     expect(screen.getByText(/Budget bleibt shadow-only bis GELO-Sales angebunden sind/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Prepare Hessen/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Hessen vorbereiten/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('columnheader', { name: /Empfehlung/i })).toBeInTheDocument();
     expect(screen.queryByText(/Research-only Methode/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Mathematischer Kern/i)).not.toBeInTheDocument();

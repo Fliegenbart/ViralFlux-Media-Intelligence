@@ -45,36 +45,36 @@ function actionForRegion(region: PhaseLeadRegion | undefined): {
 } {
   if (!region) {
     return {
-      label: 'No region',
+      label: 'Keine Region',
       tone: 'hold',
       explanation: 'Noch kein regionales Signal vorhanden.',
     };
   }
   if (region.p_surge_h7 >= 0.35 || region.p_up_h7 >= 0.75) {
     return {
-      label: `Prepare ${region.region}`,
+      label: `${region.region} vorbereiten`,
       tone: 'prepare',
       explanation: 'Creative, regionale Gebote und Apothekenabdeckung vorbereiten. Budget bleibt shadow-only.',
     };
   }
   if (region.p_up_h7 >= 0.55) {
     return {
-      label: `Watch ${region.region}`,
+      label: `${region.region} beobachten`,
       tone: 'watch',
       explanation: 'Region eng beobachten und Aktivierungspaket bereithalten.',
     };
   }
   return {
-    label: `Hold ${region.region}`,
+    label: `${region.region} halten`,
     tone: 'hold',
-    explanation: 'Keine operative Vorbereitungsaktion noetig.',
+    explanation: 'Keine operative Vorbereitungsaktion nötig.',
   };
 }
 
 function confidenceLabel(snapshot: PhaseLeadSnapshot): string {
   if (snapshot.summary.converged && snapshot.summary.warning_count === 0) return 'hoch';
   if (snapshot.summary.fit_mode === 'map_optimization') return 'mittel';
-  return 'vorlaeufig';
+  return 'vorläufig';
 }
 
 function sourceFreshness(snapshot: PhaseLeadSnapshot): string {
@@ -107,7 +107,8 @@ export const PhaseLeadResearchPage: React.FC = () => {
       <div className="peix phase-lead-page">
         <main className="phase-lead-shell">
           <div className="phase-lead-loading" role="status">
-            Regional Media Watch loading...
+            <span aria-hidden="true" />
+            Regional Media Watch lädt...
           </div>
         </main>
       </div>
@@ -119,14 +120,14 @@ export const PhaseLeadResearchPage: React.FC = () => {
       <div className="peix phase-lead-page">
         <main className="phase-lead-shell">
           <Link to="/cockpit" className="phase-lead-back">
-            Back to cockpit
+            Zurück ins Cockpit
           </Link>
           <section className="phase-lead-panel phase-lead-error" role="alert">
-            <div className="phase-lead-kicker">Signal unavailable</div>
+            <div className="phase-lead-kicker">Signal nicht verfügbar</div>
             <h1>Regional Media Watch konnte nicht geladen werden.</h1>
             <p>{error.message}</p>
             <button type="button" onClick={reload}>
-              Retry
+              Erneut laden
             </button>
           </section>
         </main>
@@ -141,34 +142,82 @@ export const PhaseLeadResearchPage: React.FC = () => {
   const primaryAction = actionForRegion(topRegion);
   const connectedSources = Object.keys(snapshot.sources).length;
   const modelConfidence = confidenceLabel(snapshot);
+  const isMapOptimized = snapshot.summary.fit_mode === 'map_optimization';
 
   return (
     <div className="peix phase-lead-page">
       <main className="phase-lead-shell">
         <header className="phase-lead-hero phase-lead-hero--product">
-          <div className="phase-lead-hero__copy">
+          <div className="phase-lead-brandline">
             <Link to="/cockpit" className="phase-lead-back">
-              Back to cockpit
+              Zurück ins Cockpit
             </Link>
-            <div className="phase-lead-kicker">Live product signal</div>
+            <span className="phase-lead-orbit-mark" aria-hidden="true" />
+            <span>Regional Media Watch</span>
+          </div>
+          <div className="phase-lead-hero__copy">
+            <div className="phase-lead-kicker">
+              <span className="phase-lead-live-dot" aria-hidden="true" />
+              Live-Produktsignal
+            </div>
             <h1>Regional Media Watch</h1>
             <p>
-              Fruehwarnung fuer regionale Media-Vorbereitung. Das Signal sagt,
-              welche Bundeslaender in den naechsten Tagen wahrscheinlicher
+              Frühwarnung für regionale Media-Vorbereitung. Das Signal sagt,
+              welche Bundesländer in den nächsten Tagen wahrscheinlicher
               steigen und wo Marketing heute vorbereitet sein sollte.
             </p>
+            <div className="phase-lead-hero__cta-row">
+              <div className={`phase-lead-primary-command phase-lead-primary-command--${primaryAction.tone}`}>
+                <span aria-hidden="true">→</span>
+                {primaryAction.label}
+              </div>
+              <div className="phase-lead-hero__fineprint">
+                Budget bleibt gesperrt, bis GELO-Sales angebunden sind.
+              </div>
+            </div>
           </div>
-          <aside className="phase-lead-hero__meta" aria-label="Signal status">
+
+          <aside className="phase-lead-hero__visual" aria-label="Signalstatus">
+            <div className="phase-lead-orbital-map" aria-hidden="true">
+              <span className="phase-lead-orbit phase-lead-orbit--outer" />
+              <span className="phase-lead-orbit phase-lead-orbit--middle" />
+              <span className="phase-lead-orbit phase-lead-orbit--inner" />
+              <span className="phase-lead-map-glass" />
+              <span className="phase-lead-region-core">{topRegion?.region_code ?? '--'}</span>
+              <span className="phase-lead-node phase-lead-node--one" />
+              <span className="phase-lead-node phase-lead-node--two" />
+              <span className="phase-lead-node phase-lead-node--three" />
+              <span className="phase-lead-node phase-lead-node--four" />
+              <span className="phase-lead-radar-line" />
+            </div>
+            <div className="phase-lead-floating-card phase-lead-floating-card--up">
+              <span>p(up)</span>
+              <strong>{formatPercent(topRegion?.p_up_h7)}</strong>
+              <small>Trend {formatSigned(topRegion?.current_growth)}</small>
+            </div>
+            <div className="phase-lead-floating-card phase-lead-floating-card--surge">
+              <span>Surge</span>
+              <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
+              <small>{topRegion?.region ?? 'Keine Region'}</small>
+            </div>
+            <div className="phase-lead-floating-card phase-lead-floating-card--model">
+              <span>MAP</span>
+              <strong>{snapshot.summary.converged ? 'konvergiert' : 'prüfen'}</strong>
+              <small>Vertrauen: {modelConfidence}</small>
+            </div>
+          </aside>
+
+          <aside className="phase-lead-hero__meta" aria-label="Signalstatus">
             <span>{snapshot.virus_typ}</span>
             <span>{formatDate(snapshot.as_of)}</span>
             <span>{snapshot.horizons.join('/')} Tage Horizont</span>
-            <span>{snapshot.summary.fit_mode === 'map_optimization' ? 'MAP optimiert' : 'Schnellmodus'}</span>
+            <span>{isMapOptimized ? 'MAP optimiert' : 'Schnellmodus'}</span>
           </aside>
         </header>
 
         <section className={`phase-lead-panel phase-lead-action phase-lead-action--${primaryAction.tone}`}>
           <div>
-            <div className="phase-lead-kicker">Naechste Aktion</div>
+            <div className="phase-lead-kicker">Nächste Aktion</div>
             <h2>{topRegionHeadline(topRegion)}</h2>
             <p>{primaryAction.explanation}</p>
           </div>
@@ -184,7 +233,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div className="phase-lead-live-metric">
             <span>Surge-Risiko</span>
             <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
-            <small>Schwelle fuer Vorbereitung</small>
+            <small>Schwelle für Vorbereitung</small>
           </div>
           <div className="phase-lead-live-metric">
             <span>Modellvertrauen</span>
@@ -206,7 +255,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
             </div>
             <p>
               Das Signal priorisiert Vorbereitung, nicht automatische
-              Umschichtung. Sales- und Outcome-Daten fehlen noch fuer echte
+              Umschichtung. Sales- und Outcome-Daten fehlen noch für echte
               Budgetfreigabe.
             </p>
           </div>
@@ -214,7 +263,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
             <article>
               <span>Heute erlaubt</span>
               <b>Vorbereiten</b>
-              <p>Regionale Creatives, Inventar, Zielgruppen und Apothekenlisten pruefen.</p>
+              <p>Regionale Creatives, Inventar, Zielgruppen und Apothekenlisten prüfen.</p>
             </article>
             <article>
               <span>Noch blockiert</span>
@@ -222,8 +271,8 @@ export const PhaseLeadResearchPage: React.FC = () => {
               <p>Ohne GELO-Sales bleibt jede Aktivierung eine manuelle Business-Entscheidung.</p>
             </article>
             <article>
-              <span>Naechster Datenhebel</span>
-              <b>Sales anschliessen</b>
+              <span>Nächster Datenhebel</span>
+              <b>Sales anschließen</b>
               <p>Danach kann das Signal gegen Nachfrage und Kampagnenwirkung kalibriert werden.</p>
             </article>
           </div>
@@ -233,11 +282,11 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div className="phase-lead-section-head">
             <div>
               <div className="phase-lead-kicker">Regionale Priorisierung</div>
-              <h2 id="phase-lead-region-title">Welche Bundeslaender jetzt Aufmerksamkeit brauchen.</h2>
+              <h2 id="phase-lead-region-title">Welche Bundesländer jetzt Aufmerksamkeit brauchen.</h2>
             </div>
             <p>
-              Sortiert nach GEGB: ein growth-weighted burden score fuer
-              Media-Priorisierung. Hoeher bedeutet: mehr erwartete Last bei
+              Sortiert nach GEGB: ein growth-weighted burden score für
+              Media-Priorisierung. Höher bedeutet: mehr erwartete Last bei
               positivem Wachstum.
             </p>
           </div>
@@ -276,7 +325,7 @@ export const PhaseLeadResearchPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="phase-lead-grid phase-lead-grid--two" aria-label="Operational context">
+        <section className="phase-lead-grid phase-lead-grid--two" aria-label="Operativer Kontext">
           <article className="phase-lead-panel phase-lead-output">
             <div className="phase-lead-kicker">Datenbasis</div>
             <h2>Live-Quellen sind verbunden.</h2>
@@ -292,22 +341,22 @@ export const PhaseLeadResearchPage: React.FC = () => {
           </article>
           <article className="phase-lead-panel phase-lead-output">
             <div className="phase-lead-kicker">Modellstatus</div>
-            <h2>{snapshot.summary.converged ? 'Optimierung konvergiert.' : 'Optimierung pruefen.'}</h2>
+            <h2>{snapshot.summary.converged ? 'Optimierung konvergiert.' : 'Optimierung prüfen.'}</h2>
             <p>
-              {snapshot.summary.fit_mode === 'map_optimization'
+              {isMapOptimized
                 ? 'Das Cockpit nutzt das gespeicherte MAP-Ergebnis aus dem Nachtlauf.'
                 : 'Das Cockpit nutzt gerade den schnellen Fallback, bis ein MAP-Ergebnis vorliegt.'}
             </p>
             <div className="phase-lead-model-meta">
               <span>Beobachtungen: {snapshot.summary.observation_count}</span>
-              <span>Fenster: {formatDate(snapshot.summary.window_start)} - {formatDate(snapshot.summary.window_end)}</span>
-              <span>Objective: {formatOne(snapshot.summary.objective_value)}</span>
+              <span>Fenster: {formatDate(snapshot.summary.window_start)} – {formatDate(snapshot.summary.window_end)}</span>
+              <span>Zielwert: {formatOne(snapshot.summary.objective_value)}</span>
             </div>
           </article>
         </section>
 
         {snapshot.warnings.length > 0 ? (
-          <section className="phase-lead-panel" aria-label="Model warnings">
+          <section className="phase-lead-panel" aria-label="Modellhinweise">
             <div className="phase-lead-kicker">Modellhinweise</div>
             <ul className="phase-lead-warning-list">
               {snapshot.warnings.slice(0, 4).map((warning) => (
@@ -321,12 +370,12 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div>
             <b>Produktstatus</b>
             <p>
-              Live-Fruehwarnsignal fuer Vorbereitung. Budgetfreigabe bleibt
+              Live-Frühwarnsignal für Vorbereitung. Budgetfreigabe bleibt
               blockiert, bis GELO-Sales und Outcome-Validierung angeschlossen sind.
             </p>
           </div>
           <Link to="/cockpit" className="phase-lead-footer__link">
-            Return to cockpit
+            Zurück ins Cockpit
           </Link>
         </footer>
       </main>

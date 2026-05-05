@@ -8,9 +8,9 @@
   --phase-soft: #7e8d9d;
   --phase-line: rgba(77, 121, 159, 0.2);
   --phase-line-strong: rgba(48, 95, 137, 0.34);
-  --phase-coral: #ff604d;
-  --phase-coral-deep: #df3f31;
-  --phase-cyan: #4db8ff;
+  --phase-coral: #ff2a59;
+  --phase-coral-deep: #d91446;
+  --phase-cyan: #00d6ff;
   --phase-green: #17a673;
   --phase-glass: rgba(255, 255, 255, 0.78);
   --phase-glass-strong: rgba(255, 255, 255, 0.92);
@@ -21,9 +21,9 @@
   min-height: 100vh;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 78% 12%, rgba(82, 190, 255, 0.28), transparent 32%),
-    radial-gradient(circle at 12% 16%, rgba(255, 96, 77, 0.12), transparent 28%),
-    linear-gradient(135deg, #ffffff 0%, #f1f9ff 48%, #ffffff 100%);
+    radial-gradient(circle at 72% 8%, rgba(0, 214, 255, 0.34), transparent 31%),
+    radial-gradient(circle at 14% 15%, rgba(255, 42, 89, 0.2), transparent 30%),
+    linear-gradient(135deg, #fffdf9 0%, #edfbff 48%, #ffffff 100%);
   color: var(--phase-ink);
   letter-spacing: 0;
 }
@@ -81,7 +81,7 @@
   height: 6px;
   border-radius: 50%;
   background: var(--phase-coral);
-  box-shadow: 0 0 0 6px rgba(255, 96, 77, 0.12), 0 0 18px rgba(255, 96, 77, 0.55);
+  box-shadow: 0 0 0 7px rgba(255, 42, 89, 0.14), 0 0 28px rgba(255, 42, 89, 0.42);
 }
 
 .phase-lead-brandline {
@@ -160,10 +160,10 @@
 
 .phase-lead-hero {
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(440px, 0.78fr);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 360px);
   gap: 34px 48px;
-  align-items: center;
-  min-height: 650px;
+  align-items: end;
+  min-height: 620px;
   padding: 0 0 30px;
 }
 
@@ -173,14 +173,15 @@
 }
 
 .phase-lead-hero h1 {
-  max-width: 760px;
-  margin: 22px 0 20px;
+  max-width: 980px;
+  margin: 34px 0 20px;
   color: var(--phase-ink);
   font-family: var(--peix-font-sans);
-  font-size: 82px;
+  font-size: clamp(76px, 12vw, 176px);
   font-weight: 800;
-  line-height: 0.96;
+  line-height: 0.88;
   letter-spacing: 0;
+  text-shadow: 0 18px 46px rgba(0, 184, 255, 0.13);
 }
 
 .phase-lead-hero p {
@@ -206,13 +207,13 @@
   min-height: 60px;
   max-width: 100%;
   padding: 0 24px;
-  border: 1px solid rgba(255, 96, 77, 0.42);
-  background: linear-gradient(135deg, #ff6b59, #ff4e43);
+  border: 1px solid rgba(255, 42, 89, 0.42);
+  background: linear-gradient(135deg, #ff2a59, #ff7a00 62%, #ffd000);
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
-  color: #fff;
+  color: var(--phase-ink);
   font-size: 16px;
   font-weight: 800;
-  box-shadow: 0 16px 36px rgba(255, 96, 77, 0.25);
+  box-shadow: 0 20px 44px rgba(255, 42, 89, 0.26);
 }
 
 .phase-lead-primary-command--watch {
@@ -242,8 +243,88 @@
 }
 
 .phase-lead-hero__visual {
-  position: relative;
-  min-height: 540px;
+  display: grid;
+  gap: 14px;
+  min-height: 360px;
+  align-content: end;
+}
+
+.phase-lead-signal-card {
+  display: grid;
+  min-height: 360px;
+  align-content: center;
+  padding: 24px;
+  border: 1px solid rgba(255, 42, 89, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 42, 89, 0.12), rgba(0, 214, 255, 0.14)),
+    rgba(255, 255, 255, 0.8);
+  box-shadow: 0 30px 70px rgba(0, 144, 204, 0.15);
+}
+
+.phase-lead-signal-card span,
+.phase-lead-signal-strip span {
+  display: block;
+  color: #075f7a;
+  font-family: var(--peix-font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.phase-lead-signal-card strong {
+  display: block;
+  margin: 10px 0 14px;
+  color: var(--phase-coral);
+  font-family: var(--peix-font-sans);
+  font-size: 126px;
+  font-weight: 800;
+  line-height: 0.9;
+  text-shadow: 8px 8px 0 rgba(0, 214, 255, 0.16);
+}
+
+.phase-lead-signal-card p {
+  margin: 0;
+  color: #38505d;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.phase-lead-signal-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.phase-lead-signal-strip div {
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid rgba(7, 17, 31, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.phase-lead-signal-strip div:first-child {
+  border-color: rgba(255, 42, 89, 0.24);
+  background: linear-gradient(135deg, rgba(255, 42, 89, 0.1), rgba(255, 255, 255, 0.82));
+}
+
+.phase-lead-signal-strip div:nth-child(2) {
+  border-color: rgba(255, 122, 0, 0.26);
+  background: linear-gradient(135deg, rgba(255, 122, 0, 0.11), rgba(255, 255, 255, 0.82));
+}
+
+.phase-lead-signal-strip div:nth-child(3) {
+  border-color: rgba(0, 184, 255, 0.26);
+  background: linear-gradient(135deg, rgba(0, 214, 255, 0.12), rgba(255, 255, 255, 0.82));
+}
+
+.phase-lead-signal-strip strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--phase-ink);
+  font-family: var(--peix-font-sans);
+  font-size: 22px;
+  line-height: 1;
 }
 
 .phase-lead-orbital-map {

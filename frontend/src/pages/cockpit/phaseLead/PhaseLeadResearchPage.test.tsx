@@ -129,7 +129,8 @@ describe('PhaseLeadResearchPage', () => {
 
     renderPage();
 
-    expect(screen.getByRole('heading', { name: /Regional Media Watch/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /HE zuerst\./i })).toBeInTheDocument();
+    expect(screen.getByText(/Regional Media Watch übersetzt Atemwegsdaten/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Gesamt' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Influenza A' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Influenza B' })).toBeInTheDocument();
@@ -177,6 +178,6 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getByRole('heading', { name: /Niedersachsen zuerst vorbereiten/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Gesamt-Score/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /Haupttreiber/i })).toBeInTheDocument();
-    expect(screen.getByText(/SARS-CoV-2 \+ Influenza B/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/SARS-CoV-2 \+ Influenza B/i).length).toBeGreaterThan(0);
   });
 });

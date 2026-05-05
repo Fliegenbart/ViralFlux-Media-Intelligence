@@ -158,6 +158,9 @@ export const PhaseLeadResearchPage: React.FC = () => {
   const modelConfidence = confidenceLabel(snapshot);
   const isMapOptimized = snapshot.summary.fit_mode === 'map_optimization';
   const isAggregate = snapshot.virus_typ === 'Gesamt' || Boolean(snapshot.aggregate);
+  const heroHeadline = topRegion ? `${topRegion.region_code} zuerst.` : 'Region zuerst.';
+  const topDriverLabel = topRegion ? aggregateDrivers(snapshot, topRegion.region_code) : '-';
+  const heroScoreLabel = isAggregate ? 'Gesamt-Score' : 'GEGB';
 
   return (
     <div className="peix phase-lead-page">
@@ -186,13 +189,14 @@ export const PhaseLeadResearchPage: React.FC = () => {
           <div className="phase-lead-hero__copy">
             <div className="phase-lead-kicker">
               <span className="phase-lead-live-dot" aria-hidden="true" />
-              Live-Produktsignal
+              Media-Fokus
             </div>
-            <h1>Regional Media Watch</h1>
+            <h1>{heroHeadline}</h1>
             <p>
-              Frühwarnung für regionale Media-Vorbereitung. Das Signal sagt,
-              welche Bundesländer in den nächsten Tagen wahrscheinlicher
-              steigen und wo Marketing heute vorbereitet sein sollte.
+              Regional Media Watch übersetzt Atemwegsdaten in eine klare
+              Vorbereitungsempfehlung: welches Bundesland zuerst Aufmerksamkeit
+              braucht, welcher Score dahintersteht und ob Budget noch gesperrt
+              bleibt.
             </p>
             <div className="phase-lead-hero__cta-row">
               <div className={`phase-lead-primary-command phase-lead-primary-command--${primaryAction.tone}`}>
@@ -206,32 +210,28 @@ export const PhaseLeadResearchPage: React.FC = () => {
           </div>
 
           <aside className="phase-lead-hero__visual" aria-label="Signalstatus">
-            <div className="phase-lead-orbital-map" aria-hidden="true">
-              <span className="phase-lead-orbit phase-lead-orbit--outer" />
-              <span className="phase-lead-orbit phase-lead-orbit--middle" />
-              <span className="phase-lead-orbit phase-lead-orbit--inner" />
-              <span className="phase-lead-map-glass" />
-              <span className="phase-lead-region-core">{topRegion?.region_code ?? '--'}</span>
-              <span className="phase-lead-node phase-lead-node--one" />
-              <span className="phase-lead-node phase-lead-node--two" />
-              <span className="phase-lead-node phase-lead-node--three" />
-              <span className="phase-lead-node phase-lead-node--four" />
-              <span className="phase-lead-radar-line" />
+            <div className="phase-lead-signal-card">
+              <span>{heroScoreLabel}</span>
+              <strong>{formatOne(topRegion?.gegb)}</strong>
+              <p>
+                {isAggregate && topDriverLabel !== '-'
+                  ? `${topDriverLabel} treiben das Signal am stärksten.`
+                  : `${snapshot.virus_typ} treibt das regionale Signal.`}
+              </p>
             </div>
-            <div className="phase-lead-floating-card phase-lead-floating-card--up">
-              <span>p(up)</span>
-              <strong>{formatPercent(topRegion?.p_up_h7)}</strong>
-              <small>Trend {formatSigned(topRegion?.current_growth)}</small>
-            </div>
-            <div className="phase-lead-floating-card phase-lead-floating-card--surge">
-              <span>Surge</span>
-              <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
-              <small>{topRegion?.region ?? 'Keine Region'}</small>
-            </div>
-            <div className="phase-lead-floating-card phase-lead-floating-card--model">
-              <span>MAP</span>
-              <strong>{snapshot.summary.converged ? 'konvergiert' : 'prüfen'}</strong>
-              <small>Vertrauen: {modelConfidence}</small>
+            <div className="phase-lead-signal-strip" aria-label="Top-Signale">
+              <div>
+                <span>p(up) 7 Tage</span>
+                <strong>{formatPercent(topRegion?.p_up_h7)}</strong>
+              </div>
+              <div>
+                <span>Surge</span>
+                <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
+              </div>
+              <div>
+                <span>Budget</span>
+                <strong>gesperrt</strong>
+              </div>
             </div>
           </aside>
 

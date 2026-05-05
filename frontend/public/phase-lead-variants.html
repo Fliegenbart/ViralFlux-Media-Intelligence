@@ -422,6 +422,340 @@
         background: rgba(255, 255, 255, 0.72);
       }
 
+      .variant-d {
+        background:
+          linear-gradient(90deg, rgba(19, 91, 143, 0.06) 1px, transparent 1px),
+          linear-gradient(rgba(19, 91, 143, 0.06) 1px, transparent 1px),
+          radial-gradient(circle at 92% 18%, rgba(22, 166, 115, 0.18), transparent 28%),
+          #fbfeff;
+        background-size: 48px 48px, 48px 48px, auto, auto;
+      }
+
+      .variant-d .hero {
+        grid-template-columns: minmax(0, 0.78fr) minmax(520px, 1fr);
+      }
+
+      .variant-d h2 {
+        font-size: clamp(50px, 6vw, 96px);
+      }
+
+      .atlas {
+        position: relative;
+        min-height: 500px;
+        padding: 26px;
+        border: 1px solid rgba(19, 91, 143, 0.18);
+        background: rgba(255, 255, 255, 0.66);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72), 0 30px 70px rgba(36, 98, 139, 0.12);
+      }
+
+      .atlas-map {
+        position: absolute;
+        inset: 56px 108px 48px 58px;
+        clip-path: polygon(43% 0, 65% 7%, 73% 23%, 88% 27%, 97% 45%, 86% 63%, 73% 70%, 67% 90%, 48% 97%, 33% 82%, 16% 88%, 4% 69%, 15% 52%, 3% 37%, 18% 18%);
+        background:
+          radial-gradient(circle at 48% 58%, rgba(255, 96, 77, 0.58), transparent 15%),
+          radial-gradient(circle at 61% 34%, rgba(77, 184, 255, 0.48), transparent 18%),
+          linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(213, 244, 236, 0.68));
+        border: 1px solid rgba(19, 91, 143, 0.28);
+        filter: drop-shadow(0 28px 38px rgba(19, 91, 143, 0.16));
+      }
+
+      .atlas-pin {
+        position: absolute;
+        display: grid;
+        width: 96px;
+        height: 96px;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        background: radial-gradient(circle, #ff604d, rgba(255, 96, 77, 0.36));
+        color: #fff;
+        font-family: "Space Mono", monospace;
+        font-size: 24px;
+        font-weight: 700;
+        box-shadow: 0 0 0 16px rgba(255, 96, 77, 0.11), 0 0 44px rgba(255, 96, 77, 0.42);
+      }
+
+      .atlas-pin.primary { left: 44%; top: 43%; }
+      .atlas-pin.secondary {
+        left: 58%;
+        top: 25%;
+        width: 46px;
+        height: 46px;
+        font-size: 12px;
+        background: radial-gradient(circle, #4db8ff, rgba(77, 184, 255, 0.28));
+        box-shadow: 0 0 0 10px rgba(77, 184, 255, 0.12);
+      }
+
+      .atlas-callout {
+        position: absolute;
+        right: 28px;
+        bottom: 28px;
+        max-width: 280px;
+        padding: 18px;
+        border: 1px solid rgba(22, 166, 115, 0.28);
+        background: rgba(255, 255, 255, 0.84);
+        backdrop-filter: blur(16px);
+      }
+
+      .atlas-callout strong {
+        display: block;
+        margin: 7px 0;
+        color: var(--green);
+        font-size: 42px;
+        line-height: 1;
+      }
+
+      .atlas-rail {
+        position: absolute;
+        left: 24px;
+        top: 24px;
+        display: grid;
+        gap: 9px;
+        width: 150px;
+      }
+
+      .atlas-rail span {
+        padding: 10px;
+        border: 1px solid rgba(19, 91, 143, 0.14);
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--muted);
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .variant-e {
+        background:
+          linear-gradient(135deg, #ffffff 0%, #f3fbff 48%, #ffffff 100%);
+      }
+
+      .variant-e .hero {
+        grid-template-columns: minmax(360px, 0.52fr) minmax(0, 1fr);
+        gap: 26px;
+        align-items: stretch;
+      }
+
+      .decision-rail {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 500px;
+        padding: 26px;
+        border: 1px solid rgba(7, 17, 31, 0.12);
+        background: #07111f;
+        color: #fff;
+      }
+
+      .decision-rail h2 {
+        margin-top: 32px;
+        color: #fff;
+        font-size: clamp(42px, 4.5vw, 78px);
+      }
+
+      .decision-rail p,
+      .decision-rail .variant-note {
+        color: rgba(255, 255, 255, 0.68);
+      }
+
+      .rail-status {
+        display: grid;
+        gap: 10px;
+      }
+
+      .rail-status div {
+        display: grid;
+        grid-template-columns: 82px 1fr;
+        gap: 14px;
+        align-items: center;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .rail-status strong {
+        color: #fff;
+        font-size: 20px;
+      }
+
+      .command-board {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        align-content: stretch;
+      }
+
+      .command-card {
+        position: relative;
+        overflow: hidden;
+        min-height: 238px;
+        padding: 18px;
+        border: 1px solid rgba(65, 112, 154, 0.18);
+        background: rgba(255, 255, 255, 0.76);
+      }
+
+      .command-card.large {
+        grid-row: span 2;
+        min-height: 488px;
+      }
+
+      .command-card strong {
+        display: block;
+        margin-top: 14px;
+        font-size: 48px;
+        line-height: 0.95;
+      }
+
+      .command-card small {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+
+      .command-wave {
+        position: absolute;
+        inset: auto -10% 0;
+        height: 48%;
+        background:
+          linear-gradient(135deg, rgba(255, 96, 77, 0.48), transparent 62%),
+          repeating-linear-gradient(90deg, rgba(77, 184, 255, 0.28) 0 8px, transparent 8px 18px);
+        clip-path: polygon(0 74%, 10% 64%, 22% 70%, 34% 38%, 46% 46%, 58% 20%, 70% 30%, 84% 8%, 100% 14%, 100% 100%, 0 100%);
+      }
+
+      .command-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .command-list div {
+        display: grid;
+        grid-template-columns: 42px 1fr 70px;
+        gap: 10px;
+        align-items: center;
+        padding: 11px 0;
+        border-bottom: 1px solid rgba(7, 17, 31, 0.1);
+      }
+
+      .variant-f {
+        min-height: 780px;
+        background:
+          radial-gradient(circle at 72% 10%, rgba(0, 214, 255, 0.34), transparent 31%),
+          radial-gradient(circle at 16% 18%, rgba(255, 42, 89, 0.2), transparent 30%),
+          linear-gradient(135deg, #fffdf9 0%, #edfbff 48%, #ffffff 100%);
+      }
+
+      .variant-f .hero {
+        display: block;
+        min-height: 620px;
+        padding: 38px 44px 0;
+      }
+
+      .variant-f .variant-head {
+        border-bottom-color: rgba(255, 42, 89, 0.28);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .variant-f .chip {
+        border-color: rgba(0, 184, 255, 0.34);
+        background: rgba(0, 214, 255, 0.09);
+        color: #075f7a;
+      }
+
+      .variant-f .dot {
+        background: #ff2a59;
+        box-shadow: 0 0 0 7px rgba(255, 42, 89, 0.14), 0 0 28px rgba(255, 42, 89, 0.42);
+      }
+
+      .variant-f .kicker {
+        color: #075f7a;
+      }
+
+      .variant-f .cta {
+        background: linear-gradient(135deg, #ff2a59, #ff7a00 62%, #ffd000);
+        color: #07111f;
+        box-shadow: 0 20px 44px rgba(255, 42, 89, 0.26);
+      }
+
+      .executive-signal {
+        display: grid;
+        grid-template-columns: 1fr 360px;
+        gap: 34px;
+        align-items: end;
+        min-height: 520px;
+      }
+
+      .executive-signal h2 {
+        max-width: 960px;
+        margin-top: 34px;
+        color: #06101d;
+        font-size: clamp(76px, 12vw, 176px);
+        line-height: 0.88;
+        text-shadow: 0 18px 46px rgba(0, 184, 255, 0.13);
+      }
+
+      .signal-number {
+        display: grid;
+        min-height: 360px;
+        align-content: center;
+        padding: 24px;
+        border: 1px solid rgba(255, 42, 89, 0.28);
+        background:
+          linear-gradient(135deg, rgba(255, 42, 89, 0.12), rgba(0, 214, 255, 0.14)),
+          rgba(255, 255, 255, 0.8);
+        box-shadow: 0 30px 70px rgba(0, 144, 204, 0.15);
+      }
+
+      .signal-number strong {
+        color: #ff2a59;
+        font-size: 126px;
+        font-weight: 800;
+        line-height: 0.9;
+        text-shadow: 8px 8px 0 rgba(0, 214, 255, 0.16);
+      }
+
+      .signal-number p {
+        margin-top: 14px;
+        color: #38505d;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      .signal-footer {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr 1fr;
+        gap: 10px;
+        margin: 0 44px 44px;
+        background: transparent;
+      }
+
+      .signal-footer div {
+        min-height: 130px;
+        padding: 18px;
+        border: 1px solid rgba(7, 17, 31, 0.1);
+        background: rgba(255, 255, 255, 0.74);
+      }
+
+      .signal-footer div:first-child {
+        border-color: rgba(255, 42, 89, 0.24);
+        background: linear-gradient(135deg, rgba(255, 42, 89, 0.1), rgba(255, 255, 255, 0.82));
+      }
+
+      .signal-footer div:nth-child(2) {
+        border-color: rgba(255, 122, 0, 0.26);
+        background: linear-gradient(135deg, rgba(255, 122, 0, 0.11), rgba(255, 255, 255, 0.82));
+      }
+
+      .signal-footer div:nth-child(3) {
+        border-color: rgba(0, 184, 255, 0.26);
+        background: linear-gradient(135deg, rgba(0, 214, 255, 0.12), rgba(255, 255, 255, 0.82));
+      }
+
+      .signal-footer strong {
+        display: block;
+        margin: 8px 0;
+        font-size: 24px;
+      }
+
       @media (max-width: 900px) {
         .page {
           padding: 16px;
@@ -430,7 +764,8 @@
         .intro,
         .variant-head,
         .hero,
-        .poster {
+        .poster,
+        .executive-signal {
           display: block;
         }
 
@@ -456,9 +791,43 @@
 
         .metrics,
         .poster-strip,
-        .instrument {
+        .instrument,
+        .command-board,
+        .signal-footer {
           grid-template-columns: 1fr;
           padding: 0 18px 28px;
+        }
+
+        .variant-d .hero,
+        .variant-e .hero {
+          grid-template-columns: 1fr;
+        }
+
+        .atlas,
+        .decision-rail {
+          margin-top: 24px;
+        }
+
+        .atlas-map {
+          inset: 110px 26px 80px;
+        }
+
+        .atlas-rail,
+        .atlas-callout {
+          position: relative;
+          inset: auto;
+          width: auto;
+          max-width: none;
+          margin-top: 12px;
+        }
+
+        .command-card.large {
+          min-height: 280px;
+        }
+
+        .signal-number {
+          border-left: 0;
+          min-height: auto;
         }
       }
     </style>
@@ -575,6 +944,117 @@
           <div><span class="meta">Budget</span><h3>Shadow-only</h3><p class="variant-note">Keine automatische Umschichtung ohne GELO-Sales.</p></div>
           <div><span class="meta">Modell</span><h3>MAP konvergiert</h3><p class="variant-note">Gespeicherter Nachtlauf.</p></div>
           <div><span class="meta">Quellen</span><h3>AMELAG · SurvStat · ARE</h3><p class="variant-note">Reale Datenbasis, kein Demo-Modus.</p></div>
+        </div>
+      </section>
+
+      <section class="variant variant-d">
+        <div class="variant-head">
+          <b>Variante D · Lab Atlas</b>
+          <span class="chip">Kartenartig · hell · datenqualitätsgewichtet</span>
+        </div>
+        <div class="hero">
+          <div>
+            <div class="kicker"><span class="dot"></span>Gesamt-Score</div>
+            <h2>Wo Atemwegsdruck zuerst entsteht.</h2>
+            <p>
+              Diese Richtung macht den neuen Gesamtwert zum Star: ein heller
+              Labor-Atlas mit Bundesland-Fokus, Haupttreibern und Gewichtung der
+              Viren nach Datenqualität.
+            </p>
+            <div class="cta">→ Rheinland-Pfalz vorbereiten</div>
+          </div>
+          <div class="atlas" aria-hidden="true">
+            <div class="atlas-rail">
+              <span>Influenza A · 25,5%</span>
+              <span>RSV A · 25,4%</span>
+              <span>SARS-CoV-2 · 25,4%</span>
+              <span>Influenza B · 23,7%</span>
+            </div>
+            <div class="atlas-map"></div>
+            <div class="atlas-pin primary">RP</div>
+            <div class="atlas-pin secondary">HE</div>
+            <div class="atlas-callout">
+              <span class="meta">Haupttreiber</span>
+              <strong>SARS-CoV-2</strong>
+              <p class="variant-note">plus Influenza B. Der Gesamt-Score bleibt ein Produktindex, kein Diagnosewert.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="variant variant-e">
+        <div class="variant-head">
+          <b>Variante E · Decision Rail</b>
+          <span class="chip">Kontrastreich · sehr operativ · klare Handlung</span>
+        </div>
+        <div class="hero">
+          <div class="decision-rail">
+            <div class="kicker"><span class="dot"></span>Aktionslogik</div>
+            <div>
+              <h2>Vorbereiten, nicht blind ausspielen.</h2>
+              <p>
+                Links steht die Entscheidung. Rechts stehen nur die Daten, die
+                man braucht, um diese Entscheidung zu verstehen.
+              </p>
+            </div>
+            <div class="rail-status">
+              <div><span class="meta">Budget</span><strong>gesperrt</strong></div>
+              <div><span class="meta">Sales</span><strong>fehlen</strong></div>
+              <div><span class="meta">Nutzung</span><strong>Media-Prep</strong></div>
+            </div>
+          </div>
+          <div class="command-board">
+            <div class="command-card large">
+              <span class="meta">Gesamt-Score</span>
+              <strong>71,4</strong>
+              <small>Rheinland-Pfalz führt das Ranking an.</small>
+              <div class="command-wave"></div>
+            </div>
+            <div class="command-card">
+              <span class="meta">p(up) 7 Tage</span>
+              <strong>79%</strong>
+              <small>Wahrscheinlichkeit für steigende Aktivität.</small>
+            </div>
+            <div class="command-card">
+              <span class="meta">Regionen</span>
+              <div class="command-list">
+                <div><b>RP</b><span>Vorbereiten</span><strong>71</strong></div>
+                <div><b>HE</b><span>Beobachten</span><strong>64</strong></div>
+                <div><b>BY</b><span>Halten</span><strong>42</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="variant variant-f">
+        <div class="variant-head">
+          <b>Variante F · Executive Signal</b>
+          <span class="chip">Minimal · plakativ · für schnelle Führungsebene</span>
+        </div>
+        <div class="hero">
+          <div class="executive-signal">
+            <div>
+              <div class="kicker"><span class="dot"></span>Media-Fokus</div>
+              <h2>RP zuerst.</h2>
+              <p>
+                Eine sehr reduzierte Variante: maximale Klarheit, wenig Oberfläche,
+                starke Typografie. Gut, wenn die Seite wie ein täglicher
+                Entscheidungszettel wirken soll.
+              </p>
+              <div class="cta">→ Vorbereitung öffnen</div>
+            </div>
+            <div class="signal-number">
+              <span class="meta">Gesamt-Score</span>
+              <strong>71</strong>
+              <p>SARS-CoV-2 und Influenza B treiben das Signal am stärksten.</p>
+            </div>
+          </div>
+        </div>
+        <div class="signal-footer">
+          <div><span class="meta">Datenqualität</span><strong>Gewichtet</strong><p class="variant-note">MAP-Artefakte vor Schnellmodus.</p></div>
+          <div><span class="meta">Budget</span><strong>Shadow-only</strong><p class="variant-note">Keine automatische Freigabe.</p></div>
+          <div><span class="meta">Quellen</span><strong>AMELAG · SurvStat · ARE</strong><p class="variant-note">Echte Daten, keine Demo-Werte.</p></div>
         </div>
       </section>
     </main>

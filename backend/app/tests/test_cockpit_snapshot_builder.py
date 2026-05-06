@@ -184,6 +184,85 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
             for p in patches:
                 p.stop()
 
+    def _phase_lead_authority_snapshot(self) -> dict:
+        return {
+            "module": "phase_lead_graph_renewal_filter",
+            "version": "plgrf_aggregate_v0",
+            "mode": "research",
+            "as_of": "2026-05-05",
+            "virus_typ": "Gesamt",
+            "horizons": [3, 5, 7, 10, 14],
+            "summary": {
+                "fit_mode": "map_optimization",
+                "converged": True,
+                "top_region": "RP",
+                "observation_count": 1200,
+                "warning_count": 0,
+            },
+            "sources": {},
+            "regions": [
+                {
+                    "region_code": "RP",
+                    "region": "Rheinland-Pfalz",
+                    "current_growth": 0.432,
+                    "p_up_h7": 0.62,
+                    "p_surge_h7": 0.54,
+                    "gegb": 61.2,
+                    "source_rows": 90,
+                },
+                {
+                    "region_code": "HH",
+                    "region": "Hamburg",
+                    "current_growth": 0.02,
+                    "p_up_h7": 0.18,
+                    "p_surge_h7": 0.11,
+                    "gegb": 8.4,
+                    "source_rows": 30,
+                },
+            ],
+            "rankings": {"Gesamt": [{"region_id": "RP", "gegb": 61.2}]},
+            "warnings": [],
+            "aggregate": {
+                "kind": "respiratory_pressure",
+                "weighting": "data_quality",
+                "available_viruses": ["SARS-CoV-2", "Influenza B"],
+                "fallback_viruses": [],
+                "virus_weights": [],
+                "drivers_by_region": {
+                    "RP": [
+                        {"virus_typ": "SARS-CoV-2", "contribution": 34.1},
+                        {"virus_typ": "Influenza B", "contribution": 21.8},
+                    ],
+                    "HH": [{"virus_typ": "Influenza A", "contribution": 4.2}],
+                },
+            },
+        }
+
+    def _regional_payload_with_wrong_hamburg_top(self) -> dict:
+        return {
+            "status": "success",
+            "predictions": [
+                {
+                    "bundesland": "HH",
+                    "expected_next_week_incidence": 61.0,
+                    "current_known_incidence": 50.0,
+                    "prediction_interval": {"lower": 50.0, "upper": 74.0},
+                    "change_pct": 15.1,
+                    "event_probability": 0.71,
+                    "decision_label": "Prepare",
+                },
+                {
+                    "bundesland": "RP",
+                    "expected_next_week_incidence": 42.0,
+                    "current_known_incidence": 41.0,
+                    "prediction_interval": {"lower": 37.0, "upper": 50.0},
+                    "change_pct": 2.0,
+                    "event_probability": 0.41,
+                    "decision_label": "Watch",
+                },
+            ],
+        }
+
     # ---------- ranking + lead blocks ----------
 
     def test_lead_block_pulled_from_atemwegsindex_backtest_by_default(self) -> None:
@@ -207,6 +286,29 @@ class CockpitSnapshotBuilderTests(unittest.TestCase):
         self.assertAlmostEqual(lead["correlationAtBestLag"], 0.95)
         self.assertAlmostEqual(lead["maeVsPersistencePct"], 5.94)
         self.assertTrue(lead["hasRun"])
+
+    def test_phase_lead_authority_overrides_cockpit_regional_priority(self) -> None:
+        self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")
+
+        with patch.object(
+            snapshot_builder,
+            "load_phase_lead_authority_snapshot",
+            return_value=self._phase_lead_authority_snapshot(),
+        ):
+            payload = self._build(
+                regional_forecast_service=_FakeRegionalForecastService(
+                    self._regional_payload_with_wrong_hamburg_top()
+                )
+            )
+
+        self.assertEqual(payload["phaseLeadAuthority"]["topRegionCode"], "RP")
+        self.assertEqual(payload["regions"][0]["code"], "RP")
+        self.assertEqual(payload["regions"][0]["phaseLeadScore"], 61.2)
+        self.assertEqual(payload["regions"][0]["phaseLeadDrivers"], ["SARS-CoV-2", "Influenza B"])
+        self.assertAlmostEqual(payload["regions"][0]["delta7d"], 0.432)
+        self.assertEqual(payload["regions"][0]["decisionLabel"], "Prepare")
+        self.assertEqual(payload["primaryRecommendation"]["toCode"], "RP")
+        self.assertIn("Phase-Lead", payload["primaryRecommendation"]["why"])
 
     def test_ranking_block_filled_from_training_summary(self) -> None:
         self._insert_backtest(virus_typ="Influenza A", target_source="ATEMWEGSINDEX")

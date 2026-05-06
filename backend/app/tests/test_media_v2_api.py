@@ -654,6 +654,97 @@ class MediaV2ApiTests(unittest.TestCase):
         self.assertEqual(region["gates"]["sales_calibration"], "not_available")
         self.assertFalse(body["summary"]["budget_can_change"])
 
+    def test_tri_layer_snapshot_follows_phase_lead_regional_priority(self) -> None:
+        class StubRegionalForecastService:
+            def __init__(self, db):
+                self.db = db
+
+            def predict_all_regions(self, *, virus_typ: str, brand: str, horizon_days: int):
+                return {
+                    "virus_typ": virus_typ,
+                    "horizon_days": horizon_days,
+                    "status": "ok",
+                    "as_of_date": "2026-04-30",
+                    "predictions": [
+                        {
+                            "bundesland": "HH",
+                            "bundesland_name": "Hamburg",
+                            "event_probability": 0.82,
+                            "change_pct": 24.0,
+                            "expected_next_week_incidence": 71.0,
+                            "current_known_incidence": 48.0,
+                            "prediction_interval": {"lower": 55.0, "upper": 93.0},
+                            "decision": {"forecast_confidence": 0.74},
+                        },
+                        {
+                            "bundesland": "RP",
+                            "bundesland_name": "Rheinland-Pfalz",
+                            "event_probability": 0.31,
+                            "change_pct": 2.0,
+                            "expected_next_week_incidence": 41.0,
+                            "current_known_incidence": 40.0,
+                            "prediction_interval": {"lower": 37.0, "upper": 47.0},
+                            "decision": {"forecast_confidence": 0.42},
+                        },
+                    ],
+                    "generated_at": utc_now().isoformat(),
+                }
+
+        phase_lead = {
+            "version": "plgrf_aggregate_v0",
+            "as_of": "2026-05-05",
+            "virus_typ": "Gesamt",
+            "summary": {"top_region": "RP", "fit_mode": "map_optimization", "converged": True},
+            "regions": [
+                {
+                    "region_code": "RP",
+                    "region": "Rheinland-Pfalz",
+                    "gegb": 61.2,
+                    "current_growth": 0.432,
+                    "p_up_h7": 0.62,
+                    "p_surge_h7": 0.54,
+                },
+                {
+                    "region_code": "HH",
+                    "region": "Hamburg",
+                    "gegb": 8.4,
+                    "current_growth": 0.02,
+                    "p_up_h7": 0.18,
+                    "p_surge_h7": 0.11,
+                },
+            ],
+            "aggregate": {
+                "drivers_by_region": {
+                    "RP": [
+                        {"virus_typ": "SARS-CoV-2", "contribution": 34.1},
+                        {"virus_typ": "Influenza B", "contribution": 21.8},
+                    ]
+                }
+            },
+            "warnings": [],
+        }
+
+        with (
+            patch("app.services.ml.regional_forecast.RegionalForecastService", StubRegionalForecastService),
+            patch(
+                "app.services.media.cockpit.tri_layer_evidence.load_phase_lead_authority_snapshot",
+                return_value=phase_lead,
+                create=True,
+            ),
+        ):
+            response = self.client.get(
+                "/api/v1/media/cockpit/tri-layer/snapshot?virus_typ=Influenza%20A&horizon_days=7",
+                headers=self.admin_headers,
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["regions"][0]["region_code"], "RP")
+        self.assertEqual(body["regions"][0]["phase_lead_score"], 61.2)
+        self.assertEqual(body["regions"][0]["phase_lead_drivers"], ["SARS-CoV-2", "Influenza B"])
+        self.assertAlmostEqual(body["regions"][0]["early_warning_score"], 61.2)
+        self.assertIn("Phase-Lead aggregate is the regional priority source.", body["model_notes"])
+
     def test_tri_layer_snapshot_uses_wastewater_observations_for_evidence_weight(self) -> None:
         self.db.query(WastewaterAggregated).delete()
         now = utc_now().replace(tzinfo=None)

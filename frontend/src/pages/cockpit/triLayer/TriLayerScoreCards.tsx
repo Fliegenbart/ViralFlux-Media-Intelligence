@@ -14,9 +14,9 @@ function formatState(value: string): string {
 export const TriLayerScoreCards: React.FC<{ summary: TriLayerSummary }> = ({ summary }) => (
   <section className="tri-layer-score-grid" aria-label="Tri-Layer score summary">
     <article className="tri-layer-score-card">
-      <div className="tri-layer-kicker">Tri-Layer Frühwarn-Score</div>
+      <div className="tri-layer-kicker">Phase-Lead Frühwarn-Score</div>
       <strong className="tri-layer-score-value">{formatScore(summary.early_warning_score)}</strong>
-      <p>Konservativer Cross-Layer-Wert. Er ist nicht identisch mit dem Cockpit-Riser und keine Budgetfreigabe.</p>
+      <p>Regionaler Atemwegsdruck aus Phase-Lead. Er priorisiert Regionen, gibt aber noch kein Budget frei.</p>
     </article>
     <article className="tri-layer-score-card">
       <div className="tri-layer-kicker">Commercial Relevance Score</div>

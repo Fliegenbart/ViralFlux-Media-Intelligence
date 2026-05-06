@@ -67,6 +67,12 @@ export interface TriLayerRegion {
   evidence_weights: TriLayerEvidenceWeights;
   lead_lag: TriLayerLeadLag;
   gates: TriLayerGates;
+  phase_lead_rank?: number | null;
+  phase_lead_score?: number | null;
+  phase_lead_p_up_h7?: number | null;
+  phase_lead_p_surge_h7?: number | null;
+  phase_lead_growth?: number | null;
+  phase_lead_drivers?: string[];
   explanation: string;
 }
 

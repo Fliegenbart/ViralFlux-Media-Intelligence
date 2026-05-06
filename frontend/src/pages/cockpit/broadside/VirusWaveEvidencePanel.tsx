@@ -24,7 +24,7 @@ function waveTruthFrom(snapshot: CockpitSnapshot): VirusWaveTruth | null {
   return snapshot.virusWaveTruth ?? mediaTruth?.virusWaveTruth ?? null;
 }
 
-function topRiserNames(snapshot: CockpitSnapshot): string {
+function topRiserSummary(snapshot: CockpitSnapshot): string {
   const names = [...(snapshot.regions ?? [])]
     .filter((region) =>
       typeof region.delta7d === 'number' &&
@@ -34,7 +34,9 @@ function topRiserNames(snapshot: CockpitSnapshot): string {
     .slice(0, 3)
     .map((region) => region.name)
     .filter(Boolean);
-  return names.length > 0 ? names.join(', ') : 'Hamburg, Berlin, Brandenburg';
+  return names.length > 0
+    ? `${names.join(', ')} sind die heutigen Top-Regionen.`
+    : 'Noch keine eindeutige Top-Region sichtbar.';
 }
 
 export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
@@ -103,7 +105,7 @@ export const VirusWaveEvidencePanel: React.FC<Props> = ({ snapshot }) => {
           <div className="wave-source-kicker">AMELAG-Frühsignal</div>
           <div className="wave-source-phase">Lebt.</div>
           <p>
-            {topRiserNames(snapshot)} sind die heutigen Top-Riser.
+            {topRiserSummary(snapshot)}
           </p>
         </div>
         <div className="wave-source confirmed">

@@ -93,29 +93,29 @@ export const TriLayerPage: React.FC = () => {
           <div className="tri-layer-section-head">
             <div>
               <div className="tri-layer-kicker">Lesart</div>
-              <h2 id="tri-layer-reconcile-title">Cockpit-Signal ≠ Tri-Layer-Freigabe</h2>
+              <h2 id="tri-layer-reconcile-title">Phase-Lead-Priorität ≠ Budget-Freigabe</h2>
             </div>
             <p>
-              Das Cockpit zeigt den heutigen regionalen Signal-Kandidaten.
-              Der Tri-Layer prüft, ob Abwasser, Klinik und Sales gemeinsam
-              stark genug sind.
+              Phase-Lead liefert die regionale Atemwegs-Priorität.
+              Der Tri-Layer prüft zusätzlich, ob klinische Bestätigung und
+              Sales-Kalibrierung stark genug sind.
             </p>
           </div>
           <div className="tri-layer-reconcile-grid">
             <div>
-              <span>Cockpit</span>
-              <b>aktueller regionaler Riser</b>
-              <small>{topRegionName} kann sichtbar steigen, während der Tri-Layer niedrig bleibt.</small>
+              <span>Phase-Lead</span>
+              <b>regionale Priorität</b>
+              <small>{topRegionName} ist die aktuelle Phase-Lead-Top-Region.</small>
             </div>
             <div>
               <span>Tri-Layer</span>
-              <b>konservative Tragfähigkeit</b>
-              <small>Sales fehlt, Horizon {snapshot.horizon_days} days, Budget bleibt blockiert.</small>
+              <b>Evidenz-Gates</b>
+              <small>Klinik und Sales entscheiden, ob aus dem Signal später eine Freigabe werden darf.</small>
             </div>
             <div>
               <span>Budget</span>
               <b>{String(snapshot.summary.budget_can_change)}</b>
-              <small>Ein niedriger Cross-Layer-Score ändert keine Cockpit-Daten und gibt kein Budget frei.</small>
+              <small>Budget bleibt blockiert, bis GELO-Sales und Outcome-Validierung angeschlossen sind.</small>
             </div>
           </div>
         </section>

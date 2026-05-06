@@ -16,6 +16,11 @@ function formatLabel(value: string): string {
   return value.replace(/_/g, ' ');
 }
 
+function phaseLeadDriverLabel(region: TriLayerRegion): string {
+  const drivers = region.phase_lead_drivers ?? [];
+  return drivers.length ? drivers.slice(0, 2).join(' + ') : '—';
+}
+
 export const TriLayerRegionTable: React.FC<{ regions: TriLayerRegion[] }> = ({ regions }) => (
   <section className="tri-layer-panel">
     <div className="tri-layer-section-head">
@@ -34,7 +39,8 @@ export const TriLayerRegionTable: React.FC<{ regions: TriLayerRegion[] }> = ({ r
             <tr>
               <th scope="col">Region</th>
               <th scope="col">Code</th>
-              <th scope="col">EWS</th>
+              <th scope="col">Phase-Lead Score</th>
+              <th scope="col">Phase-Lead Treiber</th>
               <th scope="col">CRS</th>
               <th scope="col">Budget State</th>
               <th scope="col">Wave Phase</th>
@@ -49,7 +55,8 @@ export const TriLayerRegionTable: React.FC<{ regions: TriLayerRegion[] }> = ({ r
               <tr key={region.region_code}>
                 <td>{region.region}</td>
                 <td>{region.region_code}</td>
-                <td>{formatScore(region.early_warning_score)}</td>
+                <td>{formatScore(region.phase_lead_score ?? region.early_warning_score)}</td>
+                <td>{phaseLeadDriverLabel(region)}</td>
                 <td>{formatScore(region.commercial_relevance_score)}</td>
                 <td>{formatLabel(region.budget_permission_state)}</td>
                 <td>{formatLabel(region.wave_phase)}</td>

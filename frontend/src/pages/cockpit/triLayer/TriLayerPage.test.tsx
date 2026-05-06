@@ -36,9 +36,15 @@ const baseSnapshot: TriLayerSnapshot = {
   },
   regions: [
     {
-      region: 'Hamburg',
-      region_code: 'HH',
-      early_warning_score: 71.2,
+      region: 'Rheinland-Pfalz',
+      region_code: 'RP',
+      early_warning_score: 61.2,
+      phase_lead_rank: 1,
+      phase_lead_score: 61.2,
+      phase_lead_p_up_h7: 0.62,
+      phase_lead_p_surge_h7: 0.54,
+      phase_lead_growth: 0.432,
+      phase_lead_drivers: ['SARS-CoV-2', 'Influenza B'],
       commercial_relevance_score: null,
       budget_permission_state: 'shadow_only',
       wave_phase: 'early_growth',
@@ -122,8 +128,8 @@ describe('TriLayerPage', () => {
 
     expect(screen.getByRole('heading', { name: /Tri-Layer Evidence Fusion — Research Layer/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Research-only\. This page does not activate or change media budget\./).length).toBeGreaterThan(0);
-    expect(screen.getByText('Tri-Layer Frühwarn-Score')).toBeInTheDocument();
-    expect(screen.getByText(/nicht identisch mit dem Cockpit-Riser/i)).toBeInTheDocument();
+    expect(screen.getByText('Phase-Lead Frühwarn-Score')).toBeInTheDocument();
+    expect(screen.getByText(/Regionaler Atemwegsdruck aus Phase-Lead/i)).toBeInTheDocument();
     expect(screen.getByText('Budget can change: false')).toBeInTheDocument();
   });
 
@@ -143,9 +149,9 @@ describe('TriLayerPage', () => {
 
     renderPage();
 
-    expect(screen.getByRole('heading', { name: /Cockpit-Signal ≠ Tri-Layer-Freigabe/i })).toBeInTheDocument();
-    expect(screen.getByText(/Das Cockpit zeigt den heutigen regionalen Signal-Kandidaten/i)).toBeInTheDocument();
-    expect(screen.getByText(/Hamburg kann sichtbar steigen, während der Tri-Layer niedrig bleibt/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Phase-Lead-Priorität ≠ Budget-Freigabe/i })).toBeInTheDocument();
+    expect(screen.getByText(/Phase-Lead liefert die regionale Atemwegs-Priorität/i)).toBeInTheDocument();
+    expect(screen.getByText(/Rheinland-Pfalz ist die aktuelle Phase-Lead-Top-Region/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Horizon 7 days/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Budget bleibt blockiert/i).length).toBeGreaterThan(0);
   });
@@ -161,8 +167,9 @@ describe('TriLayerPage', () => {
     renderPage();
 
     expect(screen.getAllByText('Sales layer not connected').length).toBeGreaterThan(0);
-    expect(screen.getByRole('cell', { name: /Hamburg/i })).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: 'HH' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /Rheinland-Pfalz/i })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'RP' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: /SARS-CoV-2 \+ Influenza B/i })).toBeInTheDocument();
     expect(screen.getByRole('cell', { name: /shadow only/i })).toBeInTheDocument();
   });
 

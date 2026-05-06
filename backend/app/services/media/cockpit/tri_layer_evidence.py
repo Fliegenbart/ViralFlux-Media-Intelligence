@@ -16,6 +16,13 @@ from sqlalchemy.orm import Session
 from app.core.time import utc_now
 from app.services.media.cockpit.constants import BUNDESLAND_NAMES
 from app.services.media.cockpit.freshness import build_data_freshness, build_source_status
+from app.services.media.cockpit.phase_lead_authority import (
+    phase_lead_decision_label,
+    phase_lead_driver_labels,
+    phase_lead_rank_by_code,
+    phase_lead_regions_by_code,
+    load_phase_lead_authority_snapshot,
+)
 from app.services.research.tri_layer.clinical_evidence import build_clinical_evidence_by_region
 from app.services.research.tri_layer.observation_panel import build_tri_layer_observation_panel
 from app.services.research.tri_layer.sales_adapter import load_sales_panel
@@ -99,6 +106,12 @@ class TriLayerRegion(BaseModel):
     gates: TriLayerGates = Field(default_factory=TriLayerGates)
     source_counts: dict[str, int] = Field(default_factory=dict)
     point_in_time_notes: list[str] = Field(default_factory=list)
+    phase_lead_rank: int | None = None
+    phase_lead_score: float | None = None
+    phase_lead_p_up_h7: float | None = None
+    phase_lead_p_surge_h7: float | None = None
+    phase_lead_growth: float | None = None
+    phase_lead_drivers: list[str] = Field(default_factory=list)
     explanation: str
 
 
@@ -483,6 +496,71 @@ def _regions_from_forecast(
     return regions
 
 
+def _phase_gate_state(phase_region: dict[str, Any]) -> GateState:
+    decision = phase_lead_decision_label(phase_region)
+    return "pass" if decision == "Prepare" else "watch"
+
+
+def _apply_phase_lead_authority_to_regions(
+    regions: list[TriLayerRegion],
+    phase_lead_snapshot: dict[str, Any] | None,
+) -> list[TriLayerRegion]:
+    by_code = phase_lead_regions_by_code(phase_lead_snapshot)
+    ranks = phase_lead_rank_by_code(phase_lead_snapshot)
+    if not by_code:
+        return regions
+
+    updated: list[TriLayerRegion] = []
+    for region in regions:
+        phase_region = by_code.get(region.region_code.upper())
+        if not phase_region:
+            updated.append(region)
+            continue
+        drivers = phase_lead_driver_labels(phase_lead_snapshot, region.region_code)
+        score = _optional_float(phase_region.get("gegb"))
+        p_up = _optional_float(phase_region.get("p_up_h7"))
+        p_surge = _optional_float(phase_region.get("p_surge_h7"))
+        growth = _optional_float(phase_region.get("current_growth"))
+        gates = region.gates.model_copy(
+            update={"epidemiological_signal": _phase_gate_state(phase_region)}
+        )
+        explanation = (
+            f"Phase-Lead aggregate is the regional priority source. Haupttreiber: "
+            f"{' + '.join(drivers) if drivers else 'Atemwegsdruck'}. "
+            "Sales calibration is not connected, so this row cannot grant budget permission."
+        )
+        updated.append(
+            region.model_copy(
+                update={
+                    "early_warning_score": round(score, 4) if score is not None else region.early_warning_score,
+                    "posterior": region.posterior.model_copy(
+                        update={
+                            "growth_mean": growth if growth is not None else region.posterior.growth_mean,
+                            "intensity_mean": p_up if p_up is not None else region.posterior.intensity_mean,
+                        }
+                    ),
+                    "gates": gates,
+                    "phase_lead_rank": ranks.get(region.region_code.upper()),
+                    "phase_lead_score": round(score, 4) if score is not None else None,
+                    "phase_lead_p_up_h7": round(p_up, 4) if p_up is not None else None,
+                    "phase_lead_p_surge_h7": round(p_surge, 4) if p_surge is not None else None,
+                    "phase_lead_growth": round(growth, 4) if growth is not None else None,
+                    "phase_lead_drivers": drivers,
+                    "explanation": explanation,
+                }
+            )
+        )
+
+    return sorted(
+        updated,
+        key=lambda region: (
+            region.phase_lead_rank is None,
+            region.phase_lead_rank or 999,
+            region.region_code,
+        ),
+    )
+
+
 def build_tri_layer_snapshot(
     db: Session,
     *,
@@ -570,6 +648,15 @@ def build_tri_layer_snapshot(
             cutoff=cutoff,
             virus_typ=virus_typ,
         )
+
+    try:
+        phase_lead_authority = load_phase_lead_authority_snapshot()
+    except Exception:
+        phase_lead_authority = None
+        notes.append("Phase-Lead aggregate unavailable for this Tri-Layer snapshot.")
+    if phase_lead_authority:
+        regions = _apply_phase_lead_authority_to_regions(regions, phase_lead_authority)
+        notes.append("Phase-Lead aggregate is the regional priority source.")
 
     early_scores = [
         float(region.early_warning_score)

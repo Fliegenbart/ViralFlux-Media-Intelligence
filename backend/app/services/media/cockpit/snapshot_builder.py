@@ -46,6 +46,12 @@ from app.services.media.cockpit.freshness import (
     build_data_freshness,
     build_source_status,
 )
+from app.services.media.cockpit.phase_lead_authority import (
+    apply_phase_lead_to_cockpit_regions,
+    build_phase_lead_authority_payload,
+    build_phase_lead_primary_recommendation,
+    load_phase_lead_authority_snapshot,
+)
 from app.services.media.cockpit.truth_scoreboard import build_truth_scoreboard
 
 logger = logging.getLogger(__name__)
@@ -2059,6 +2065,25 @@ def build_cockpit_snapshot(
                 "signalMode": True,
             }
 
+    phase_lead_authority: dict[str, Any] | None = None
+    try:
+        phase_lead_authority_snapshot = load_phase_lead_authority_snapshot()
+    except Exception:  # noqa: BLE001
+        logger.exception("phase-lead authority load failed (non-fatal)")
+        phase_lead_authority_snapshot = None
+        notes.append("Phase-Lead-Autorität konnte für diesen Cockpit-Snapshot nicht geladen werden.")
+
+    if phase_lead_authority_snapshot:
+        regions = apply_phase_lead_to_cockpit_regions(regions, phase_lead_authority_snapshot)
+        phase_lead_recommendation = build_phase_lead_primary_recommendation(phase_lead_authority_snapshot)
+        if phase_lead_recommendation is not None:
+            primary_recommendation = phase_lead_recommendation
+        phase_lead_authority = build_phase_lead_authority_payload(phase_lead_authority_snapshot)
+        notes.append(
+            "Regionale Priorität stammt aus Phase-Lead-Gesamtwert; "
+            "klassischer Regional-Forecast bleibt als Kontext erhalten."
+        )
+
     sources = _build_sources(db)
     top_drivers = _top_drivers_from_sources(sources)
 
@@ -2191,6 +2216,7 @@ def build_cockpit_snapshot(
         "horizonAlignment": horizon_alignment,
         "truthScoreboard": truth_scoreboard,
         "mediaSpendingTruth": media_spending_truth,
+        "phaseLeadAuthority": phase_lead_authority,
         "mediaPlan": {
             "connected": plan_connected,
             "totalWeeklySpendEur": total_weekly_spend,

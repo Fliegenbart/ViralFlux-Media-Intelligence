@@ -214,6 +214,27 @@ describe('PhaseLeadResearchPage', () => {
     expect(screen.getByText(/Datenstand 27\.4\.2026/i)).toBeInTheDocument();
   });
 
+  it('adds pitch-layer explanations for the most important terms and limits', () => {
+    mockedUsePhaseLeadSnapshot.mockImplementation((options) => ({
+      snapshot: options?.virusTyp === 'Gesamt' ? aggregateSnapshot : productSnapshot,
+      loading: false,
+      error: null,
+      reload: jest.fn(),
+    }));
+
+    renderPage();
+
+    expect(screen.getByRole('button', { name: /Gesamt-Score erklären/i })).toBeInTheDocument();
+    expect(screen.getByText(/Verdichtet die Signale der verfügbaren Atemwegsviren/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /p\(up\) 7 Tage erklären/i })).toBeInTheDocument();
+    expect(screen.getByText(/Wahrscheinlichkeit, dass das regionale Signal in den nächsten 7 Tagen steigt/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Budget-Gate erklären/i })).toBeInTheDocument();
+    expect(screen.getByText(/Das Tool empfiehlt Vorbereitung, aber keine automatische Media-Budgetverschiebung/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Warum jetzt GELO zeigen erklären/i })).toBeInTheDocument();
+    expect(screen.getByText(/Es ist jetzt sinnvoll für GELO, weil der Nutzen ohne Salesdaten schon sichtbar ist/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Bisherige Kurve und Prognose erklären/i })).toBeInTheDocument();
+  });
+
   it('shows source freshness as reporting lag instead of a plain latest date', () => {
     mockedUsePhaseLeadSnapshot.mockReturnValue({
       snapshot: productSnapshot,

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CircleHelp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import '../../../styles/peix.css';
@@ -16,12 +17,71 @@ const sourceLabels: Record<string, string> = {
   notaufnahme: 'Notaufnahme',
 };
 
+const sourceHelp: Record<string, string> = {
+  wastewater: 'AMELAG ist das Abwassermonitoring. Es kann Atemwegswellen oft früher sichtbar machen als klassische Meldedaten.',
+  survstat: 'SurvStat sind gemeldete Infektionsdaten. Sie sind belastbar, kommen aber mit Meldeverzug.',
+  are: 'ARE steht für akute respiratorische Erkrankungen. Die Quelle zeigt, wie stark Erkältungs- und Atemwegsaktivität allgemein zunimmt.',
+  notaufnahme: 'Notaufnahme-Daten geben Hinweise auf akuten Versorgungsdruck. Sie sind hier ein ergänzendes Signal, nicht die alleinige Wahrheit.',
+};
+
 const availableViruses = ['Gesamt', 'Influenza A', 'Influenza B', 'RSV A', 'SARS-CoV-2'] as const;
 
 type PhaseLeadAudience = 'product' | 'limbach';
 
 export interface PhaseLeadResearchPageProps {
   audience?: PhaseLeadAudience;
+}
+
+function Explain({
+  label,
+  title,
+  children,
+  placement = 'top',
+}: {
+  label: string;
+  title: string;
+  children: React.ReactNode;
+  placement?: 'top' | 'left' | 'right';
+}) {
+  return (
+    <span className={`phase-lead-help phase-lead-help--${placement}`}>
+      <button type="button" className="phase-lead-help__button" aria-label={label}>
+        <CircleHelp size={14} strokeWidth={2.3} aria-hidden="true" />
+      </button>
+      <span className="phase-lead-help__bubble" role="tooltip" aria-hidden="true">
+        <b>{title}</b>
+        <span>{children}</span>
+      </span>
+    </span>
+  );
+}
+
+function HelpLabel({
+  children,
+  label,
+  title,
+  body,
+  placement,
+}: {
+  children: React.ReactNode;
+  label: string;
+  title: string;
+  body: React.ReactNode;
+  placement?: 'top' | 'left' | 'right';
+}) {
+  const tooltipTitle =
+    typeof children === 'string' && children.replace(/\.$/, '') === title
+      ? 'Kurz erklärt'
+      : title;
+
+  return (
+    <span className="phase-lead-help-label">
+      <span>{children}</span>
+      <Explain label={label} title={tooltipTitle} placement={placement}>
+        {body}
+      </Explain>
+    </span>
+  );
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -361,41 +421,142 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
 
           <aside className="phase-lead-hero__visual" aria-label="Signalstatus">
             <div className="phase-lead-signal-card">
-              <span>{heroScoreLabel}</span>
+              <span>
+                <HelpLabel
+                  label={`${heroScoreLabel} erklären`}
+                  title={heroScoreLabel}
+                  body={
+                    isAggregate
+                      ? 'Verdichtet die Signale der verfügbaren Atemwegsviren zu einem regionalen Atemwegsdruck-Score. Er ist ein Priorisierungssignal, keine Umsatzprognose und keine medizinische Diagnose.'
+                      : 'GEGB ist der growth-weighted burden score: aktueller Druck plus erwartetes Wachstum. Er zeigt, welche Region zuerst vorbereitet werden sollte.'
+                  }
+                >
+                  {heroScoreLabel}
+                </HelpLabel>
+              </span>
               <strong>{formatOne(topRegion?.gegb)}</strong>
               <p>
                 {isAggregate && topDriverLabel !== '-'
-                  ? `${topDriverLabel} treiben das Signal am stärksten.`
+                  ? (
+                    <>
+                      {topDriverLabel} treiben das Signal am stärksten.
+                      <Explain
+                        label="Haupttreiber erklären"
+                        title="Haupttreiber"
+                        placement="left"
+                      >
+                        Die Haupttreiber zeigen, welche Viren in dieser Region den größten Beitrag zum Gesamt-Score leisten. Das hilft im Pitch zu erklären, warum eine Region vorne liegt.
+                      </Explain>
+                    </>
+                  )
                   : `${snapshot.virus_typ} treibt das regionale Signal.`}
               </p>
             </div>
             <div className="phase-lead-signal-strip" aria-label="Top-Signale">
               <div>
-                <span>p(up) 7 Tage</span>
+                <span>
+                  <HelpLabel
+                    label="p(up) 7 Tage erklären"
+                    title="p(up) 7 Tage"
+                    body="Wahrscheinlichkeit, dass das regionale Signal in den nächsten 7 Tagen steigt. Hohe Werte heißen: jetzt vorbereiten, nicht automatisch Budget verschieben."
+                  >
+                    p(up) 7 Tage
+                  </HelpLabel>
+                </span>
                 <strong>{formatPercent(topRegion?.p_up_h7)}</strong>
               </div>
               <div>
-                <span>Surge</span>
+                <span>
+                  <HelpLabel
+                    label="Surge erklären"
+                    title="Surge"
+                    body="Surge meint ein stärkeres, kurzfristiges Anstiegsrisiko. Für GELO ist das ein Frühhinweis für Kampagnen- und Außendienstvorbereitung."
+                  >
+                    Surge
+                  </HelpLabel>
+                </span>
                 <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
               </div>
               <div>
-                <span>{isLimbach ? 'Logistik' : 'Budget'}</span>
+                <span>
+                  <HelpLabel
+                    label={isLimbach ? 'Logistikstatus erklären' : 'Budgetstatus erklären'}
+                    title={isLimbach ? 'Logistik' : 'Budget'}
+                    body={
+                      isLimbach
+                        ? 'Für Labor-Use-Cases bedeutet das: Kapazität, Material und Kurierlogik vorbereiten.'
+                        : 'Budget ist bewusst gesperrt. Das Tool zeigt, wo Vorbereitung sinnvoll ist. Für echte Budgetfreigabe fehlen noch GELO-Sales- und Outcome-Daten.'
+                    }
+                    placement="left"
+                  >
+                    {isLimbach ? 'Logistik' : 'Budget'}
+                  </HelpLabel>
+                </span>
                 <strong>{isLimbach ? 'planen' : 'gesperrt'}</strong>
               </div>
             </div>
           </aside>
 
           <aside className="phase-lead-hero__meta" aria-label="Signalstatus">
-            <span>{snapshot.virus_typ}</span>
-            <span>{formatDate(snapshot.as_of)}</span>
-            <span>{snapshot.horizons.join('/')} Tage Horizont</span>
-            <span>{isMapOptimized ? 'MAP optimiert' : 'Schnellmodus'}</span>
+            <span>
+              <HelpLabel
+                label="Virus-Auswahl erklären"
+                title="Virus-Auswahl"
+                body="Gesamt fasst die Atemwegsviren zusammen. Die Einzelansichten bleiben wichtig, wenn Anna oder Johannes wissen wollen, welcher Erreger das Signal treibt."
+              >
+                {snapshot.virus_typ}
+              </HelpLabel>
+            </span>
+            <span>
+              <HelpLabel
+                label="Berechnungsdatum erklären"
+                title="Berechnungsdatum"
+                body="Das ist der Stand der Berechnung. Der Datenstand kann etwas älter sein, weil öffentliche Quellen mit Meldeverzug eintreffen."
+              >
+                {formatDate(snapshot.as_of)}
+              </HelpLabel>
+            </span>
+            <span>
+              <HelpLabel
+                label="Prognosehorizont erklären"
+                title="Prognosehorizont"
+                body="Die Seite bewertet mehrere Horizonte. Für den Pitch ist vor allem 7 Tage interessant: genug früh für Vorbereitung, nah genug für operative Entscheidungen."
+              >
+                {snapshot.horizons.join('/')} Tage Horizont
+              </HelpLabel>
+            </span>
+            <span>
+              <HelpLabel
+                label="MAP-Optimierung erklären"
+                title={isMapOptimized ? 'MAP optimiert' : 'Schnellmodus'}
+                body={
+                  isMapOptimized
+                    ? 'MAP optimiert heißt: Die schwere Berechnung wurde aus den echten Quellen vorab berechnet und gespeichert. Die Seite zeigt also keinen schnellen Demo-Fallback.'
+                    : 'Schnellmodus heißt: Das System kann eine Ansicht liefern, auch wenn noch kein gespeichertes schweres Ergebnis vorliegt.'
+                }
+                placement="left"
+              >
+                {isMapOptimized ? 'MAP optimiert' : 'Schnellmodus'}
+              </HelpLabel>
+            </span>
           </aside>
         </header>
 
         <section className={`phase-lead-panel phase-lead-action phase-lead-action--${primaryAction.tone}`}>
           <div>
-            <div className="phase-lead-kicker">Nächste Aktion</div>
+            <div className="phase-lead-kicker">
+              <HelpLabel
+                label="Nächste Aktion erklären"
+                title="Nächste Aktion"
+                body={
+                  isLimbach
+                    ? 'Die Aktion übersetzt das Frühwarnsignal in Laborplanung: disponieren, beobachten oder halten.'
+                    : 'Die Aktion ist ein Vorbereitungshinweis. Sie sagt, wo GELO jetzt Creatives, Apothekenlisten und regionale Pakete prüfen sollte.'
+                }
+              >
+                Nächste Aktion
+              </HelpLabel>
+            </div>
             <h2>{topRegionHeadline(topRegion, audience)}</h2>
             <p>{primaryAction.explanation}</p>
           </div>
@@ -404,22 +565,54 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
 
         <section className="phase-lead-live-grid phase-lead-live-grid--product" aria-label="Signal metrics">
           <div className="phase-lead-live-metric">
-            <span>p(up) 7 Tage</span>
+            <span>
+              <HelpLabel
+                label="p(up) Kennzahl erklären"
+                title="p(up) 7 Tage"
+                body="Das ist die Anstiegswahrscheinlichkeit für die Top-Region. Hohe Werte bedeuten: Früh handeln, weil die Welle wahrscheinlich noch stärker wird."
+              >
+                p(up) 7 Tage
+              </HelpLabel>
+            </span>
             <strong>{formatPercent(topRegion?.p_up_h7)}</strong>
             <small>{topRegion?.region ?? 'Keine Region'}</small>
           </div>
           <div className="phase-lead-live-metric">
-            <span>Surge-Risiko</span>
+            <span>
+              <HelpLabel
+                label="Surge-Risiko erklären"
+                title="Surge-Risiko"
+                body="Surge meint einen stärkeren Sprung nach oben. Für den Pitch ist das der Hinweis: Nicht nur Wachstum, sondern mögliches Beschleunigen."
+              >
+                Surge-Risiko
+              </HelpLabel>
+            </span>
             <strong>{formatPercent(topRegion?.p_surge_h7)}</strong>
             <small>Schwelle für Vorbereitung</small>
           </div>
           <div className="phase-lead-live-metric">
-            <span>Modellvertrauen</span>
+            <span>
+              <HelpLabel
+                label="Modellvertrauen erklären"
+                title="Modellvertrauen"
+                body="Das Vertrauen fasst zusammen, ob die schwere Optimierung sauber lief und ob Warnungen vorliegen. Es ersetzt keine fachliche Prüfung."
+              >
+                Modellvertrauen
+              </HelpLabel>
+            </span>
             <strong>{modelConfidence}</strong>
             <small>{snapshot.summary.warning_count} Warnungen</small>
           </div>
           <div className="phase-lead-live-metric">
-            <span>Datenstand</span>
+            <span>
+              <HelpLabel
+                label="Datenstand erklären"
+                title="Datenstand"
+                body="Die Zahl zeigt, wie viele öffentliche Quellen verbunden sind. Das Datum darunter zeigt den neuesten Eingang und den Meldeverzug."
+              >
+                Datenstand
+              </HelpLabel>
+            </span>
             <strong>{connectedSources} Quellen</strong>
             <small>{sourceFreshness}</small>
           </div>
@@ -428,7 +621,19 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
         <section className="phase-lead-panel phase-lead-sales-gate" aria-labelledby="phase-lead-sales-gate-title">
           <div className="phase-lead-section-head">
             <div>
-              <div className="phase-lead-kicker">{isLimbach ? 'Laborbedarf' : 'Budget-Gate'}</div>
+              <div className="phase-lead-kicker">
+                <HelpLabel
+                  label="Budget-Gate erklären"
+                  title={isLimbach ? 'Laborbedarf' : 'Budget-Gate'}
+                  body={
+                    isLimbach
+                      ? 'Das Tool empfiehlt operative Vorbereitung für Laborbedarf, aber keine medizinische Einzelfallentscheidung.'
+                      : 'Das Tool empfiehlt Vorbereitung, aber keine automatische Media-Budgetverschiebung. Dafür fehlen noch GELO-Sales- und Outcome-Daten.'
+                  }
+                >
+                  {isLimbach ? 'Laborbedarf' : 'Budget-Gate'}
+                </HelpLabel>
+              </div>
               <h2 id="phase-lead-sales-gate-title">
                 {isLimbach
                   ? 'Von Frühwarnsignal zu Laborplanung.'
@@ -439,22 +644,104 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
               {isLimbach
                 ? 'Die Limbach Gruppe könnte externe Atemwegs-Frühsignale nutzen, um Probenlogistik, Praxisbedarf und regionale Kommunikation früher zu planen.'
                 : 'Das Signal priorisiert Vorbereitung, nicht automatische Umschichtung. Sales- und Outcome-Daten fehlen noch für echte Budgetfreigabe.'}
+              {!isLimbach ? (
+                <Explain
+                  label="Warum jetzt GELO zeigen erklären"
+                  title="Warum jetzt GELO zeigen?"
+                  placement="left"
+                >
+                  Es ist jetzt sinnvoll für GELO, weil der Nutzen ohne Salesdaten schon sichtbar ist: Regionen priorisieren, Vorbereitung auslösen und Grenzen transparent machen. Mit GELO-Salesdaten wird daraus später ein Budget-Gate.
+                </Explain>
+              ) : null}
             </p>
           </div>
           <div className="phase-lead-decision-grid">
             <article>
-              <span>{isLimbach ? 'Operations' : 'Heute erlaubt'}</span>
-              <b>{isLimbach ? 'Probenlogistik vorbereiten' : 'Vorbereiten'}</b>
+              <span>
+                <HelpLabel
+                  label={isLimbach ? 'Operations erklären' : 'Heute erlaubt erklären'}
+                  title={isLimbach ? 'Operations' : 'Heute erlaubt'}
+                  body={
+                    isLimbach
+                      ? 'Hier wird das Signal in konkrete Laborvorbereitung übersetzt.'
+                      : 'Diese Maßnahmen kann GELO schon nutzen, ohne Budget automatisch zu verschieben.'
+                  }
+                >
+                  {isLimbach ? 'Operations' : 'Heute erlaubt'}
+                </HelpLabel>
+              </span>
+              <b>
+                <HelpLabel
+                  label={isLimbach ? 'Probenlogistik vorbereiten erklären' : 'Vorbereiten erklären'}
+                  title={isLimbach ? 'Probenlogistik vorbereiten' : 'Vorbereiten'}
+                  body={
+                    isLimbach
+                      ? 'Kurierfenster, regionale Last und Materialflüsse früher planen.'
+                      : 'Regionale Creatives, Zielgruppen, Inventar und Außendiensthinweise bereitlegen.'
+                  }
+                >
+                  {isLimbach ? 'Probenlogistik vorbereiten' : 'Vorbereiten'}
+                </HelpLabel>
+              </b>
               <p>{isLimbach ? 'Regionale Kurierfenster, Abholspitzen und Laborstandorte frühzeitig einplanen.' : 'Regionale Creatives, Inventar, Zielgruppen und Apothekenlisten prüfen.'}</p>
             </article>
             <article>
-              <span>{isLimbach ? 'Versorgung' : 'Noch blockiert'}</span>
-              <b>{isLimbach ? 'Reagenzien und Entnahmematerial' : 'Budget verschieben'}</b>
+              <span>
+                <HelpLabel
+                  label={isLimbach ? 'Versorgung erklären' : 'Noch blockiert erklären'}
+                  title={isLimbach ? 'Versorgung' : 'Noch blockiert'}
+                  body={
+                    isLimbach
+                      ? 'Das Frühwarnsignal kann helfen, Engpässe bei Material und Testkapazität früher zu vermeiden.'
+                      : 'Automatische Budgetverschiebung bleibt blockiert, bis echte GELO-Nachfrage- und Ergebnisdaten angebunden sind.'
+                  }
+                >
+                  {isLimbach ? 'Versorgung' : 'Noch blockiert'}
+                </HelpLabel>
+              </span>
+              <b>
+                <HelpLabel
+                  label={isLimbach ? 'Reagenzien und Entnahmematerial erklären' : 'Budget verschieben erklären'}
+                  title={isLimbach ? 'Reagenzien und Entnahmematerial' : 'Budget verschieben'}
+                  body={
+                    isLimbach
+                      ? 'Material muss oft früher disponiert werden als die sichtbare Nachfrage steigt.'
+                      : 'Das Tool kann eine starke Empfehlung geben. Die eigentliche Budgetentscheidung soll erst mit Sales-Validierung automatisiert werden.'
+                  }
+                >
+                  {isLimbach ? 'Reagenzien und Entnahmematerial' : 'Budget verschieben'}
+                </HelpLabel>
+              </b>
               <p>{isLimbach ? 'Respiratorische Tests, Abstrichmaterial und Verbrauchsgüter entlang regionaler Wellen vorbereiten.' : 'Ohne GELO-Sales bleibt jede Aktivierung eine manuelle Business-Entscheidung.'}</p>
             </article>
             <article>
-              <span>{isLimbach ? 'Partnernetz' : 'Nächster Datenhebel'}</span>
-              <b>{isLimbach ? 'Arztkommunikation timen' : 'Sales anschließen'}</b>
+              <span>
+                <HelpLabel
+                  label={isLimbach ? 'Partnernetz erklären' : 'Nächster Datenhebel erklären'}
+                  title={isLimbach ? 'Partnernetz' : 'Nächster Datenhebel'}
+                  body={
+                    isLimbach
+                      ? 'Der Nutzen entsteht, wenn Labore Praxen und Kliniken vor der Spitze informieren können.'
+                      : 'Der nächste große Schritt ist die Verbindung mit GELO-Sales, damit aus Signalqualität Business-Wirkung wird.'
+                  }
+                >
+                  {isLimbach ? 'Partnernetz' : 'Nächster Datenhebel'}
+                </HelpLabel>
+              </span>
+              <b>
+                <HelpLabel
+                  label={isLimbach ? 'Arztkommunikation timen erklären' : 'Sales anschließen erklären'}
+                  title={isLimbach ? 'Arztkommunikation timen' : 'Sales anschließen'}
+                  body={
+                    isLimbach
+                      ? 'Regionale Kommunikation kann starten, bevor Diagnostiknachfrage in den eigenen Zahlen voll sichtbar ist.'
+                      : 'Mit GELO-Salesdaten lässt sich prüfen, ob Frühwarnsignale wirklich Absatz, Verfügbarkeit oder Kampagnenwirkung verbessern.'
+                  }
+                  placement="left"
+                >
+                  {isLimbach ? 'Arztkommunikation timen' : 'Sales anschließen'}
+                </HelpLabel>
+              </b>
               <p>{isLimbach ? 'Praxen, MVZ und Kliniken regional informieren, bevor die Diagnostiknachfrage sichtbar steigt.' : 'Danach kann das Signal gegen Nachfrage und Kampagnenwirkung kalibriert werden.'}</p>
             </article>
           </div>
@@ -480,13 +767,80 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
             <table className="phase-lead-table">
               <thead>
                 <tr>
-                  <th>Region</th>
-                  <th>{isLimbach ? 'Laboraktion' : 'Empfehlung'}</th>
-                  {isAggregate ? <th>Haupttreiber</th> : null}
-                  <th>p(up) h7</th>
-                  <th>Surge h7</th>
-                  <th>Wachstum</th>
-                  <th>{isAggregate ? 'Gesamt-Score' : 'GEGB'}</th>
+                  <th>
+                    <HelpLabel
+                      label="Region Tabellenspalte erklären"
+                      title="Region"
+                      body="Bundesland, für das das Signal berechnet wird."
+                    >
+                      Region
+                    </HelpLabel>
+                  </th>
+                  <th>
+                    <HelpLabel
+                      label={isLimbach ? 'Laboraktion Tabellenspalte erklären' : 'Empfehlung Tabellenspalte erklären'}
+                      title={isLimbach ? 'Laboraktion' : 'Empfehlung'}
+                      body={
+                        isLimbach
+                          ? 'Kurzfassung der empfohlenen Laborvorbereitung pro Region.'
+                          : 'Kurzfassung der empfohlenen Media- oder Vorbereitungsaktion pro Region.'
+                      }
+                    >
+                      {isLimbach ? 'Laboraktion' : 'Empfehlung'}
+                    </HelpLabel>
+                  </th>
+                  {isAggregate ? (
+                    <th>
+                      <HelpLabel
+                        label="Haupttreiber Tabellenspalte erklären"
+                        title="Haupttreiber"
+                        body="Die zwei Viren, die in der jeweiligen Region am stärksten zum Gesamt-Score beitragen."
+                      >
+                        Haupttreiber
+                      </HelpLabel>
+                    </th>
+                  ) : null}
+                  <th>
+                    <HelpLabel
+                      label="p(up) h7 Tabellenspalte erklären"
+                      title="p(up) h7"
+                      body="Wahrscheinlichkeit für steigendes Signal über den 7-Tage-Horizont."
+                    >
+                      p(up) h7
+                    </HelpLabel>
+                  </th>
+                  <th>
+                    <HelpLabel
+                      label="Surge h7 Tabellenspalte erklären"
+                      title="Surge h7"
+                      body="Risiko für einen stärkeren kurzfristigen Anstieg in den nächsten 7 Tagen."
+                    >
+                      Surge h7
+                    </HelpLabel>
+                  </th>
+                  <th>
+                    <HelpLabel
+                      label="Wachstum Tabellenspalte erklären"
+                      title="Wachstum"
+                      body="Aktuelle Wachstumsrichtung des regionalen Signals. Plus bedeutet steigende Aktivität."
+                    >
+                      Wachstum
+                    </HelpLabel>
+                  </th>
+                  <th>
+                    <HelpLabel
+                      label={`${isAggregate ? 'Gesamt-Score' : 'GEGB'} Tabellenspalte erklären`}
+                      title={isAggregate ? 'Gesamt-Score' : 'GEGB'}
+                      body={
+                        isAggregate
+                          ? 'Der Gesamt-Score verdichtet mehrere Atemwegsviren zu einem regionalen Prioritätswert.'
+                          : 'GEGB gewichtet aktuelle Last und erwartetes Wachstum für dieses einzelne Virus.'
+                      }
+                      placement="left"
+                    >
+                      {isAggregate ? 'Gesamt-Score' : 'GEGB'}
+                    </HelpLabel>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -521,12 +875,28 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
 
         <section className="phase-lead-grid phase-lead-grid--two" aria-label="Operativer Kontext">
           <article className="phase-lead-panel phase-lead-output">
-            <div className="phase-lead-kicker">Datenbasis</div>
+            <div className="phase-lead-kicker">
+              <HelpLabel
+                label="Datenbasis erklären"
+                title="Datenbasis"
+                body="Die Seite nutzt reale öffentliche Quellen. Die Quellen erklären, warum das Signal früher sein kann als reine Salesdaten."
+              >
+                Datenbasis
+              </HelpLabel>
+            </div>
             <h2>{isLimbach ? 'Öffentliche Frühsignale sind verbunden.' : 'Live-Quellen sind verbunden.'}</h2>
             <div className="phase-lead-source-list">
               {Object.entries(snapshot.sources).map(([source, status]) => (
                 <div key={source} className="phase-lead-source-pill">
-                  <b>{sourceLabels[source] ?? source}</b>
+                  <b>
+                    <HelpLabel
+                      label={`${sourceLabels[source] ?? source} erklären`}
+                      title={sourceLabels[source] ?? source}
+                      body={sourceHelp[source] ?? 'Diese Quelle liefert ein ergänzendes regionales Signal für die Berechnung.'}
+                    >
+                      {sourceLabels[source] ?? source}
+                    </HelpLabel>
+                  </b>
                   <span>{status.rows} Zeilen</span>
                   <small>{formatDate(status.latest_event_date)} · {status.units.length} Einheiten</small>
                 </div>
@@ -534,7 +904,15 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
             </div>
           </article>
           <article className="phase-lead-panel phase-lead-output">
-            <div className="phase-lead-kicker">Modellstatus</div>
+            <div className="phase-lead-kicker">
+              <HelpLabel
+                label="Modellstatus erklären"
+                title="Modellstatus"
+                body="Hier sieht man, ob die Berechnung sauber lief, wie groß das Datenfenster ist und ob Warnungen vorliegen."
+              >
+                Modellstatus
+              </HelpLabel>
+            </div>
             <h2>{snapshot.summary.converged ? 'Optimierung konvergiert.' : 'Optimierung prüfen.'}</h2>
             <p>
               {isLimbach
@@ -544,9 +922,34 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
                   : 'Das Cockpit nutzt gerade den schnellen Fallback, bis ein MAP-Ergebnis vorliegt.'}
             </p>
             <div className="phase-lead-model-meta">
-              <span>Beobachtungen: {snapshot.summary.observation_count}</span>
-              <span>Fenster: {formatDate(snapshot.summary.window_start)} – {formatDate(snapshot.summary.window_end)}</span>
-              <span>Zielwert: {formatOne(snapshot.summary.objective_value)}</span>
+              <span>
+                <HelpLabel
+                  label="Beobachtungen erklären"
+                  title="Beobachtungen"
+                  body="Anzahl der Datenpunkte, die für die Berechnung verwendet wurden."
+                >
+                  Beobachtungen: {snapshot.summary.observation_count}
+                </HelpLabel>
+              </span>
+              <span>
+                <HelpLabel
+                  label="Modellfenster erklären"
+                  title="Fenster"
+                  body="Zeitraum, aus dem das Modell gelernt hat. Die öffentlichen Daten laufen mit Meldeverzug ein."
+                >
+                  Fenster: {formatDate(snapshot.summary.window_start)} – {formatDate(snapshot.summary.window_end)}
+                </HelpLabel>
+              </span>
+              <span>
+                <HelpLabel
+                  label="Zielwert erklären"
+                  title="Zielwert"
+                  body="Technischer Optimierungswert des Modells. Wichtig für Debugging, nicht als Business-Kennzahl."
+                  placement="left"
+                >
+                  Zielwert: {formatOne(snapshot.summary.objective_value)}
+                </HelpLabel>
+              </span>
             </div>
           </article>
         </section>
@@ -566,11 +969,26 @@ export const PhaseLeadResearchPage: React.FC<PhaseLeadResearchPageProps> = ({ au
           <div className="phase-lead-section-head">
             <div>
               <div className="phase-lead-kicker">Verlauf</div>
-              <h2 id="phase-lead-curve-title">Bisherige Kurve und Prognose.</h2>
+              <h2 id="phase-lead-curve-title">
+                <HelpLabel
+                  label="Bisherige Kurve und Prognose erklären"
+                  title="Bisherige Kurve und Prognose"
+                  body="Links steht der modellierte Verlauf bis zum Berechnungsdatum. Rechts zeigt die gestrichelte Linie die Prognose. Die Datumsfelder darunter zeigen, auf welchen Zeitraum sich die Kurve bezieht."
+                >
+                  Bisherige Kurve und Prognose.
+                </HelpLabel>
+              </h2>
             </div>
             <p>
               Die Linie zeigt das aktuelle Top-Signal: links der bisherige Verlauf,
               rechts die Modellprojektion für die nächsten Tage.
+              <Explain
+                label="Datumsachse erklären"
+                title="Datumsachse"
+                placement="left"
+              >
+                Die Prognose startet am Berechnungsdatum. Die Wahrheit endet beim neuesten Datenstand, weil Meldedaten erst verzögert eintreffen.
+              </Explain>
             </p>
           </div>
           <div className="phase-lead-curve-layout">
